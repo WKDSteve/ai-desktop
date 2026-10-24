@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>loomAI Dashboard</title>
+  <title>ai Dashboard</title>
   <style>
     :root {
       --bg: #0f1117; --card: #1a1d27; --border: #2a2d3e;
@@ -119,7 +119,7 @@
 <body>
 
 <header>
-  <h1>▸ loomAI Dashboard</h1>
+  <h1 id="app-title">▸ ai Dashboard</h1>
   <div style="display:flex;gap:.5rem;align-items:center">
     <span id="sse-dot" class="dot"></span>
     <span id="sse-label" style="font-size:.75rem;color:var(--muted)">
@@ -224,6 +224,11 @@
 </div>
 
 <script>
+  // The name the page shows for the program: "KI" in German, "ai" in every other language (the program itself is
+  // ai-desktop; that name stays in the file names, the installer and the repository).
+  const APP_NAME = (navigator.language || '').toLowerCase().startsWith('de') ? 'KI' : 'ai';
+  document.title = APP_NAME + ' Dashboard';
+  document.getElementById('app-title').textContent = '▸ ' + APP_NAME + ' Dashboard';
   let currentDecisionTs = null;
 
   const COLORS = {
@@ -442,7 +447,7 @@
     sseLabel.style.color = 'var(--green)';
     sseStatus.textContent = 'Verbunden';
     sseStatus.style.color = 'var(--green)';
-    appendLog('SYSTEM', 'Dashboard verbunden mit loomAI', 'var(--teal)');
+    appendLog('SYSTEM', 'Dashboard verbunden mit ' + APP_NAME, 'var(--teal)');
   };
 
   sse.onmessage = (e) => {

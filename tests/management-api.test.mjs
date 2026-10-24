@@ -39,9 +39,9 @@ describe("/settings", () => {
   let dir;
   let server;
   before(async () => {
-    dir = mkdtempSync(path.join(os.tmpdir(), "loomai-settings-"));
-    // An empty LOOMAI_OLLAMA_HOST counts as unset, so ollama_host is not locked here.
-    server = await startServer({ configDir: dir, env: { LOOMAI_OLLAMA_HOST: "" } });
+    dir = mkdtempSync(path.join(os.tmpdir(), "ai-desktop-settings-"));
+    // An empty AI_DESKTOP_OLLAMA_HOST counts as unset, so ollama_host is not locked here.
+    server = await startServer({ configDir: dir, env: { AI_DESKTOP_OLLAMA_HOST: "" } });
   });
   after(async () => {
     await server.stop();
@@ -68,7 +68,7 @@ describe("/settings", () => {
     assert.equal(JSON.parse(readFileSync(path.join(dir, "config.json"), "utf8")).settings.theme, "dark");
 
     await server.stop();
-    server = await startServer({ configDir: dir, env: { LOOMAI_OLLAMA_HOST: "" } });
+    server = await startServer({ configDir: dir, env: { AI_DESKTOP_OLLAMA_HOST: "" } });
     assert.equal((await server.get("/settings")).json.settings.theme.value, "dark");
   });
 
@@ -101,7 +101,7 @@ describe("/settings", () => {
 describe("/settings with an environment-locked value", () => {
   let server;
   before(async () => {
-    server = await startServer({ env: { LOOMAI_DEFAULT_MODEL: "from-env:7b" } });
+    server = await startServer({ env: { AI_DESKTOP_DEFAULT_MODEL: "from-env:7b" } });
   });
   after(async () => {
     await server.stop();
@@ -112,10 +112,10 @@ describe("/settings with an environment-locked value", () => {
     assert.equal(get.json.settings.default_model.value, "from-env:7b");
     assert.equal(get.json.settings.default_model.source, "env");
     assert.equal(get.json.settings.default_model.locked, true);
-    assert.equal(get.json.settings.default_model.env, "LOOMAI_DEFAULT_MODEL");
+    assert.equal(get.json.settings.default_model.env, "AI_DESKTOP_DEFAULT_MODEL");
     const put = await server.put("/settings", { default_model: "other" });
     assert.equal(put.status, 409);
-    assert.match(put.json.error.message, /LOOMAI_DEFAULT_MODEL/);
+    assert.match(put.json.error.message, /AI_DESKTOP_DEFAULT_MODEL/);
     assert.equal((await server.get("/models")).json.default, "from-env:7b");
   });
 });
@@ -127,7 +127,7 @@ describe("changing ollama_host while the server runs", () => {
   before(async () => {
     a = await ollamaMock("alpha");
     b = await ollamaMock("beta");
-    server = await startServer({ env: { LOOMAI_OLLAMA_HOST: "" } }); // not env-locked
+    server = await startServer({ env: { AI_DESKTOP_OLLAMA_HOST: "" } }); // not env-locked
   });
   after(async () => {
     await server.stop();
@@ -153,7 +153,7 @@ describe("/keys", () => {
   let dir;
   let server;
   before(async () => {
-    dir = mkdtempSync(path.join(os.tmpdir(), "loomai-keys-"));
+    dir = mkdtempSync(path.join(os.tmpdir(), "ai-desktop-keys-"));
     server = await startServer({ configDir: dir });
   });
   after(async () => {
@@ -235,7 +235,7 @@ describe("/models/custom", () => {
       res.setHeader("Content-Type", "application/json");
       res.end(JSON.stringify({ choices: [{ message: { content: `echo:${body?.model}` }, finish_reason: "stop" }] }));
     });
-    dir = mkdtempSync(path.join(os.tmpdir(), "loomai-custom-"));
+    dir = mkdtempSync(path.join(os.tmpdir(), "ai-desktop-custom-"));
     server = await startServer({ configDir: dir });
   });
   after(async () => {

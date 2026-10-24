@@ -8,11 +8,11 @@
 
 // Shared result shape and SSE helpers for every backend client (ollama,
 // openai, anthropic, gemini) that main.cpp's /ask and /ask/stream handlers
-// dispatch to by model-name prefix -- see wkdbook-native/loomai/Guides/
+// dispatch to by model-name prefix -- see wkdbook-native/ai-desktop/Guides/
 // ki-agenten-framework-architektur.md (private repo) and the ai.nvim
-// handover's loomAI ModelRouter scoping for the reasoning behind the
+// handover's ai-desktop ModelRouter scoping for the reasoning behind the
 // prefix-based router.
-namespace loomai {
+namespace ai_desktop {
 
 struct AskResult {
     bool ok = false;
@@ -86,4 +86,4 @@ inline std::optional<nlohmann::json> recover_error_body(
     return parsed;
 }
 
-}  // namespace loomai
+}  // namespace ai_desktop

@@ -60,7 +60,7 @@ describe("GET /models and /models/info", () => {
 
   before(async () => {
     ollama = await startMockOllama();
-    configDir = mkdtempSync(path.join(os.tmpdir(), "loomai-models-"));
+    configDir = mkdtempSync(path.join(os.tmpdir(), "ai-desktop-models-"));
     writeFileSync(
       path.join(configDir, "config.json"),
       JSON.stringify({
@@ -74,7 +74,7 @@ describe("GET /models and /models/info", () => {
         ],
       }),
     );
-    server = await startServer({ configDir, env: { LOOMAI_OLLAMA_HOST: `http://127.0.0.1:${ollama.port}` } });
+    server = await startServer({ configDir, env: { AI_DESKTOP_OLLAMA_HOST: `http://127.0.0.1:${ollama.port}` } });
   });
 
   after(async () => {
@@ -163,7 +163,7 @@ describe("GET /models with Ollama down", () => {
   let server;
   before(async () => {
     // Nothing listens on this port: the list must still come back, with the reason in `errors`.
-    server = await startServer({ env: { LOOMAI_OLLAMA_HOST: `http://127.0.0.1:${await freePort()}` } });
+    server = await startServer({ env: { AI_DESKTOP_OLLAMA_HOST: `http://127.0.0.1:${await freePort()}` } });
   });
   after(async () => {
     await server.stop();

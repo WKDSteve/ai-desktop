@@ -5,7 +5,7 @@
 #include "httplib.h"
 #include "secrets.hpp"
 
-namespace loomai::anthropic {
+namespace ai_desktop::anthropic {
 
 using json = nlohmann::json;
 
@@ -231,4 +231,4 @@ std::string ask_stream(const std::string& prompt,
     return "";
 }
 
-}  // namespace loomai::anthropic
+}  // namespace ai_desktop::anthropic

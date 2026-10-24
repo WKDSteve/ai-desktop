@@ -7,25 +7,25 @@
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
-namespace models = loomai::models;
-namespace secrets = loomai::secrets;
+namespace models = ai_desktop::models;
+namespace secrets = ai_desktop::secrets;
 
 namespace {
 
 struct Sandbox {
     fs::path dir;
     explicit Sandbox(const std::string& tag) : dir(minitest::make_temp_dir(tag)) {
-        minitest::set_env("LOOMAI_CONFIG_DIR", dir.string());
-        minitest::set_env("LOOMAI_SECRET_BACKEND", "file");
+        minitest::set_env("AI_DESKTOP_CONFIG_DIR", dir.string());
+        minitest::set_env("AI_DESKTOP_SECRET_BACKEND", "file");
         for (const char* name : {"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY"}) {
             minitest::set_env(name, "");
         }
-        loomai::config::reload();
+        ai_desktop::config::reload();
         secrets::reload();
     }
     ~Sandbox() {
-        minitest::set_env("LOOMAI_SECRET_BACKEND", "");
-        loomai::config::reload();
+        minitest::set_env("AI_DESKTOP_SECRET_BACKEND", "");
+        ai_desktop::config::reload();
         secrets::reload();
         std::error_code ignored;
         fs::remove_all(dir, ignored);
@@ -141,7 +141,7 @@ TEST(the_api_key_goes_to_the_secret_store_and_never_into_the_listing) {
     CHECK(created["has_key"].get<bool>());
     CHECK_EQ(secrets::get("custom:keyed"), std::string("sk-very-secret"));
     CHECK(models::custom_list().dump().find("sk-very-secret") == std::string::npos);
-    CHECK(loomai::config::snapshot().dump().find("sk-very-secret") == std::string::npos);  // not in config.json either
+    CHECK(ai_desktop::config::snapshot().dump().find("sk-very-secret") == std::string::npos);  // not in config.json either
 }
 
 TEST(custom_add_validates_everything) {
@@ -193,7 +193,7 @@ TEST(custom_models_survive_a_restart) {
     Sandbox box("persist");
     json created;
     CHECK(models::custom_add(compat("kept", "http://localhost:8080/v1"), created).ok());
-    loomai::config::reload();  // as after a restart: the list must come back from disk
+    ai_desktop::config::reload();  // as after a restart: the list must come back from disk
     CHECK_EQ(models::custom_list().size(), static_cast<size_t>(1));
     CHECK(models::resolve("kept").custom);
 }

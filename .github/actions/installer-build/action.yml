@@ -1,4 +1,4 @@
-# Build the Windows installer of loomAI and prove it, for release.yml and rolling.yml alike (so the two cannot
+# Build the Windows installer of ai-desktop and prove it, for release.yml and rolling.yml alike (so the two cannot
 # drift apart).
 #
 # What "prove" means: scripts/setup.ps1 builds and stages the app and smoke tests it, Inno Setup packs that
@@ -8,13 +8,13 @@
 # release-kit, the one a user runs) instead of calling the setup directly, so the way to the workstation is
 # tried as well. Only then is anything offered.
 #
-# Output `file`: the installer, dist/loomai-setup-<version>-x64.exe. The caller names it and uploads it.
+# Output `file`: the installer, dist/ai-desktop-setup-<version>-x64.exe. The caller names it and uploads it.
 #
 # A dedicated MSYS2/MinGW-w64 toolchain: the runner image already has several g++ on PATH (Strawberry Perl,
 # C:\mingw64), none with OpenSSL. setup.ps1 is pointed at this one with -Msys2Root, which wins over PATH.
 
 name: build the installer
-description: Build loomai-setup-<version>-x64.exe with MSYS2 and Inno Setup, install it silently, check it, uninstall it.
+description: Build ai-desktop-setup-<version>-x64.exe with MSYS2 and Inno Setup, install it silently, check it, uninstall it.
 
 inputs:
   version:
@@ -68,9 +68,9 @@ runs:
       run: |
         if ($env:VERSION -notmatch '^\d+\.\d+\.\d+$') { throw "the version '$env:VERSION' is not numeric X.Y.Z" }
         New-Item -ItemType Directory -Force -Path dist | Out-Null
-        & $env:ISCC /Q "/DAppVersion=$env:VERSION" "/DStageDir=$env:RUNNER_TEMP\stage" "/O$PWD\dist" installer\loomai.iss
+        & $env:ISCC /Q "/DAppVersion=$env:VERSION" "/DStageDir=$env:RUNNER_TEMP\stage" "/O$PWD\dist" installer\ai-desktop.iss
         if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE" }
-        $setup = Get-Item "dist\loomai-setup-$env:VERSION-x64.exe"
+        $setup = Get-Item "dist\ai-desktop-setup-$env:VERSION-x64.exe"
         Get-ChildItem dist | Format-Table Name, Length
         "file=dist/$($setup.Name)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 

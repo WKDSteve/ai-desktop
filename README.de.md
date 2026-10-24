@@ -1,19 +1,30 @@
-# loomAI
+# ai-desktop
 
 Lokaler Agenten-Framework-Server (C++17, `cpp-httplib`). Dient als Backend für
 ein Live-Dashboard (SSE) und als Ask/Stream-Endpoint für Editor-Integrationen
-(siehe [`ai.nvim`](../ai.nvim)s `loomai`-Provider,
-dort `lua/ai/providers/loomai.lua`).
+(siehe [`ai.nvim`](../ai.nvim)s `ai_desktop`-Provider,
+dort `lua/ai/providers/ai_desktop.lua`).
 
 *[English version](README.md)*
 
-## loomAI herunterladen
+## Früher loomAI
 
-[**Neuestes Release herunterladen**](https://github.com/StefanBartl/loomAI/releases/latest)
--- `loomai-setup-<version>-x64.exe`, ein Windows-Installer, ohne Compiler oder
+Das Programm heißt nicht mehr loomAI, sondern ai-desktop (die Seite zeigt "KI", in anderen Sprachen "ai"). Was unter dem
+alten Namen eingerichtet wurde, gilt weiter: die Variablen `LOOMAI_*` (`AI_DESKTOP_*` gilt vor ihnen), der
+Konfigurationsordner (`%APPDATA%\loomai`, `~/.config/loomai`; er bleibt in Gebrauch, bis es einen Ordner `ai-desktop`
+gibt) und die API-Schlüssel im Windows-Anmeldeinformationsmanager (`loomai/<name>`; sie werden gelesen, wenn es keinen
+unter `ai-desktop/<name>` gibt, und zusammen gelöscht). Der Installer aktualisiert eine Installation von loomAI an Ort
+und Stelle und entfernt ihre alte Programmdatei und ihre Verknüpfung. Eine Installation mit `scripts/setup.*` lag unter
+`...\loomAI` oder `~/.local/share/loomai`; diesen Ordner und das Startskript `loomai` löscht man von Hand. Die alte
+GitHub-Adresse leitet auf dieses Repository um.
+
+## ai-desktop herunterladen
+
+[**Neuestes Release herunterladen**](https://github.com/StefanBartl/ai-desktop/releases/latest)
+-- `ai-desktop-setup-<version>-x64.exe`, ein Windows-Installer, ohne Compiler oder
 MSYS2. Er installiert für den aktuellen Benutzer (keine Administratorrechte),
-legt einen Startmenü-Eintrag an und kann optional den Befehl `loomai` in den
-`PATH` aufnehmen. Start über das Startmenü oder mit `loomai`; das Dashboard
+legt einen Startmenü-Eintrag an und kann optional den Befehl `ai-desktop` in den
+`PATH` aufnehmen. Start über das Startmenü oder mit `ai-desktop`; das Dashboard
 läuft dann auf `http://127.0.0.1:8080/`. Deinstallation über *Einstellungen ->
 Apps*.
 
@@ -35,7 +46,7 @@ das Release gemacht hat). In der eigenen PowerShell, nicht erhöht:
 
 ```powershell
 # der neueste Stand von main (die Vorabversion "latest")
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/StefanBartl/loomAI/releases/download/latest/install.ps1 | iex"
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/StefanBartl/ai-desktop/releases/download/latest/install.ps1 | iex"
 
 # ein Release: dasselbe mit dem Tag statt latest, z. B. .../releases/download/v0.1.1/install.ps1
 ```
@@ -45,12 +56,12 @@ den Rolling-Build ([`rolling.yml`](.github/workflows/rolling.yml), nach jedem
 grünen CI-Lauf auf `main` neu gebaut und durch Installieren, Starten,
 Aktualisieren und Deinstallieren geprüft, zum Ausprobieren des Neuesten). Die
 Zeile oben installiert ohne den Schritt „zum PATH hinzufügen", der Befehl
-`loomai` steht also nicht in neuen Terminals; loomAI über das Startmenü
+`ai-desktop` steht also nicht in neuen Terminals; ai-desktop über das Startmenü
 starten. Für den Schritt oder ein anderes Argument des Skripts die Form
 verwenden, die Argumente annimmt:
 
 ```powershell
-& ([scriptblock]::Create((irm https://github.com/StefanBartl/loomAI/releases/download/latest/install.ps1))) -InstallArgs '/TASKS=addtopath'
+& ([scriptblock]::Create((irm https://github.com/StefanBartl/ai-desktop/releases/download/latest/install.ps1))) -InstallArgs '/TASKS=addtopath'
 ```
 
 Als Datei gespeichert startet man das Skript mit `powershell -ExecutionPolicy
@@ -59,7 +70,7 @@ Bypass -File .\install.ps1 -InstallArgs '/TASKS=addtopath'` (ein Wert je
 PowerShell-Sitzung ist `-InstallArgs 'a','b'` in Ordnung). `-File <setup.exe>`
 installiert ein vorhandenes Setup; dessen Prüfsumme kommt dann aus `-Sums`,
 `-Sha256` oder einer `SHA256SUMS` daneben. Zum Reparieren oder Aktualisieren
-das Skript erneut ausführen (loomAI vorher beenden, falls es läuft). Die
+das Skript erneut ausführen (ai-desktop vorher beenden, falls es läuft). Die
 Skripte sind die des
 [Release-Kits](https://github.com/StefanBartl/appkit/tree/main/release-kit) von
 appkit, beim Anhängen für diese App und den Kanal gestempelt. (v0.1.0 ist
@@ -80,7 +91,7 @@ Windows (MSYS2/MinGW-w64; CMake >= 3.20 muss schon installiert sein):
 
 `-InstallDeps` installiert gcc, make und OpenSSL über MSYS2s `pacman`,
 `-AddToPath` trägt das Installationsverzeichnis in den User-`PATH` ein. Weitere
-Schalter: `-Prefix` (Standard `%LOCALAPPDATA%\loomai`), `-BuildType`, `-Clean`,
+Schalter: `-Prefix` (Standard `%LOCALAPPDATA%\ai-desktop`), `-BuildType`, `-Clean`,
 `-CheckOnly`, `-SkipInstall`, `-SkipSmokeTest`, `-Uninstall`. Details:
 `Get-Help .\scripts\setup.ps1 -Detailed`.
 
@@ -95,9 +106,9 @@ Optionen: `--prefix`, `--bin-dir`, `--build-type`, `--clean`, `--check`,
 
 Der Server liefert `./dashboard` relativ zu seinem Arbeitsverzeichnis aus,
 deshalb ist das installierte Layout `<prefix>/app` (Binary, Dashboard, unter
-Windows die Runtime-DLLs) plus ein Launcher -- `<prefix>\loomai.cmd` unter
-Windows, sonst `~/.local/bin/loomai` --, der ihn aus dem richtigen Verzeichnis
-startet. loomAI also über den Launcher starten, nicht `app/loomai` direkt. Die
+Windows die Runtime-DLLs) plus ein Launcher -- `<prefix>\ai-desktop.cmd` unter
+Windows, sonst `~/.local/bin/ai-desktop` --, der ihn aus dem richtigen Verzeichnis
+startet. ai-desktop also über den Launcher starten, nicht `app/ai-desktop` direkt. Die
 Skripte schreiben nie API-Keys; die kommen in die Umgebung (siehe "Starten").
 
 ## Bauen
@@ -140,7 +151,7 @@ cmake --build build -j4
 ## Starten
 
 ```bash
-./build/loomai      # bzw. build/loomai.exe unter Windows
+./build/ai-desktop      # bzw. build/ai-desktop.exe unter Windows
 ```
 
 Der Server bindet auf `127.0.0.1:8080` (bewusst nicht `0.0.0.0` — kein
@@ -152,10 +163,10 @@ geht es an das lokale Ollama:
 
 Für den Ollama-Fallback muss ein lokaler [Ollama](https://ollama.com)
 laufen (Standard: `http://127.0.0.1:11434`). Abweichender Host via
-`LOOMAI_OLLAMA_HOST` (**nicht** `OLLAMA_HOST` — das ist bereits durch Ollama
+`AI_DESKTOP_OLLAMA_HOST` (**nicht** `OLLAMA_HOST` — das ist bereits durch Ollama
 selbst als Bind-Adresse des Ollama-*Servers* belegt, z. B. `0.0.0.0:11434`,
 und damit kein gültiges Client-Ziel). Standardmodell via
-`LOOMAI_DEFAULT_MODEL`, sonst `llama3.1:8b-q5_K_M`.
+`AI_DESKTOP_DEFAULT_MODEL`, sonst `llama3.1:8b-q5_K_M`.
 
 Für die drei Cloud-Backends je ein API-Key als Env-Var, sonst meldet `/ask*`
 einen klaren Konfigurationsfehler statt einen Request zu versuchen:
@@ -168,8 +179,8 @@ einen klaren Konfigurationsfehler statt einen Request zu versuchen:
 | Ollama (lokal) | alles andere / kein `model` | -- (s. o.) |
 
 Die Präfix-Liste jedes Backends lässt sich komplett überschreiben
-(kommagetrennt) via `LOOMAI_PREFIXES_OPENAI`/`LOOMAI_PREFIXES_CLAUDE`/
-`LOOMAI_PREFIXES_GEMINI` — z. B. `LOOMAI_PREFIXES_OPENAI=gpt-,o1-,o3-,o4-`,
+(kommagetrennt) via `AI_DESKTOP_PREFIXES_OPENAI`/`AI_DESKTOP_PREFIXES_CLAUDE`/
+`AI_DESKTOP_PREFIXES_GEMINI` — z. B. `AI_DESKTOP_PREFIXES_OPENAI=gpt-,o1-,o3-,o4-`,
 um eine neue OpenAI-Modellfamilie ohne Neubau aufzunehmen. Wird einmal beim
 Start gelesen.
 
@@ -209,7 +220,7 @@ mehrere Sekunden zum Laden brauchen) — nur wenn der Request es weglässt.
 `/ask` — Response (`200`):
 
 ```json
-{ "text": "...", "provider": "loomai", "stop_reason": "stop", "usage": { "prompt_tokens": 37, "completion_tokens": 3 } }
+{ "text": "...", "provider": "ai_desktop", "stop_reason": "stop", "usage": { "prompt_tokens": 37, "completion_tokens": 3 } }
 ```
 
 `/ask` — Fehler (`4xx`/`5xx`):
@@ -232,7 +243,7 @@ data: [DONE]
 ```
 
 Die Motivation für diesen Vertrag (was `ai.nvim` als Provider-Kontrakt
-voraussetzt) steht in `ai.nvim`s `lua/ai/providers/loomai.lua`
+voraussetzt) steht in `ai.nvim`s `lua/ai/providers/ai_desktop.lua`
 (Modul-Doku-Kommentar am Dateikopf).
 
 ## ModelRouter
@@ -241,7 +252,7 @@ voraussetzt) steht in `ai.nvim`s `lua/ai/providers/loomai.lua`
 Backend-Clients (`src/{ollama,openai,anthropic,gemini}_client.{hpp,cpp}`),
 siehe Tabelle oben. Bewusst Präfix-Routing statt eines expliziten
 `provider`-Felds im Request: der HTTP-Vertrag bleibt dadurch unverändert
-(kein Anpassungsbedarf in `ai.nvim`s `loomai.lua`). Jeder Cloud-Client
+(kein Anpassungsbedarf in `ai.nvim`s `ai-desktop.lua`). Jeder Cloud-Client
 behandelt einen Fehler mitten im Stream defensiv (siehe `model_client.hpp`s
 `error_text`/`recover_error_body`) -- eine Auth-Fehlerantwort kommt bei
 OpenAI/Anthropic/Gemini teils als rohe, nicht-SSE-förmige JSON ohne
@@ -268,7 +279,7 @@ verschicken, baut Gemini den Pfad direkt aus dem Modellnamen
   `Origin` wird mit `403` abgelehnt, bevor er einen Route-Handler erreicht
   (diesen Header kann eine Webseite bei einem echten Cross-Origin-Request
   weder fälschen noch weglassen). curl-basierte Clients (`ai.nvim`s
-  `loomai.lua`, reines `curl`) schicken gar keinen `Origin`-Header und sind
+  `ai-desktop.lua`, reines `curl`) schicken gar keinen `Origin`-Header und sind
   davon nicht betroffen; die drei Cloud-*Backends* brauchen natürlich
   weiterhin ihre eigenen Keys, s. o.
 - `ollama_client.cpp` öffnet pro Request eine neue TCP-Verbindung zu Ollama

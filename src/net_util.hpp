@@ -2,7 +2,7 @@
 
 #include <string>
 
-namespace loomai {
+namespace ai_desktop {
 
 // Host part of "scheme://host[:port][/path]" (brackets kept for IPv6).
 inline std::string host_of(const std::string& url) {
@@ -21,4 +21,4 @@ inline bool is_loopback_host(const std::string& host) {
     return host == "localhost" || host == "[::1]" || host.rfind("127.", 0) == 0;
 }
 
-}  // namespace loomai
+}  // namespace ai_desktop

@@ -4,12 +4,12 @@
 # no version tag, not signed. A release stays a deliberate act (release.yml, a pushed tag, a draft a person
 # opens).
 #
-#   loomai-setup-x64.exe     the installer, under a fixed name (the version inside is 0.0.<run number>)
+#   ai-desktop-setup-x64.exe     the installer, under a fixed name (the version inside is 0.0.<run number>)
 #   install.ps1              installs exactly this build for the current user (release-kit of appkit,
 #                            stamped for the channel `latest`)
 #   SHA256SUMS               the checksums of both
 #
-# There is no install.sh and no Linux file: loomAI is built from source there (scripts/setup.sh).
+# There is no install.sh and no Linux file: ai-desktop is built from source there (scripts/setup.sh).
 #
 # Deciding (only the tip of main is built) and publishing (SHA256SUMS first, the words of the page last) are
 # the actions prepare and publish of appkit's release-kit, pinned by the commit of tools/release-kit.pin
@@ -90,13 +90,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p out
-          cp "$FILE" out/loomai-setup-x64.exe
+          cp "$FILE" out/ai-desktop-setup-x64.exe
           ls -l out
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: rolling-windows
-          path: out/loomai-setup-x64.exe
+          path: out/ai-desktop-setup-x64.exe
           if-no-files-found: error
           retention-days: 1
 
@@ -124,10 +124,10 @@ jobs:
           sha: ${{ needs.prepare.outputs.sha }}
           files: dist
           expect: 1
-          app: loomai
+          app: ai-desktop
           windows-kind: inno
-          windows-release-asset: loomai-setup-{version}-x64.exe
-          windows-rolling-asset: loomai-setup-x64.exe
+          windows-release-asset: ai-desktop-setup-{version}-x64.exe
+          windows-rolling-asset: ai-desktop-setup-x64.exe
           notes-file: .github/rolling-notes.md
 
   # What a user does, on what was just published: the stamped install.ps1 of `latest` is fetched from GitHub
@@ -148,9 +148,9 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $text = Invoke-RestMethod -Uri $env:URL
           & ([scriptblock]::Create($text)) -AllowElevated
-          $dir = Join-Path $env:LOCALAPPDATA 'Programs\loomAI'
-          if (-not (Test-Path (Join-Path $dir 'app\loomai.exe'))) { throw "no app\loomai.exe in $dir" }
-          $server = Start-Process -FilePath (Join-Path $dir 'app\loomai.exe') -WorkingDirectory (Join-Path $dir 'app') -PassThru -WindowStyle Hidden
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\ai-desktop'
+          if (-not (Test-Path (Join-Path $dir 'app\ai-desktop.exe'))) { throw "no app\ai-desktop.exe in $dir" }
+          $server = Start-Process -FilePath (Join-Path $dir 'app\ai-desktop.exe') -WorkingDirectory (Join-Path $dir 'app') -PassThru -WindowStyle Hidden
           try {
             $health = $null
             $deadline = [DateTime]::UtcNow.AddSeconds(20)

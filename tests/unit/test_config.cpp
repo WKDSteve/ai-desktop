@@ -5,7 +5,7 @@
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
-namespace config = loomai::config;
+namespace config = ai_desktop::config;
 
 namespace {
 
@@ -14,14 +14,14 @@ namespace {
 struct Sandbox {
     fs::path dir;
     explicit Sandbox(const std::string& tag) : dir(minitest::make_temp_dir(tag)) {
-        minitest::set_env("LOOMAI_CONFIG_DIR", dir.string());
-        minitest::set_env("LOOMAI_DEFAULT_MODEL", "");
-        minitest::set_env("LOOMAI_OLLAMA_HOST", "");
+        minitest::set_env("AI_DESKTOP_CONFIG_DIR", dir.string());
+        minitest::set_env("AI_DESKTOP_DEFAULT_MODEL", "");
+        minitest::set_env("AI_DESKTOP_OLLAMA_HOST", "");
         config::reload();
     }
     ~Sandbox() {
-        minitest::set_env("LOOMAI_DEFAULT_MODEL", "");
-        minitest::set_env("LOOMAI_OLLAMA_HOST", "");
+        minitest::set_env("AI_DESKTOP_DEFAULT_MODEL", "");
+        minitest::set_env("AI_DESKTOP_OLLAMA_HOST", "");
         config::reload();
         std::error_code ignored;
         fs::remove_all(dir, ignored);
@@ -126,16 +126,16 @@ TEST(ollama_host_is_normalised_on_write) {
 TEST(environment_variable_wins_and_locks_the_setting) {
     Sandbox box("envlock");
     CHECK(config::update_settings({{"default_model", "from-config"}}).ok());
-    minitest::set_env("LOOMAI_DEFAULT_MODEL", "from-env");
+    minitest::set_env("AI_DESKTOP_DEFAULT_MODEL", "from-env");
     CHECK_EQ(config::effective("default_model"), std::string("from-env"));
     json all = config::settings_json();
     CHECK_EQ(all["default_model"]["source"].get<std::string>(), std::string("env"));
     CHECK(all["default_model"]["locked"].get<bool>());
-    CHECK_EQ(all["default_model"]["env"].get<std::string>(), std::string("LOOMAI_DEFAULT_MODEL"));
+    CHECK_EQ(all["default_model"]["env"].get<std::string>(), std::string("AI_DESKTOP_DEFAULT_MODEL"));
     auto st = config::update_settings({{"default_model", "other"}});
     CHECK_EQ(st.http, 409);
     // The stored value is untouched underneath the lock.
-    minitest::set_env("LOOMAI_DEFAULT_MODEL", "");
+    minitest::set_env("AI_DESKTOP_DEFAULT_MODEL", "");
     CHECK_EQ(config::effective("default_model"), std::string("from-config"));
 }
 
@@ -192,10 +192,53 @@ TEST(a_directory_that_cannot_be_created_reports_500_and_keeps_the_old_state) {
     Sandbox box("nodir");
     // A *file* where the config directory should be: create_directories fails.
     minitest::write_file(box.dir / "blocker", "x");
-    minitest::set_env("LOOMAI_CONFIG_DIR", (box.dir / "blocker" / "sub").string());
+    minitest::set_env("AI_DESKTOP_CONFIG_DIR", (box.dir / "blocker" / "sub").string());
     config::reload();
     auto st = config::update_settings({{"theme", "dark"}});
     CHECK_EQ(st.http, 500);
     CHECK_EQ(config::effective("theme"), std::string("system"));  // the failed write was rolled back
-    minitest::set_env("LOOMAI_CONFIG_DIR", box.dir.string());
+    minitest::set_env("AI_DESKTOP_CONFIG_DIR", box.dir.string());
 }
+
+// A setting made under the old name (loomAI) keeps working: the variables LOOMAI_*, and the folder of the old name.
+TEST(an_old_variable_still_locks_a_setting_and_the_new_one_wins) {
+    Sandbox box("oldenv");
+    minitest::set_env("LOOMAI_DEFAULT_MODEL", "old-model");
+    config::reload();
+    CHECK_EQ(config::effective("default_model"), std::string("old-model"));
+    CHECK_EQ(config::settings_json()["default_model"]["source"].get<std::string>(), std::string("env"));
+    minitest::set_env("AI_DESKTOP_DEFAULT_MODEL", "new-model");
+    config::reload();
+    CHECK_EQ(config::effective("default_model"), std::string("new-model"));
+    minitest::set_env("LOOMAI_DEFAULT_MODEL", "");
+    minitest::set_env("AI_DESKTOP_DEFAULT_MODEL", "");
+    config::reload();
+}
+
+#ifndef _WIN32
+TEST(the_folder_of_the_old_name_is_kept_until_the_new_one_exists) {
+    const fs::path base = minitest::make_temp_dir("oldfolder");
+    minitest::set_env("AI_DESKTOP_CONFIG_DIR", "");
+    minitest::set_env("LOOMAI_CONFIG_DIR", "");
+    minitest::set_env("XDG_CONFIG_HOME", base.string());
+    config::reload();
+    CHECK_EQ(fs::path(config::directory()), base / "ai-desktop");  // nothing yet: the new name
+
+    fs::create_directories(base / "loomai");
+    config::reload();
+    CHECK_EQ(fs::path(config::directory()), base / "loomai");  // only the old folder is there: it stays in use
+
+    fs::create_directories(base / "ai-desktop");
+    config::reload();
+    CHECK_EQ(fs::path(config::directory()), base / "ai-desktop");  // the new one wins as soon as it exists
+
+    minitest::set_env("LOOMAI_CONFIG_DIR", (base / "elsewhere").string());
+    config::reload();
+    CHECK_EQ(fs::path(config::directory()), base / "elsewhere");  // the old variable still points the folder
+
+    minitest::set_env("LOOMAI_CONFIG_DIR", "");
+    minitest::set_env("XDG_CONFIG_HOME", "");
+    std::error_code ignored;
+    fs::remove_all(base, ignored);
+}
+#endif

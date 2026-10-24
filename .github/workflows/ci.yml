@@ -50,7 +50,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # The binary needs the runtime DLLs of the toolchain, which the install step copies beside the
-      # installed copy but not beside build/loomai.exe.
+      # installed copy but not beside build/ai-desktop.exe.
       - name: unit tests (ctest)
         shell: pwsh
         run: |
@@ -81,7 +81,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends cmake g++ curl libssl-dev
 
       - name: build, install and smoke-test with scripts/setup.sh
-        run: bash scripts/setup.sh --prefix "$RUNNER_TEMP/loomai" --bin-dir "$RUNNER_TEMP/bin"
+        run: bash scripts/setup.sh --prefix "$RUNNER_TEMP/ai-desktop" --bin-dir "$RUNNER_TEMP/bin"
 
       - name: unit tests (ctest)
         run: ctest --test-dir build --output-on-failure

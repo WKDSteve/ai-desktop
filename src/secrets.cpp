@@ -11,6 +11,7 @@
 #include <optional>
 
 #include "ids.hpp"
+#include "legacy.hpp"
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -26,7 +27,7 @@
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
-namespace loomai::secrets {
+namespace ai_desktop::secrets {
 
 namespace {
 
@@ -63,7 +64,7 @@ std::string env_value(const std::string& name) {
 
 bool use_file_backend() {
 #ifdef _WIN32
-    const char* forced = std::getenv("LOOMAI_SECRET_BACKEND");
+    const char* forced = legacy::env("AI_DESKTOP_SECRET_BACKEND");
     return forced && std::string(forced) == "file";
 #else
     return true;
@@ -99,7 +100,7 @@ json load_file_locked() {
         fs::path aside = path;
         aside += ".corrupt-" + std::to_string(static_cast<long long>(std::time(nullptr)));
         fs::rename(path, aside, ec);
-        std::cerr << "loomai: the secrets file is not valid; "
+        std::cerr << "ai-desktop: the secrets file is not valid; "
                   << (ec ? "could not move it aside" : "moved it to " + aside.u8string()) << "\n";
         return empty;
     }
@@ -162,6 +163,11 @@ config::Status save_file_locked(const json& doc) {
 #ifdef _WIN32
 
 std::string target_name(const std::string& name) {
+    return "ai-desktop/" + name;
+}
+
+// The entry under the old name (loomAI): read when there is none under the new one, deleted with it, never written.
+std::string old_target_name(const std::string& name) {
     return "loomai/" + name;
 }
 
@@ -175,9 +181,9 @@ std::wstring widen(const std::string& utf8) {
     return wide;
 }
 
-std::optional<std::string> wincred_read(const std::string& name) {
+std::optional<std::string> wincred_read_target(const std::string& target) {
     PCREDENTIALW credential = nullptr;
-    if (!CredReadW(widen(target_name(name)).c_str(), CRED_TYPE_GENERIC, 0, &credential)) {
+    if (!CredReadW(widen(target).c_str(), CRED_TYPE_GENERIC, 0, &credential)) {
         return std::nullopt;  // ERROR_NOT_FOUND in the normal case
     }
     std::string value(reinterpret_cast<const char*>(credential->CredentialBlob), credential->CredentialBlobSize);
@@ -185,9 +191,16 @@ std::optional<std::string> wincred_read(const std::string& name) {
     return value;
 }
 
+std::optional<std::string> wincred_read(const std::string& name) {
+    if (auto value = wincred_read_target(target_name(name))) {
+        return value;
+    }
+    return wincred_read_target(old_target_name(name));
+}
+
 config::Status wincred_write(const std::string& name, const std::string& value) {
     std::wstring target = widen(target_name(name));
-    std::wstring user = L"loomai";
+    std::wstring user = L"ai-desktop";
     CREDENTIALW credential = {};
     credential.Type = CRED_TYPE_GENERIC;
     credential.TargetName = &target[0];
@@ -202,8 +215,11 @@ config::Status wincred_write(const std::string& name, const std::string& value) 
 }
 
 config::Status wincred_delete(const std::string& name) {
-    if (!CredDeleteW(widen(target_name(name)).c_str(), CRED_TYPE_GENERIC, 0) && GetLastError() != ERROR_NOT_FOUND) {
-        return {500, "the Windows Credential Manager refused the delete (error " + std::to_string(GetLastError()) + ")"};
+    // Both entries go: a key that is forgotten must not come back from under the old name.
+    for (const std::string& target : {target_name(name), old_target_name(name)}) {
+        if (!CredDeleteW(widen(target).c_str(), CRED_TYPE_GENERIC, 0) && GetLastError() != ERROR_NOT_FOUND) {
+            return {500, "the Windows Credential Manager refused the delete (error " + std::to_string(GetLastError()) + ")"};
+        }
     }
     return {};
 }
@@ -361,4 +377,4 @@ void reload() {
     g_cache.clear();
 }
 
-}  // namespace loomai::secrets
+}  // namespace ai_desktop::secrets

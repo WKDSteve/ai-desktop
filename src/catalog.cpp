@@ -19,7 +19,7 @@
 using json = nlohmann::json;
 using Clock = std::chrono::steady_clock;
 
-namespace loomai::catalog {
+namespace ai_desktop::catalog {
 
 namespace {
 
@@ -61,7 +61,7 @@ bool get_json(const std::string& origin, const std::string& path, const httplib:
         return false;
     }
     if (res->status != 200) {
-        std::string detail = (out.is_object() && out.contains("error")) ? loomai::error_text(out["error"]) : "";
+        std::string detail = (out.is_object() && out.contains("error")) ? ai_desktop::error_text(out["error"]) : "";
         if (detail.size() > 200) {
             detail.resize(200);
         }
@@ -311,4 +311,4 @@ InfoResult info(const std::string& id) {
     return result;
 }
 
-}  // namespace loomai::catalog
+}  // namespace ai_desktop::catalog

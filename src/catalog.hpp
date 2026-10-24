@@ -11,7 +11,7 @@
 // Remote lists are fetched in parallel with short timeouts and cached (cloud
 // ~10 min, Ollama ~15 s, failures ~30 s). One provider failing leaves the rest of
 // the list intact; its message ends up in "errors", never as a failed request.
-namespace loomai::catalog {
+namespace ai_desktop::catalog {
 
 // {"default": "<default model>", "models": [entry...], "errors": {"<provider>": "msg"}}.
 // `refresh` bypasses the cache.
@@ -27,4 +27,4 @@ struct InfoResult {
 // the list are returned. 404 for an unknown id, 502 if Ollama cannot be reached.
 InfoResult info(const std::string& id);
 
-}  // namespace loomai::catalog
+}  // namespace ai_desktop::catalog

@@ -9,16 +9,16 @@
 
 // Model registry: decides which backend a model name goes to, and manages the
 // user-defined ("custom") models stored in config.json. Pure logic, no HTTP, so
-// it lives in loomai_core and is unit-tested directly.
+// it lives in ai_desktop_core and is unit-tested directly.
 //
 // Resolution order for a request's `model`:
 //   1. an exact match with a custom model id,
 //   2. the model-name prefixes (claude-, gpt-/o1-/o3-, gemini-; overridable with
-//      LOOMAI_PREFIXES_* exactly as before),
+//      AI_DESKTOP_PREFIXES_* exactly as before),
 //   3. local Ollama (also for an empty model).
 // The /ask and /ask/stream contract is unchanged: `model` may simply also be the
 // id of a custom model.
-namespace loomai::models {
+namespace ai_desktop::models {
 
 struct Route {
     std::string provider = "ollama";  // ollama | openai | anthropic | gemini | openai-compatible
@@ -54,4 +54,4 @@ config::Status custom_remove(const std::string& id);
 // Returns false for anything else (query, fragment, credentials, bad port, ...).
 bool split_base_url(const std::string& url, std::string& origin, std::string& path_prefix);
 
-}  // namespace loomai::models
+}  // namespace ai_desktop::models

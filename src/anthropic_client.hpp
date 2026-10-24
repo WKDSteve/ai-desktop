@@ -5,11 +5,11 @@
 
 #include "model_client.hpp"
 
-// Client for the Anthropic Messages API -- one of loomAI's ModelRouter
+// Client for the Anthropic Messages API -- one of ai-desktop's ModelRouter
 // backends (see main.cpp's model-name-prefix dispatch). Mirrors
 // ollama_client.hpp's shape so main.cpp can treat every backend uniformly
-// through loomai::AskResult.
-namespace loomai::anthropic {
+// through ai_desktop::AskResult.
+namespace ai_desktop::anthropic {
 
 // True if ANTHROPIC_API_KEY is set. The router only dispatches a "claude-"
 // model here when this is true; an unset key is a config error the caller
@@ -29,4 +29,4 @@ std::string ask_stream(const std::string& prompt,
                         int timeout_ms,
                         const std::function<void(const std::string&)>& on_delta);
 
-}  // namespace loomai::anthropic
+}  // namespace ai_desktop::anthropic

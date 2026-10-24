@@ -6,7 +6,7 @@
 #include "httplib.h"
 #include "secrets.hpp"
 
-namespace loomai::gemini {
+namespace ai_desktop::gemini {
 
 using json = nlohmann::json;
 
@@ -301,4 +301,4 @@ std::string ask_stream(const std::string& prompt,
     return "";
 }
 
-}  // namespace loomai::gemini
+}  // namespace ai_desktop::gemini

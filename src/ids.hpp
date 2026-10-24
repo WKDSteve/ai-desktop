@@ -2,7 +2,7 @@
 
 #include <string>
 
-namespace loomai {
+namespace ai_desktop {
 
 // Identifier of a user-defined model. It ends up in URLs (/models/custom/<id>),
 // in config.json and in the name of a stored secret, so it is restricted to a
@@ -24,4 +24,4 @@ inline bool valid_model_id(const std::string& id) {
     return true;
 }
 
-}  // namespace loomai
+}  // namespace ai_desktop

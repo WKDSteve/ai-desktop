@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Installs a built loomai-setup-*.exe silently, checks the installed copy and
+    Installs a built ai-desktop-setup-*.exe silently, checks the installed copy and
     uninstalls it again.
 
 .DESCRIPTION
@@ -16,7 +16,7 @@
     refuses to run outside CI unless -Force is given.
 
 .PARAMETER Setup
-    Path to loomai-setup-<version>-x64.exe.
+    Path to ai-desktop-setup-<version>-x64.exe.
 
 .PARAMETER WorkDir
     Scratch directory the installer installs into. Default: $env:RUNNER_TEMP\verify-install.
@@ -45,7 +45,7 @@ if (-not $Force -and $env:CI -ne 'true') {
 }
 
 $Setup = (Resolve-Path -LiteralPath $Setup).Path
-$InstallDir = Join-Path $WorkDir 'loomAI'
+$InstallDir = Join-Path $WorkDir 'ai-desktop'
 $SetupLog = Join-Path $WorkDir 'setup.log'
 New-Item -ItemType Directory -Force -Path $WorkDir | Out-Null
 $Port = 8080
@@ -85,11 +85,11 @@ function Wait-ForHealth {
 }
 
 function Stop-InstalledServer {
-    $exe = Join-Path $InstallDir 'app\loomai.exe'
-    Get-Process loomai -ErrorAction SilentlyContinue |
+    $exe = Join-Path $InstallDir 'app\ai-desktop.exe'
+    Get-Process ai-desktop -ErrorAction SilentlyContinue |
         Where-Object { $_.Path -ieq $exe } |
         Stop-Process -Force
-    # The launcher (cmd.exe running loomai.cmd) is a process of its own with the app directory as its working
+    # The launcher (cmd.exe running ai-desktop.cmd) is a process of its own with the app directory as its working
     # directory. When its server is closed by a break, as the setup does to update a running one, cmd asks
     # "Terminate batch job (Y/N)?" in its hidden window and stays: it would keep the uninstaller from
     # deleting the directory (error 32 in the uninstaller log).
@@ -124,10 +124,10 @@ function Install-Setup {
 }
 
 function Assert-InstalledFiles {
-    foreach ($rel in @('app\loomai.exe', 'app\dashboard\index.html', 'loomai.cmd', 'unins000.exe')) {
+    foreach ($rel in @('app\ai-desktop.exe', 'app\dashboard\index.html', 'ai-desktop.cmd', 'unins000.exe')) {
         Assert-That (Test-Path (Join-Path $InstallDir $rel)) "missing $rel"
     }
-    Assert-That (@(Get-ChildItem (Join-Path $InstallDir 'app') -Filter *.dll).Count -gt 0) 'no runtime DLLs next to loomai.exe'
+    Assert-That (@(Get-ChildItem (Join-Path $InstallDir 'app') -Filter *.dll).Count -gt 0) 'no runtime DLLs next to ai-desktop.exe'
     Write-Ok 'binary, dashboard, runtime DLLs, launcher and uninstaller are in place'
 }
 
@@ -138,7 +138,7 @@ function Start-InstalledServer {
     $env:Path = "$env:SystemRoot\System32;$env:SystemRoot"
     try {
         $null = Start-Process -FilePath "$env:SystemRoot\System32\cmd.exe" -WindowStyle Hidden `
-            -WorkingDirectory $env:TEMP -ArgumentList '/c', "`"$(Join-Path $InstallDir 'loomai.cmd')`""
+            -WorkingDirectory $env:TEMP -ArgumentList '/c', "`"$(Join-Path $InstallDir 'ai-desktop.cmd')`""
     } finally {
         $env:Path = $savedPath
     }
@@ -151,8 +151,8 @@ function Start-InstalledServer {
 }
 
 function Get-InstalledServer {
-    $exe = Join-Path $InstallDir 'app\loomai.exe'
-    return @(Get-Process loomai -ErrorAction SilentlyContinue | Where-Object { $_.Path -ieq $exe })
+    $exe = Join-Path $InstallDir 'app\ai-desktop.exe'
+    return @(Get-Process ai-desktop -ErrorAction SilentlyContinue | Where-Object { $_.Path -ieq $exe })
 }
 
 $pathBefore = Get-RawUserPath
@@ -220,9 +220,9 @@ if ($installed) {
         # What is left, and what the uninstaller says about it.
         Write-Host '--- left in the install directory ---'
         Get-ChildItem -LiteralPath $InstallDir -Recurse -Force | ForEach-Object { $_.FullName }
-        Write-Host '--- processes that name loomai or the install directory ---'
+        Write-Host '--- processes that name ai-desktop or the install directory ---'
         Get-CimInstance Win32_Process |
-            Where-Object { $_.CommandLine -and ($_.CommandLine -match 'loomai' -or $_.CommandLine.Contains($InstallDir)) } |
+            Where-Object { $_.CommandLine -and ($_.CommandLine -match 'ai-desktop' -or $_.CommandLine.Contains($InstallDir)) } |
             ForEach-Object { "$($_.ProcessId) $($_.Name) parent=$($_.ParentProcessId) $($_.CommandLine)" }
         if (Test-Path $UninstallLog) {
             Write-Host '--- uninstaller log (tail) ---'
@@ -230,7 +230,7 @@ if ($installed) {
         }
     }
     Assert-That (-not (Test-Path (Join-Path $InstallDir 'app'))) 'the uninstaller left the app directory behind'
-    Assert-That (-not (Test-Path (Join-Path $InstallDir 'loomai.cmd'))) 'the uninstaller left the launcher behind'
+    Assert-That (-not (Test-Path (Join-Path $InstallDir 'ai-desktop.cmd'))) 'the uninstaller left the launcher behind'
     Write-Ok 'files removed'
     # Compare entry lists, not raw text: removing our entry may drop an empty
     # trailing ';' that was there before, which changes nothing for Windows.

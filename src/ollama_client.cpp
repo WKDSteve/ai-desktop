@@ -7,7 +7,7 @@
 #include "httplib.h"
 #include "nlohmann/json.hpp"
 
-namespace loomai::ollama {
+namespace ai_desktop::ollama {
 
 using json = nlohmann::json;
 
@@ -17,7 +17,7 @@ namespace {
 // malformed/adversarial response that never sends a newline, which would
 // otherwise grow `buffer` in ask_stream()'s content_receiver without bound
 // for the life of the request. Mirrors gemini_client.cpp's kMaxLineBufferBytes.
-// Most relevant here since LOOMAI_OLLAMA_HOST is user-configurable and can
+// Most relevant here since AI_DESKTOP_OLLAMA_HOST is user-configurable and can
 // point at a non-local host, unlike the hardcoded cloud-provider hosts.
 constexpr size_t kMaxLineBufferBytes = 1 << 20;  // 1 MiB
 
@@ -25,7 +25,7 @@ constexpr size_t kMaxLineBufferBytes = 1 << 20;  // 1 MiB
 // is read on every request, so a host changed in the settings dialog takes
 // effect immediately instead of staying pinned to the first request's value.
 httplib::Client& client_for_thread(int timeout_ms) {
-    return loomai::client_for(host(), timeout_ms);
+    return ai_desktop::client_for(host(), timeout_ms);
 }
 
 json build_request(const std::string& prompt,
@@ -44,8 +44,8 @@ json build_request(const std::string& prompt,
 
 }  // namespace
 
-// Both come from the config store, which applies LOOMAI_OLLAMA_HOST /
-// LOOMAI_DEFAULT_MODEL first, then config.json (settings dialog), then the
+// Both come from the config store, which applies AI_DESKTOP_OLLAMA_HOST /
+// AI_DESKTOP_DEFAULT_MODEL first, then config.json (settings dialog), then the
 // built-in default.
 std::string host() {
     std::string raw = config::effective("ollama_host");
@@ -164,4 +164,4 @@ std::string ask_stream(const std::string& prompt,
     return "";
 }
 
-}  // namespace loomai::ollama
+}  // namespace ai_desktop::ollama

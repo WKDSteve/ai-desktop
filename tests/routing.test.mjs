@@ -58,7 +58,7 @@ describe("custom OpenAI-compatible models", () => {
 
   before(async () => {
     mock = await startMock();
-    configDir = mkdtempSync(path.join(os.tmpdir(), "loomai-routing-"));
+    configDir = mkdtempSync(path.join(os.tmpdir(), "ai-desktop-routing-"));
     writeFileSync(
       path.join(configDir, "config.json"),
       JSON.stringify({

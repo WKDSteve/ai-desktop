@@ -17,6 +17,7 @@
 #include "anthropic_client.hpp"
 #include "api.hpp"
 #include "gemini_client.hpp"
+#include "legacy.hpp"
 #include "models.hpp"
 #include "ollama_client.hpp"
 #include "openai_client.hpp"
@@ -27,18 +28,18 @@ using json = nlohmann::json;
 // ---------------------------------------------------------------------------
 // ModelRouter: models::resolve() decides the backend -- an exact custom model
 // id first, then the model-name prefixes ("claude-*"/"gpt-*"/"o1-*"/"o3-*"/
-// "gemini-*", overridable with LOOMAI_PREFIXES_*), and anything else,
+// "gemini-*", overridable with AI_DESKTOP_PREFIXES_*), and anything else,
 // including no model at all, goes to the local Ollama client (the only backend
 // that existed before this router). Prefix routing keeps the /ask and
 // /ask/stream HTTP contract unchanged (no new request field ai.nvim's
-// loomai.lua would need to set) -- see the ai.nvim handover's loomAI
+// ai-desktop.lua would need to set) -- see the ai.nvim handover's ai-desktop
 // ModelRouter scoping, Option (a), for the reasoning. A custom model is just a
 // `model` value that happens to be registered in config.json.
 // ---------------------------------------------------------------------------
 namespace {
 
 // Per-backend default timeout, used only when the caller's request body
-// omits "timeout_ms" -- ai.nvim's own loomai.lua always sends one, so this
+// omits "timeout_ms" -- ai.nvim's own ai-desktop.lua always sends one, so this
 // only matters for other callers (a raw curl call, a future client).
 // Ollama's model can take several seconds just to load on a cold first
 // request (measured live against this machine's Ollama: ~4.5s cold vs
@@ -49,39 +50,39 @@ constexpr int kDefaultTimeoutLocalMs = 120000;
 constexpr int kDefaultTimeoutCloudMs = 60000;
 
 int default_timeout_for(const std::string& model) {
-    return loomai::models::resolve(model).local ? kDefaultTimeoutLocalMs : kDefaultTimeoutCloudMs;
+    return ai_desktop::models::resolve(model).local ? kDefaultTimeoutLocalMs : kDefaultTimeoutCloudMs;
 }
 
 // Endpoint for a user-defined OpenAI-compatible model. A key is optional (local
 // servers usually have none) but is sent when one is stored.
-loomai::openai::Endpoint endpoint_for(const loomai::models::Route& route) {
-    loomai::openai::Endpoint endpoint;
+ai_desktop::openai::Endpoint endpoint_for(const ai_desktop::models::Route& route) {
+    ai_desktop::openai::Endpoint endpoint;
     endpoint.base_url = route.base_url;
     endpoint.path_prefix = route.path_prefix;
-    endpoint.api_key = loomai::secrets::get(route.key_name);
+    endpoint.api_key = ai_desktop::secrets::get(route.key_name);
     endpoint.label = route.label;
     endpoint.key_required = false;
     return endpoint;
 }
 
-loomai::AskResult route_ask(const std::string& prompt,
+ai_desktop::AskResult route_ask(const std::string& prompt,
                              const std::string& system,
                              const std::string& model,
                              int timeout_ms) {
-    const auto route = loomai::models::resolve(model);
+    const auto route = ai_desktop::models::resolve(model);
     if (route.provider == "anthropic") {
-        return loomai::anthropic::ask(prompt, system, route.upstream_model, timeout_ms);
+        return ai_desktop::anthropic::ask(prompt, system, route.upstream_model, timeout_ms);
     }
     if (route.provider == "openai") {
-        return loomai::openai::ask(prompt, system, route.upstream_model, timeout_ms);
+        return ai_desktop::openai::ask(prompt, system, route.upstream_model, timeout_ms);
     }
     if (route.provider == "gemini") {
-        return loomai::gemini::ask(prompt, system, route.upstream_model, timeout_ms);
+        return ai_desktop::gemini::ask(prompt, system, route.upstream_model, timeout_ms);
     }
     if (route.provider == "openai-compatible") {
-        return loomai::openai::ask(prompt, system, route.upstream_model, timeout_ms, endpoint_for(route));
+        return ai_desktop::openai::ask(prompt, system, route.upstream_model, timeout_ms, endpoint_for(route));
     }
-    return loomai::ollama::ask(prompt, system, route.upstream_model, timeout_ms);
+    return ai_desktop::ollama::ask(prompt, system, route.upstream_model, timeout_ms);
 }
 
 std::string route_ask_stream(const std::string& prompt,
@@ -89,21 +90,21 @@ std::string route_ask_stream(const std::string& prompt,
                               const std::string& model,
                               int timeout_ms,
                               const std::function<void(const std::string&)>& on_delta) {
-    const auto route = loomai::models::resolve(model);
+    const auto route = ai_desktop::models::resolve(model);
     if (route.provider == "anthropic") {
-        return loomai::anthropic::ask_stream(prompt, system, route.upstream_model, timeout_ms, on_delta);
+        return ai_desktop::anthropic::ask_stream(prompt, system, route.upstream_model, timeout_ms, on_delta);
     }
     if (route.provider == "openai") {
-        return loomai::openai::ask_stream(prompt, system, route.upstream_model, timeout_ms, on_delta);
+        return ai_desktop::openai::ask_stream(prompt, system, route.upstream_model, timeout_ms, on_delta);
     }
     if (route.provider == "gemini") {
-        return loomai::gemini::ask_stream(prompt, system, route.upstream_model, timeout_ms, on_delta);
+        return ai_desktop::gemini::ask_stream(prompt, system, route.upstream_model, timeout_ms, on_delta);
     }
     if (route.provider == "openai-compatible") {
-        return loomai::openai::ask_stream(prompt, system, route.upstream_model, timeout_ms, endpoint_for(route),
+        return ai_desktop::openai::ask_stream(prompt, system, route.upstream_model, timeout_ms, endpoint_for(route),
                                           on_delta);
     }
-    return loomai::ollama::ask_stream(prompt, system, route.upstream_model, timeout_ms, on_delta);
+    return ai_desktop::ollama::ask_stream(prompt, system, route.upstream_model, timeout_ms, on_delta);
 }
 
 }  // namespace
@@ -131,10 +132,10 @@ void push_event(const std::string& type,
 
 // ---------------------------------------------------------------------------
 // ai.nvim-Provider-Kontrakt (/health, /ask, /ask/stream)
-// see wkdbook-native/loomai/Backlog/FEATURES/loomai-ai-nvim-integration.md (author notes, not in this repo)
+// see wkdbook-native/ai-desktop/Backlog/FEATURES/ai-desktop-ai-nvim-integration.md (author notes, not in this repo)
 // ---------------------------------------------------------------------------
 void send_json_error(httplib::Response& res, int status, const std::string& message) {
-    loomai::api::send_error(res, status, message);
+    ai_desktop::api::send_error(res, status, message);
 }
 
 // ---------------------------------------------------------------------------
@@ -150,11 +151,11 @@ void send_json_error(httplib::Response& res, int status, const std::string& mess
 // cannot forge or suppress its own Origin header on a cross-origin request
 // though, so rejecting any request whose Origin doesn't match this server's
 // own origin closes that gap without requiring a shared secret on ai.nvim's
-// side: curl-based clients (ai.nvim's loomai.lua, plain `curl`) send no
+// side: curl-based clients (ai.nvim's ai-desktop.lua, plain `curl`) send no
 // Origin header at all and are unaffected, and the dashboard's own JS is
 // always same-origin.
 // ---------------------------------------------------------------------------
-// The port is configurable (LOOMAI_PORT / --port, needed by the desktop app's
+// The port is configurable (AI_DESKTOP_PORT / --port, needed by the desktop app's
 // sidecar), so the allowed origins follow the port the server really listens
 // on instead of a hardcoded 8080.
 constexpr int kDefaultPort = 8080;
@@ -197,7 +198,7 @@ void run_simulation_agent() {
 
     std::this_thread::sleep_for(1s);
     push_event("agent_status", "Planer",
-               "loomAI gestartet — analysiere Projektstruktur...");
+               "ai-desktop gestartet — analysiere Projektstruktur...");
 
     std::this_thread::sleep_for(3s);
     push_event("agent_status", "Planer",
@@ -226,17 +227,15 @@ void run_simulation_agent() {
 int main(int argc, char** argv) {
     use_utf8_console();
 
-    // Port: --port N wins over LOOMAI_PORT, default 8080 (what ai.nvim expects).
-    // An empty LOOMAI_PORT counts as unset (a common way to "clear" a variable),
+    // Port: --port N wins over AI_DESKTOP_PORT, default 8080 (what ai.nvim expects).
+    // An empty AI_DESKTOP_PORT counts as unset (a common way to "clear" a variable),
     // but an explicit empty --port is a mistake and must not silently fall back
     // to the default.
     std::string port_text;
     bool have_port = false;
-    if (const char* env_port = std::getenv("LOOMAI_PORT")) {
-        if (*env_port) {
-            port_text = env_port;
-            have_port = true;
-        }
+    if (const char* env_port = ai_desktop::legacy::env("AI_DESKTOP_PORT")) {
+        port_text = env_port;
+        have_port = true;
     }
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -247,14 +246,14 @@ int main(int argc, char** argv) {
             port_text = arg.substr(7);
             have_port = true;
         } else {
-            std::cerr << "loomai: unknown argument '" << arg << "' (supported: --port N)\n";
+            std::cerr << "ai-desktop: unknown argument '" << arg << "' (supported: --port N)\n";
             return 2;
         }
     }
     if (have_port) {
         g_port = parse_port(port_text);
         if (g_port == 0) {
-            std::cerr << "loomai: invalid port '" << port_text << "' (expected 1-65535)\n";
+            std::cerr << "ai-desktop: invalid port '" << port_text << "' (expected 1-65535)\n";
             return 2;
         }
     }
@@ -263,29 +262,27 @@ int main(int argc, char** argv) {
     // The dashboard is served from this directory; the desktop app's sidecar
     // does not start inside it, so it can be pointed elsewhere.
     std::string dashboard_dir = "./dashboard";
-    if (const char* env_dir = std::getenv("LOOMAI_DASHBOARD_DIR")) {
-        if (*env_dir) {
-            dashboard_dir = env_dir;
-        }
+    if (const char* env_dir = ai_desktop::legacy::env("AI_DESKTOP_DASHBOARD_DIR")) {
+        dashboard_dir = env_dir;
     }
 
-    std::cout << "=== loomAI Framework ===\n";
+    std::cout << "=== ai-desktop Framework ===\n";
     std::cout << "Dashboard: " << base << "\n";
     std::cout << "SSE:       " << base << "/events\n";
     std::cout << "Health:    " << base << "/health\n";
     std::cout << "Ask:       POST " << base << "/ask\n";
     std::cout << "Stream:    POST " << base << "/ask/stream\n";
-    std::cout << "Ollama:    " << loomai::ollama::host()
-               << " (model default: " << loomai::ollama::default_model() << ")\n";
+    std::cout << "Ollama:    " << ai_desktop::ollama::host()
+               << " (model default: " << ai_desktop::ollama::default_model() << ")\n";
     std::cout << "OpenAI:    "
-               << (loomai::openai::configured() ? "configured" : "not configured (OPENAI_API_KEY unset)")
+               << (ai_desktop::openai::configured() ? "configured" : "not configured (OPENAI_API_KEY unset)")
                << "\n";
     std::cout << "Anthropic: "
-               << (loomai::anthropic::configured() ? "configured"
+               << (ai_desktop::anthropic::configured() ? "configured"
                                                     : "not configured (ANTHROPIC_API_KEY unset)")
                << "\n";
     std::cout << "Gemini:    "
-               << (loomai::gemini::configured() ? "configured" : "not configured (GEMINI_API_KEY unset)")
+               << (ai_desktop::gemini::configured() ? "configured" : "not configured (GEMINI_API_KEY unset)")
                << "\n";
     std::cout << "Herkunft:  Anfragen mit fremdem Origin-Header werden abgelehnt "
                   "(schuetzt vor einer bösartigen Webseite im selben Browser)\n";
@@ -320,7 +317,7 @@ int main(int argc, char** argv) {
 
     // Management API (models, settings, keys, custom models) for the dashboard
     // and the desktop app; the ai.nvim contract below stays as it is.
-    loomai::api::register_routes(svr);
+    ai_desktop::api::register_routes(svr);
 
     // SSE-Endpoint: Browser verbindet sich hier und empfängt live Events
     svr.Get("/events", [](const httplib::Request&, httplib::Response& res) {
@@ -380,9 +377,9 @@ int main(int argc, char** argv) {
         // worth trying without guessing from an /ask error message.
         body["backends"] = {
             {"ollama", true},
-            {"openai", loomai::openai::configured()},
-            {"anthropic", loomai::anthropic::configured()},
-            {"gemini", loomai::gemini::configured()},
+            {"openai", ai_desktop::openai::configured()},
+            {"anthropic", ai_desktop::anthropic::configured()},
+            {"gemini", ai_desktop::gemini::configured()},
         };
         res.set_content(body.dump(), "application/json");
     });
@@ -412,7 +409,7 @@ int main(int argc, char** argv) {
 
         json out;
         out["text"]     = result.text;
-        out["provider"] = "loomai";
+        out["provider"] = "ai_desktop";
         if (!result.stop_reason.empty()) {
             out["stop_reason"] = result.stop_reason;
         }
@@ -471,9 +468,9 @@ int main(int argc, char** argv) {
                         sink.write(done_event.c_str(), done_event.size());
                     }
                 } catch (const std::exception& e) {
-                    write_event(json{{"error", {{"message", std::string("loomai: ") + e.what()}}}});
+                    write_event(json{{"error", {{"message", std::string("ai-desktop: ") + e.what()}}}});
                 } catch (...) {
-                    write_event(json{{"error", {{"message", "loomai: unknown internal error"}}}});
+                    write_event(json{{"error", {{"message", "ai-desktop: unknown internal error"}}}});
                 }
 
                 sink.done();
@@ -496,7 +493,7 @@ int main(int argc, char** argv) {
     sim.join();
 
     if (!listen_ok) {
-        std::cerr << "loomai: failed to bind 127.0.0.1:" << g_port << " (port already in use?)\n";
+        std::cerr << "ai-desktop: failed to bind 127.0.0.1:" << g_port << " (port already in use?)\n";
         return 1;
     }
     return 0;

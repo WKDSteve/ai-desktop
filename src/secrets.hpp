@@ -11,15 +11,15 @@
 //
 // Store backends:
 //   * Windows: the Credential Manager (generic credentials, target
-//     "loomai/<name>"), protected by the user's login.
+//     "ai-desktop/<name>"), protected by the user's login.
 //   * elsewhere: <config dir>/secrets.json with owner-only permissions (0600).
 //     This is weaker than a keyring and the README says so.
-//   * LOOMAI_SECRET_BACKEND=file forces the file backend on Windows too (headless
+//   * AI_DESKTOP_SECRET_BACKEND=file forces the file backend on Windows too (headless
 //     setups, and the tests, which must not touch the real Credential Manager).
 //
 // A secret value is never returned by any function here except get(), which only
 // the backend clients call, and is never logged.
-namespace loomai::secrets {
+namespace ai_desktop::secrets {
 
 // OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, or "custom:<model id>" for the
 // key of a user-defined model. Anything else is not a valid secret name.
@@ -47,7 +47,7 @@ nlohmann::json keys_json();
 // "wincred" or "file".
 std::string backend_name();
 
-// Forgets cached lookups (tests, and after LOOMAI_CONFIG_DIR / backend changed).
+// Forgets cached lookups (tests, and after AI_DESKTOP_CONFIG_DIR / backend changed).
 void reload();
 
-}  // namespace loomai::secrets
+}  // namespace ai_desktop::secrets

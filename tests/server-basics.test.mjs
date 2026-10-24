@@ -19,7 +19,7 @@ describe("server basics", () => {
     assert.equal(res.json.status, "ready");
   });
 
-  it("serves the dashboard from LOOMAI_DASHBOARD_DIR although the cwd is elsewhere", async () => {
+  it("serves the dashboard from AI_DESKTOP_DASHBOARD_DIR although the cwd is elsewhere", async () => {
     const res = await server.get("/");
     assert.equal(res.status, 200);
     assert.match(res.text, /<html/i);
@@ -56,16 +56,16 @@ describe("server basics", () => {
 });
 
 describe("--port and error handling", () => {
-  // startServer() polls `port`; LOOMAI_PORT is overridden to a different value,
+  // startServer() polls `port`; AI_DESKTOP_PORT is overridden to a different value,
   // so the server only answers there if the command-line flag won.
   for (const [label, makeArgs] of [
     ["--port N", (p) => ["--port", String(p)]],
     ["--port=N", (p) => [`--port=${p}`]],
   ]) {
-    it(`${label} wins over LOOMAI_PORT`, async () => {
+    it(`${label} wins over AI_DESKTOP_PORT`, async () => {
       const port = await freePort();
       const decoy = await freePort();
-      const server = await startServer({ port, args: makeArgs(port), env: { LOOMAI_PORT: String(decoy) } });
+      const server = await startServer({ port, args: makeArgs(port), env: { AI_DESKTOP_PORT: String(decoy) } });
       try {
         const res = await server.get("/health");
         assert.equal(res.status, 200);
@@ -74,6 +74,18 @@ describe("--port and error handling", () => {
       }
     });
   }
+
+  // The program was called loomAI before: a person who set LOOMAI_PORT keeps a server on that port.
+  it("still listens on the port of the old variable LOOMAI_PORT", async () => {
+    const port = await freePort();
+    const server = await startServer({ port, env: { AI_DESKTOP_PORT: "", LOOMAI_PORT: String(port) } });
+    try {
+      const res = await server.get("/health");
+      assert.equal(res.status, 200);
+    } finally {
+      await server.stop();
+    }
+  });
 
   it("exits with 2 and says why on an invalid port", async () => {
     for (const bad of ["0", "70000", "abc", "-1", ""]) {
@@ -89,8 +101,8 @@ describe("--port and error handling", () => {
     assert.match(output, /unknown argument/);
   });
 
-  it("exits with 1 when LOOMAI_DASHBOARD_DIR does not exist", async () => {
-    const { code, output } = await runToExit([], { LOOMAI_PORT: String(await freePort()), LOOMAI_DASHBOARD_DIR: "Z:/does/not/exist" });
+  it("exits with 1 when AI_DESKTOP_DASHBOARD_DIR does not exist", async () => {
+    const { code, output } = await runToExit([], { AI_DESKTOP_PORT: String(await freePort()), AI_DESKTOP_DASHBOARD_DIR: "Z:/does/not/exist" });
     assert.equal(code, 1);
     assert.match(output, /nicht gefunden/);
   });

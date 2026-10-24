@@ -4,12 +4,13 @@
 #include <initializer_list>
 
 #include "ids.hpp"
+#include "legacy.hpp"
 #include "net_util.hpp"
 #include "secrets.hpp"
 
 using json = nlohmann::json;
 
-namespace loomai::models {
+namespace ai_desktop::models {
 
 namespace {
 
@@ -33,11 +34,11 @@ std::vector<std::string> split_csv(const std::string& value) {
 }
 
 // `env_var`, if set, REPLACES `fallback` wholesale (comma-separated), e.g.
-// LOOMAI_PREFIXES_OPENAI=gpt-,o1-,o3-,o4- to pick up a new model family without
+// AI_DESKTOP_PREFIXES_OPENAI=gpt-,o1-,o3-,o4- to pick up a new model family without
 // a rebuild. Read once per provider (function-local static).
 std::vector<std::string> prefixes_for(const char* env_var, std::initializer_list<const char*> fallback) {
-    const char* override_value = std::getenv(env_var);
-    if (override_value && *override_value) {
+    const char* override_value = legacy::env(env_var);
+    if (override_value) {
         return split_csv(override_value);
     }
     return std::vector<std::string>(fallback.begin(), fallback.end());
@@ -89,7 +90,7 @@ Route route_from_custom(const json& record) {
         if (split_base_url(record.value("base_url", ""), origin, path)) {
             route.base_url = origin;
             route.path_prefix = path;
-            route.local = loomai::is_loopback_host(loomai::host_of(origin));
+            route.local = ai_desktop::is_loopback_host(ai_desktop::host_of(origin));
         }
         route.key_name = "custom:" + id;
     } else {
@@ -116,10 +117,10 @@ json public_view(const json& record) {
 }  // namespace
 
 const std::vector<std::string>& prefixes(std::string_view provider) {
-    static const std::vector<std::string> anthropic = prefixes_for("LOOMAI_PREFIXES_CLAUDE", {"claude-"});
+    static const std::vector<std::string> anthropic = prefixes_for("AI_DESKTOP_PREFIXES_CLAUDE", {"claude-"});
     static const std::vector<std::string> openai =
-        prefixes_for("LOOMAI_PREFIXES_OPENAI", {"gpt-", "o1-", "o3-"});
-    static const std::vector<std::string> gemini = prefixes_for("LOOMAI_PREFIXES_GEMINI", {"gemini-"});
+        prefixes_for("AI_DESKTOP_PREFIXES_OPENAI", {"gpt-", "o1-", "o3-"});
+    static const std::vector<std::string> gemini = prefixes_for("AI_DESKTOP_PREFIXES_GEMINI", {"gemini-"});
     static const std::vector<std::string> none;
     if (provider == "anthropic") return anthropic;
     if (provider == "openai") return openai;
@@ -342,4 +343,4 @@ config::Status custom_remove(const std::string& id) {
     return secrets::remove("custom:" + id);
 }
 
-}  // namespace loomai::models
+}  // namespace ai_desktop::models

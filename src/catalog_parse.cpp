@@ -8,7 +8,7 @@
 
 using json = nlohmann::json;
 
-namespace loomai::catalog {
+namespace ai_desktop::catalog {
 
 namespace {
 
@@ -282,4 +282,4 @@ json presets(const std::string& provider) {
     return out;
 }
 
-}  // namespace loomai::catalog
+}  // namespace ai_desktop::catalog

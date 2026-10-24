@@ -6,7 +6,7 @@
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
-namespace secrets = loomai::secrets;
+namespace secrets = ai_desktop::secrets;
 
 namespace {
 
@@ -15,20 +15,20 @@ namespace {
 struct Sandbox {
     fs::path dir;
     explicit Sandbox(const std::string& tag) : dir(minitest::make_temp_dir(tag)) {
-        minitest::set_env("LOOMAI_CONFIG_DIR", dir.string());
-        minitest::set_env("LOOMAI_SECRET_BACKEND", "file");
+        minitest::set_env("AI_DESKTOP_CONFIG_DIR", dir.string());
+        minitest::set_env("AI_DESKTOP_SECRET_BACKEND", "file");
         for (const char* name : {"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY"}) {
             minitest::set_env(name, "");
         }
-        loomai::config::reload();
+        ai_desktop::config::reload();
         secrets::reload();
     }
     ~Sandbox() {
         for (const char* name : {"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY"}) {
             minitest::set_env(name, "");
         }
-        minitest::set_env("LOOMAI_SECRET_BACKEND", "");
-        loomai::config::reload();
+        minitest::set_env("AI_DESKTOP_SECRET_BACKEND", "");
+        ai_desktop::config::reload();
         secrets::reload();
         std::error_code ignored;
         fs::remove_all(dir, ignored);
@@ -150,11 +150,11 @@ TEST(the_secrets_file_is_owner_only) {
 // always deletes it again.
 TEST(windows_credential_manager_round_trip) {
     Sandbox box("wincred");
-    minitest::set_env("LOOMAI_SECRET_BACKEND", "");  // back to the default backend
+    minitest::set_env("AI_DESKTOP_SECRET_BACKEND", "");  // back to the default backend
     secrets::reload();
     CHECK_EQ(secrets::backend_name(), std::string("wincred"));
 
-    const std::string name = "custom:loomai-unit-test-" + std::to_string(::std::rand());
+    const std::string name = "custom:ai-desktop-unit-test-" + std::to_string(::std::rand());
     CHECK(secrets::set(name, "wincred-secret-value").ok());
     secrets::reload();  // force a real read from the Credential Manager
     CHECK_EQ(secrets::get(name), std::string("wincred-secret-value"));

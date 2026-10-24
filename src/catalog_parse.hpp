@@ -4,7 +4,7 @@
 
 #include "nlohmann/json.hpp"
 
-// Turns the model-list responses of the backends into loomAI's own entry shape.
+// Turns the model-list responses of the backends into ai-desktop's own entry shape.
 // Pure functions on already-parsed JSON (no HTTP), so they are unit-tested with
 // fixtures and a provider changing its format degrades one list, not the UI.
 //
@@ -12,7 +12,7 @@
 //         "details": {...}}. Only what the provider actually reports goes into
 // "details"; nothing is guessed, and there are deliberately no prices (they go
 // stale in code).
-namespace loomai::catalog {
+namespace ai_desktop::catalog {
 
 // GET <ollama>/api/tags  ->  entries (category "local").
 nlohmann::json parse_ollama_tags(const nlohmann::json& response);
@@ -39,4 +39,4 @@ nlohmann::json presets(const std::string& provider);
 // "YYYY-MM-DD" for a Unix timestamp (UTC), "" for non-positive input.
 std::string iso_date(long long epoch_seconds);
 
-}  // namespace loomai::catalog
+}  // namespace ai_desktop::catalog

@@ -1,4 +1,4 @@
-// Test harness: starts the real loomai binary on a free port, with a throw-away
+// Test harness: starts the real ai-desktop binary on a free port, with a throw-away
 // config directory, no API keys and an unreachable Ollama, so tests never
 // depend on (or touch) the developer's own setup.
 import { spawn } from "node:child_process";
@@ -13,8 +13,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 export const repoRoot = path.resolve(here, "..", "..");
 
 function binaryPath() {
-  if (process.env.LOOMAI_BIN) return process.env.LOOMAI_BIN;
-  const exe = process.platform === "win32" ? "loomai.exe" : "loomai";
+  if (process.env.AI_DESKTOP_BIN) return process.env.AI_DESKTOP_BIN;
+  const exe = process.platform === "win32" ? "ai-desktop.exe" : "ai-desktop";
   return path.join(repoRoot, "build", exe);
 }
 
@@ -71,25 +71,25 @@ export function request(port, { method = "GET", pathname = "/", headers = {}, bo
 export async function startServer({ env = {}, args = [], port, configDir } = {}) {
   const bin = binaryPath();
   if (!existsSync(bin)) {
-    throw new Error(`loomai binary not found at ${bin} (build it first, or set LOOMAI_BIN)`);
+    throw new Error(`ai-desktop binary not found at ${bin} (build it first, or set AI_DESKTOP_BIN)`);
   }
   const usedPort = port ?? (await freePort());
   const ownsConfigDir = !configDir;
-  const usedConfigDir = configDir ?? mkdtempSync(path.join(os.tmpdir(), "loomai-test-"));
+  const usedConfigDir = configDir ?? mkdtempSync(path.join(os.tmpdir(), "ai-desktop-test-"));
 
   const child = spawn(bin, args, {
     // Run from somewhere that is NOT the repo, so the tests prove that
-    // LOOMAI_DASHBOARD_DIR works and nothing relies on ./dashboard.
+    // AI_DESKTOP_DASHBOARD_DIR works and nothing relies on ./dashboard.
     cwd: os.tmpdir(),
     env: {
       ...process.env,
-      LOOMAI_PORT: String(usedPort),
-      LOOMAI_CONFIG_DIR: usedConfigDir,
-      LOOMAI_DASHBOARD_DIR: path.join(repoRoot, "dashboard"),
-      LOOMAI_OLLAMA_HOST: "http://127.0.0.1:9", // nothing listens on the discard port
+      AI_DESKTOP_PORT: String(usedPort),
+      AI_DESKTOP_CONFIG_DIR: usedConfigDir,
+      AI_DESKTOP_DASHBOARD_DIR: path.join(repoRoot, "dashboard"),
+      AI_DESKTOP_OLLAMA_HOST: "http://127.0.0.1:9", // nothing listens on the discard port
       // Keys saved by a test go into <config dir>/secrets.json, never into the
       // developer's real Windows Credential Manager.
-      LOOMAI_SECRET_BACKEND: "file",
+      AI_DESKTOP_SECRET_BACKEND: "file",
       OPENAI_API_KEY: "",
       ANTHROPIC_API_KEY: "",
       GEMINI_API_KEY: "",
@@ -143,7 +143,7 @@ export function runToExit(args, env = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(binaryPath(), args, {
       cwd: os.tmpdir(),
-      env: { ...process.env, LOOMAI_DASHBOARD_DIR: path.join(repoRoot, "dashboard"), ...env },
+      env: { ...process.env, AI_DESKTOP_DASHBOARD_DIR: path.join(repoRoot, "dashboard"), ...env },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let output = "";

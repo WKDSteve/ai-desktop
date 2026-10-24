@@ -7,7 +7,7 @@
 
 #include "httplib.h"
 
-namespace loomai {
+namespace ai_desktop {
 
 // One persistent, keep-alive client per (worker thread, base URL) instead of a
 // fresh TCP/TLS connection for every /ask and /ask/stream request.
@@ -39,4 +39,4 @@ inline httplib::Client& client_for(const std::string& base_url, int timeout_ms) 
     return client;
 }
 
-}  // namespace loomai
+}  // namespace ai_desktop

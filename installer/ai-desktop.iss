@@ -1,16 +1,16 @@
-; loomAI Windows installer (Inno Setup 6), built by .github/workflows/release.yml.
+; ai-desktop Windows installer (Inno Setup 6), built by .github/workflows/release.yml.
 ;
 ; It packs the output of scripts/setup.ps1 -- <StageDir>\app (binary, runtime
-; DLLs, dashboard) and <StageDir>\loomai.cmd -- so an installed copy has exactly
+; DLLs, dashboard) and <StageDir>\ai-desktop.cmd -- so an installed copy has exactly
 ; the layout a setup.ps1 install has. The server serves ./dashboard relative to
-; its working directory; the Start-menu shortcut and loomai.cmd both start it
+; its working directory; the Start-menu shortcut and ai-desktop.cmd both start it
 ; from <app>\app.
 ;
 ; Per-user install (no admin rights, no UAC prompt). The optional "add to PATH"
 ; task edits the user PATH only and undoes that on uninstall.
 ;
 ; Build locally:
-;   ISCC.exe /DAppVersion=0.1.0 /DStageDir=C:\path\to\stage /ODist installer\loomai.iss
+;   ISCC.exe /DAppVersion=0.1.0 /DStageDir=C:\path\to\stage /ODist installer\ai-desktop.iss
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
@@ -22,38 +22,45 @@
 [Setup]
 ; Never change AppId: it is how a newer installer finds and upgrades an installed copy.
 AppId={{5EA66451-99A0-4CBF-8A48-261C812EA959}
-AppName=loomAI
+AppName=ai-desktop
 AppVersion={#AppVersion}
-AppVerName=loomAI {#AppVersion}
+AppVerName=ai-desktop {#AppVersion}
 AppPublisher=Stefan Bartl
-AppPublisherURL=https://github.com/StefanBartl/loomAI
-AppSupportURL=https://github.com/StefanBartl/loomAI/issues
-AppUpdatesURL=https://github.com/StefanBartl/loomAI/releases
+AppPublisherURL=https://github.com/StefanBartl/ai-desktop
+AppSupportURL=https://github.com/StefanBartl/ai-desktop/issues
+AppUpdatesURL=https://github.com/StefanBartl/ai-desktop/releases
 VersionInfoVersion={#AppVersion}
-DefaultDirName={autopf}\loomAI
+DefaultDirName={autopf}\ai-desktop
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-OutputBaseFilename=loomai-setup-{#AppVersion}-x64
+OutputBaseFilename=ai-desktop-setup-{#AppVersion}-x64
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 ChangesEnvironment=yes
-UninstallDisplayIcon={app}\app\loomai.exe
+UninstallDisplayIcon={app}\app\ai-desktop.exe
 
 [Tasks]
-Name: "addtopath"; Description: "Add loomAI to the user &PATH (the ""loomai"" command in new terminals)"; Flags: unchecked
+Name: "addtopath"; Description: "Add ai-desktop to the user &PATH (the ""ai-desktop"" command in new terminals)"; Flags: unchecked
 
 [Files]
 Source: "{#StageDir}\app\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "{#StageDir}\loomai.cmd"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#StageDir}\ai-desktop.cmd"; DestDir: "{app}"; Flags: ignoreversion
+
+[InstallDelete]
+; The program was called loomAI before: an upgrade of that installation takes its old files and its shortcut away,
+; so that no second program is left beside the new one.
+Type: files; Name: "{app}\app\loomai.exe"
+Type: files; Name: "{app}\loomai.cmd"
+Type: files; Name: "{autoprograms}\loomAI.lnk"
 
 [Icons]
-Name: "{autoprograms}\loomAI"; Filename: "{app}\app\loomai.exe"; WorkingDir: "{app}\app"; Comment: "Start the local loomAI server on 127.0.0.1:8080"
+Name: "{autoprograms}\ai-desktop"; Filename: "{app}\app\ai-desktop.exe"; WorkingDir: "{app}\app"; Comment: "Start the local ai-desktop server on 127.0.0.1:8080"
 
 [Run]
-Filename: "{app}\app\loomai.exe"; WorkingDir: "{app}\app"; Description: "Start loomAI now"; Flags: postinstall nowait skipifsilent unchecked
+Filename: "{app}\app\ai-desktop.exe"; WorkingDir: "{app}\app"; Description: "Start ai-desktop now"; Flags: postinstall nowait skipifsilent unchecked
 
 [Code]
 const

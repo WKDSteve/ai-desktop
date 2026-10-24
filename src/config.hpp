@@ -5,7 +5,7 @@
 
 #include "nlohmann/json.hpp"
 
-// Persistent settings (config.json) for loomAI, shared by the web dashboard and
+// Persistent settings (config.json) for ai-desktop, shared by the web dashboard and
 // the desktop app: the server is the single source of truth, the UI only reads
 // and writes through the HTTP API.
 //
@@ -17,7 +17,7 @@
 // The file is written atomically (temp file + rename), a corrupt file is moved
 // aside rather than overwritten, and unknown keys are preserved so a newer
 // version's file survives a round trip through an older one.
-namespace loomai::config {
+namespace ai_desktop::config {
 
 // Outcome of a mutating call. `http == 0` means success; otherwise `http` is the
 // status the API should answer with and `message` names the problem.
@@ -28,8 +28,8 @@ struct Status {
 };
 
 // Directory that holds config.json (and the file-based secret store).
-// LOOMAI_CONFIG_DIR, else %APPDATA%\loomai (Windows), $XDG_CONFIG_HOME/loomai or
-// ~/.config/loomai (Linux), ~/Library/Application Support/loomai (macOS).
+// AI_DESKTOP_CONFIG_DIR, else %APPDATA%\ai-desktop (Windows), $XDG_CONFIG_HOME/ai-desktop or
+// ~/.config/ai-desktop (Linux), ~/Library/Application Support/ai-desktop (macOS).
 std::string directory();
 
 // Effective value of a setting: env > config.json > default. Unknown key -> "".
@@ -59,7 +59,7 @@ void inspect(const std::function<void(const nlohmann::json&)>& read);
 Status mutate(const std::function<Status(nlohmann::json&)>& edit);
 
 // Drops the in-memory copy so the next call re-reads the file. For tests, and
-// after LOOMAI_CONFIG_DIR changed.
+// after AI_DESKTOP_CONFIG_DIR changed.
 void reload();
 
 // Validation helpers, exposed for unit tests.
@@ -67,4 +67,4 @@ void reload();
 // is a plain http(s) origin: scheme, host, optional port, nothing else.
 bool normalize_http_origin(std::string& url);
 
-}  // namespace loomai::config
+}  // namespace ai_desktop::config

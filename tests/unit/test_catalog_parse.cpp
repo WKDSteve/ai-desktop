@@ -2,7 +2,7 @@
 #include "minitest.hpp"
 
 using json = nlohmann::json;
-namespace catalog = loomai::catalog;
+namespace catalog = ai_desktop::catalog;
 
 TEST(iso_date_converts_unix_time_without_gmtime) {
     CHECK_EQ(catalog::iso_date(0), std::string(""));

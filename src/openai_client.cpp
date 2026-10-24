@@ -7,7 +7,7 @@
 #include "net_util.hpp"
 #include "secrets.hpp"
 
-namespace loomai::openai {
+namespace ai_desktop::openai {
 
 using json = nlohmann::json;
 
@@ -30,8 +30,8 @@ std::string key_transport_error(const Endpoint& endpoint) {
     if (endpoint.api_key.empty() || endpoint.base_url.rfind("http://", 0) != 0) {
         return "";
     }
-    const std::string host = loomai::host_of(endpoint.base_url);
-    if (loomai::is_loopback_host(host)) {
+    const std::string host = ai_desktop::host_of(endpoint.base_url);
+    if (ai_desktop::is_loopback_host(host)) {
         return "";
     }
     return endpoint.label + ": refusing to send an API key over plain http to " + host +
@@ -101,7 +101,7 @@ AskResult ask(const std::string& prompt,
         return result;
     }
 
-    auto& cli = loomai::client_for(endpoint.base_url, timeout_ms);
+    auto& cli = ai_desktop::client_for(endpoint.base_url, timeout_ms);
     auto body = build_body(prompt, system, model, /*stream=*/false);
 
     auto res = cli.Post(chat_path(endpoint), auth_headers(endpoint), body.dump(), "application/json");
@@ -159,7 +159,7 @@ std::string ask_stream(const std::string& prompt,
         return refused;
     }
 
-    auto& cli = loomai::client_for(endpoint.base_url, timeout_ms);
+    auto& cli = ai_desktop::client_for(endpoint.base_url, timeout_ms);
     auto body = build_body(prompt, system, model, /*stream=*/true);
 
     std::string buffer;
@@ -253,4 +253,4 @@ std::string ask_stream(const std::string& prompt,
     return "";
 }
 
-}  // namespace loomai::openai
+}  // namespace ai_desktop::openai

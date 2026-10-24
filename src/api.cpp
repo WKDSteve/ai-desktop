@@ -7,7 +7,7 @@
 
 using json = nlohmann::json;
 
-namespace loomai::api {
+namespace ai_desktop::api {
 
 namespace {
 
@@ -146,4 +146,4 @@ void register_routes(httplib::Server& server) {
     });
 }
 
-}  // namespace loomai::api
+}  // namespace ai_desktop::api

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(loomai CXX)
+project(ai-desktop CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -12,26 +12,26 @@ else()
 endif()
 
 # Header-only third-party deps, vendored into third_party/ (see
-# wkdbook-loomai/Guides/setup-guide.md (author notes, not in this repo), Phase 2 -- gitignored, fetch locally).
+# wkdbook-ai-desktop/Guides/setup-guide.md (author notes, not in this repo), Phase 2 -- gitignored, fetch locally).
 add_library(third_party_headers INTERFACE)
 target_include_directories(third_party_headers INTERFACE third_party)
 
 # Logic that needs no HTTP stack (settings store, secret store, model registry),
 # kept in its own library so the unit tests can link it without OpenSSL or
 # cpp-httplib.
-add_library(loomai_core STATIC
+add_library(ai_desktop_core STATIC
     src/catalog_parse.cpp
     src/config.cpp
     src/models.cpp
     src/secrets.cpp
 )
-target_include_directories(loomai_core PUBLIC src)
-target_link_libraries(loomai_core PUBLIC third_party_headers)
+target_include_directories(ai_desktop_core PUBLIC src)
+target_link_libraries(ai_desktop_core PUBLIC third_party_headers)
 if(WIN32)
-    target_link_libraries(loomai_core PUBLIC advapi32) # Credential Manager (secrets.cpp)
+    target_link_libraries(ai_desktop_core PUBLIC advapi32) # Credential Manager (secrets.cpp)
 endif()
 
-add_executable(loomai
+add_executable(ai-desktop
     src/main.cpp
     src/api.cpp
     src/catalog.cpp
@@ -40,8 +40,8 @@ add_executable(loomai
     src/anthropic_client.cpp
     src/gemini_client.cpp
 )
-target_include_directories(loomai PRIVATE src)
-target_link_libraries(loomai PRIVATE loomai_core third_party_headers)
+target_include_directories(ai-desktop PRIVATE src)
+target_link_libraries(ai-desktop PRIVATE ai_desktop_core third_party_headers)
 
 # The cloud ModelRouter backends (openai/anthropic/gemini) talk to real
 # HTTPS endpoints, unlike ollama_client's localhost-only HTTP -- cpp-httplib
@@ -51,35 +51,35 @@ target_link_libraries(loomai PRIVATE loomai_core third_party_headers)
 # but the binary must still link successfully regardless of which keys are
 # set at runtime.
 find_package(OpenSSL REQUIRED)
-target_compile_definitions(loomai PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
-target_link_libraries(loomai PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+target_compile_definitions(ai-desktop PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
+target_link_libraries(ai-desktop PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 
 if(WIN32)
-    target_link_libraries(loomai PRIVATE ws2_32 crypt32)
+    target_link_libraries(ai-desktop PRIVATE ws2_32 crypt32)
 else()
     find_package(Threads REQUIRED)
-    target_link_libraries(loomai PRIVATE Threads::Threads)
+    target_link_libraries(ai-desktop PRIVATE Threads::Threads)
 endif()
 
 # Unit tests (plain asserts, no framework): `ctest --test-dir build`. The HTTP
 # API is covered separately by the Node tests under tests/.
-option(LOOMAI_BUILD_TESTS "Build the unit tests" ON)
-if(LOOMAI_BUILD_TESTS)
+option(AI_DESKTOP_BUILD_TESTS "Build the unit tests" ON)
+if(AI_DESKTOP_BUILD_TESTS)
     enable_testing()
-    add_executable(loomai_tests
+    add_executable(ai_desktop_tests
         tests/unit/test_main.cpp
         tests/unit/test_catalog_parse.cpp
         tests/unit/test_config.cpp
         tests/unit/test_models.cpp
         tests/unit/test_secrets.cpp
     )
-    target_link_libraries(loomai_tests PRIVATE loomai_core)
-    add_test(NAME loomai_unit COMMAND loomai_tests)
+    target_link_libraries(ai_desktop_tests PRIVATE ai_desktop_core)
+    add_test(NAME ai_desktop_unit COMMAND ai_desktop_tests)
 endif()
 
 # Flat install layout: the server mounts "./dashboard" relative to its working
 # directory, so the binary and the dashboard folder must sit side by side and
 # the server must be started from there. scripts/setup.ps1 and scripts/setup.sh
 # install into <prefix>/app and write a launcher that does the cd.
-install(TARGETS loomai RUNTIME DESTINATION .)
+install(TARGETS ai-desktop RUNTIME DESTINATION .)
 install(DIRECTORY dashboard DESTINATION .)

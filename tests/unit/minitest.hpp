@@ -64,7 +64,7 @@ inline void set_env(const char* name, const std::string& value) {
 inline std::filesystem::path make_temp_dir(const std::string& tag) {
     static int counter = 0;
     auto dir = std::filesystem::temp_directory_path() /
-               ("loomai-unit-" + tag + "-" + std::to_string(::std::rand()) + "-" + std::to_string(++counter));
+               ("ai-desktop-unit-" + tag + "-" + std::to_string(::std::rand()) + "-" + std::to_string(++counter));
     std::filesystem::remove_all(dir);
     std::filesystem::create_directories(dir);
     return dir;

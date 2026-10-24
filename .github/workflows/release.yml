@@ -1,5 +1,5 @@
-# Builds the Windows installer (loomai-setup-<version>-x64.exe) and attaches it, with the install script of
-# the release and SHA256SUMS, to a GitHub Release -- so "get loomAI" means "open Releases and download one
+# Builds the Windows installer (ai-desktop-setup-<version>-x64.exe) and attaches it, with the install script of
+# the release and SHA256SUMS, to a GitHub Release -- so "get ai-desktop" means "open Releases and download one
 # file" (or run the install line) instead of "install MSYS2 and run scripts/setup.ps1".
 #
 # Cutting a release (the same shape as docmap-desktop's):
@@ -11,7 +11,7 @@
 #      green build is not the same guarantee as someone having installed the result, so download it, run
 #      it, then publish:
 #        gh release download v0.1.0 --dir .        (the installer, install.ps1, SHA256SUMS)
-#        .\install.ps1 -File .\loomai-setup-0.1.0-x64.exe        (the script on the draft: the sums are
+#        .\install.ps1 -File .\ai-desktop-setup-0.1.0-x64.exe        (the script on the draft: the sums are
 #                                                                 found beside the file; the download path
 #                                                                 cannot reach a draft's files)
 #        gh release edit v0.1.0 --draft=false
@@ -149,7 +149,7 @@ jobs:
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: loomai-setup
+          name: ai-desktop-setup
           path: ${{ steps.installer.outputs.file }}
           if-no-files-found: error
           retention-days: 7
@@ -168,17 +168,17 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: loomai-setup
+          name: ai-desktop-setup
           path: dist
       - uses: StefanBartl/appkit/release-kit/publish@e76ee82e2484d53c18350a33e6530e8b8c33ca08 # v0.19.1
         with:
           token: ${{ github.token }}
           tag: ${{ github.ref_name }}
-          title: loomAI ${{ github.ref_name }}
+          title: ai-desktop ${{ github.ref_name }}
           files: dist
           expect: 1
-          app: loomai
+          app: ai-desktop
           windows-kind: inno
-          windows-release-asset: loomai-setup-{version}-x64.exe
-          windows-rolling-asset: loomai-setup-x64.exe
+          windows-release-asset: ai-desktop-setup-{version}-x64.exe
+          windows-rolling-asset: ai-desktop-setup-x64.exe
           notes-file: .github/release-notes.md

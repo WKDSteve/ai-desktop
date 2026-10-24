@@ -1,5 +1,7 @@
 #include "config.hpp"
 
+#include "legacy.hpp"
+
 #include <cctype>
 #include <cstdlib>
 #include <ctime>
@@ -12,7 +14,7 @@
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
-namespace loomai::config {
+namespace ai_desktop::config {
 
 namespace {
 
@@ -27,8 +29,8 @@ struct SettingDef {
 
 constexpr SettingDef kSettings[] = {
     {"theme", nullptr, "system"},
-    {"default_model", "LOOMAI_DEFAULT_MODEL", "llama3.1:8b-q5_K_M"},
-    {"ollama_host", "LOOMAI_OLLAMA_HOST", "http://127.0.0.1:11434"},
+    {"default_model", "AI_DESKTOP_DEFAULT_MODEL", "llama3.1:8b-q5_K_M"},
+    {"ollama_host", "AI_DESKTOP_OLLAMA_HOST", "http://127.0.0.1:11434"},
     {"language", nullptr, "de"},
 };
 
@@ -51,8 +53,7 @@ const char* env_value(const char* name) {
     if (!name) {
         return nullptr;
     }
-    const char* value = std::getenv(name);
-    return (value && *value) ? value : nullptr;
+    return legacy::env(name);
 }
 
 #ifdef _WIN32
@@ -64,33 +65,48 @@ fs::path wide_env_path(const wchar_t* name) {
 }
 #endif
 
+// The folder is kept under its old name (loomAI) for a person who has one and has no folder under the new name yet:
+// the settings and the secrets file in it stay where they are.
+fs::path with_old_folder(const fs::path& current, const fs::path& old) {
+    std::error_code ec;
+    if (!fs::exists(current, ec) && fs::exists(old, ec)) {
+        return old;
+    }
+    return current;
+}
+
 fs::path directory_path() {
 #ifdef _WIN32
+    if (auto dir = wide_env_path(L"AI_DESKTOP_CONFIG_DIR"); !dir.empty()) {
+        return dir;
+    }
     if (auto dir = wide_env_path(L"LOOMAI_CONFIG_DIR"); !dir.empty()) {
         return dir;
     }
     if (auto appdata = wide_env_path(L"APPDATA"); !appdata.empty()) {
-        return appdata / "loomai";
+        return with_old_folder(appdata / "ai-desktop", appdata / "loomai");
     }
     if (auto profile = wide_env_path(L"USERPROFILE"); !profile.empty()) {
-        return profile / "AppData" / "Roaming" / "loomai";
+        const fs::path roaming = profile / "AppData" / "Roaming";
+        return with_old_folder(roaming / "ai-desktop", roaming / "loomai");
     }
-    return fs::path("loomai-config");
+    return fs::path("ai-desktop-config");
 #else
-    if (const char* dir = env_value("LOOMAI_CONFIG_DIR")) {
+    if (const char* dir = env_value("AI_DESKTOP_CONFIG_DIR")) {
         return fs::path(dir);
     }
     if (const char* xdg = env_value("XDG_CONFIG_HOME")) {
-        return fs::path(xdg) / "loomai";
+        return with_old_folder(fs::path(xdg) / "ai-desktop", fs::path(xdg) / "loomai");
     }
     if (const char* home = env_value("HOME")) {
 #ifdef __APPLE__
-        return fs::path(home) / "Library" / "Application Support" / "loomai";
+        const fs::path base = fs::path(home) / "Library" / "Application Support";
 #else
-        return fs::path(home) / ".config" / "loomai";
+        const fs::path base = fs::path(home) / ".config";
 #endif
+        return with_old_folder(base / "ai-desktop", base / "loomai");
     }
-    return fs::path("loomai-config");
+    return fs::path("ai-desktop-config");
 #endif
 }
 
@@ -126,7 +142,7 @@ void load_locked() {
         fs::path aside = path;
         aside += ".corrupt-" + std::to_string(static_cast<long long>(std::time(nullptr)));
         fs::rename(path, aside, ec);
-        std::cerr << "loomai: " << path.u8string() << " is not valid JSON; "
+        std::cerr << "ai-desktop: " << path.u8string() << " is not valid JSON; "
                   << (ec ? "could not move it aside" : "moved it to " + aside.u8string())
                   << ", using defaults\n";
         return;
@@ -439,4 +455,4 @@ void reload() {
     g_loaded = false;
 }
 
-}  // namespace loomai::config
+}  // namespace ai_desktop::config

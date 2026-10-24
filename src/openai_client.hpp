@@ -5,15 +5,15 @@
 
 #include "model_client.hpp"
 
-// Client for the OpenAI Chat Completions API -- one of loomAI's ModelRouter
+// Client for the OpenAI Chat Completions API -- one of ai-desktop's ModelRouter
 // backends (see main.cpp's model-name-prefix dispatch). Mirrors
 // ollama_client.hpp's shape so main.cpp can treat every backend uniformly
-// through loomai::AskResult.
+// through ai_desktop::AskResult.
 //
 // The same wire protocol is spoken by many other servers (LM Studio, vLLM, Groq,
 // OpenRouter, llama.cpp, ...), so the calls also take an Endpoint: user-defined
 // "openai-compatible" models point at one of those instead of api.openai.com.
-namespace loomai::openai {
+namespace ai_desktop::openai {
 
 // Where and how to talk. The default is OpenAI itself.
 struct Endpoint {
@@ -59,4 +59,4 @@ std::string ask_stream(const std::string& prompt,
                         const Endpoint& endpoint,
                         const std::function<void(const std::string&)>& on_delta);
 
-}  // namespace loomai::openai
+}  // namespace ai_desktop::openai
