@@ -220,9 +220,18 @@ vendor "third_party/httplib.h" "$HTTPLIB_URL" "$HTTPLIB_SHA256"
 # 3. Configure + build
 # ---------------------------------------------------------------------------
 step "Building ($BUILD_TYPE)"
-if [ "$CLEAN" -eq 1 ] && [ -f "$BUILD_DIR/CMakeCache.txt" ]; then
+# A build directory made at another place (the folder was renamed or moved, a copy of the repository) cannot be
+# reused: CMake refuses it. It holds nothing but build output, so it is removed instead of asking for --clean.
+MOVED=0
+if [ -f "$BUILD_DIR/CMakeCache.txt" ]; then
+    cached_home="$(sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "$BUILD_DIR/CMakeCache.txt" | head -n 1)"
+    if [ -n "$cached_home" ] && [ "${cached_home%/}" != "${REPO_ROOT%/}" ]; then
+        MOVED=1
+    fi
+fi
+if { [ "$CLEAN" -eq 1 ] || [ "$MOVED" -eq 1 ]; } && [ -f "$BUILD_DIR/CMakeCache.txt" ]; then
     rm -rf -- "$BUILD_DIR"
-    ok "removed old build directory"
+    if [ "$MOVED" -eq 1 ]; then ok "removed the build directory of another location"; else ok "removed old build directory"; fi
 fi
 
 configure_args=(-S "$REPO_ROOT" -B "$BUILD_DIR" "-DCMAKE_BUILD_TYPE=$BUILD_TYPE" "-DCMAKE_CXX_COMPILER=$CXX_BIN")

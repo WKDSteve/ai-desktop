@@ -403,9 +403,21 @@ try {
     # 3. Configure + build
     # -----------------------------------------------------------------------
     Write-Step "Building ($BuildType)"
-    if ($Clean -and (Test-Path (Join-Path $BuildDir 'CMakeCache.txt'))) {
+    $cachePath = Join-Path $BuildDir 'CMakeCache.txt'
+    # A build directory made at another place (the folder was renamed or moved, a copy of the repository) cannot be
+    # reused: CMake refuses it. It holds nothing but build output, so it is removed instead of asking for -Clean.
+    $moved = $false
+    if (Test-Path $cachePath) {
+        $line = Select-String -Path $cachePath -Pattern '^CMAKE_HOME_DIRECTORY:INTERNAL=(.*)$' | Select-Object -First 1
+        if ($line) {
+            $was = ($line.Matches[0].Groups[1].Value -replace '\\', '/').TrimEnd('/')
+            $now = ($RepoRoot -replace '\\', '/').TrimEnd('/')
+            $moved = ($was -ne $now) -and ($was.ToLowerInvariant() -ne $now.ToLowerInvariant())
+        }
+    }
+    if (($Clean -or $moved) -and (Test-Path $cachePath)) {
         Remove-Item -LiteralPath $BuildDir -Recurse -Force
-        Write-Ok 'removed old build directory'
+        Write-Ok $(if ($moved) { 'removed the build directory of another location' } else { 'removed old build directory' })
     }
     $configureArgs = @(
         '-S', $RepoRoot, '-B', $BuildDir,
