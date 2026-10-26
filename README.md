@@ -19,7 +19,7 @@ The old GitHub address redirects to this repository.
 
 ## Get ai-desktop
 
-[**Download the latest release**](https://github.com/StefanBartl/ai-desktop/releases/latest)
+[**Download the latest release**](https://github.com/WKDSteve/ai-desktop/releases/latest)
 -- `ai-desktop-setup-<version>-x64.exe`, a Windows installer, no compiler or MSYS2
 needed. It installs for the current user (no administrator rights), adds a
 Start-menu entry, and can optionally put the `ai-desktop` command on your `PATH`.
@@ -43,7 +43,7 @@ PowerShell, not elevated:
 
 ```powershell
 # the newest state of main (the pre-release "latest")
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/StefanBartl/ai-desktop/releases/download/latest/install.ps1 | iex"
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/WKDSteve/ai-desktop/releases/download/latest/install.ps1 | iex"
 
 # a release: the same with the tag in place of latest, e.g. .../releases/download/v0.1.1/install.ps1
 ```
@@ -57,7 +57,7 @@ terminals; start ai-desktop from the Start menu. For the step, or any other
 argument of the script, use the form that takes arguments:
 
 ```powershell
-& ([scriptblock]::Create((irm https://github.com/StefanBartl/ai-desktop/releases/download/latest/install.ps1))) -InstallArgs '/TASKS=addtopath'
+& ([scriptblock]::Create((irm https://github.com/WKDSteve/ai-desktop/releases/download/latest/install.ps1))) -InstallArgs '/TASKS=addtopath'
 ```
 
 Saved as a file, the script is run as `powershell -ExecutionPolicy Bypass -File
@@ -67,7 +67,7 @@ line: a list would arrive as one string; in a PowerShell session
 already have; its checksum then comes from `-Sums`, `-Sha256` or a
 `SHA256SUMS` beside it. Run the script again to repair or update (stop ai-desktop
 first if it is running). The scripts are the ones of appkit's
-[release-kit](https://github.com/StefanBartl/appkit/tree/main/release-kit),
+[release-kit](https://github.com/WKDSteve/appkit/tree/main/release-kit),
 stamped for this app and the channel when they are attached. (v0.1.0 predates
 them and has no script.)
 

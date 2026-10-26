@@ -48,7 +48,7 @@ jobs:
       sha: ${{ steps.prepare.outputs.sha }}
     steps:
       - id: prepare
-        uses: StefanBartl/appkit/release-kit/prepare@e76ee82e2484d53c18350a33e6530e8b8c33ca08 # v0.19.1
+        uses: WKDSteve/appkit/release-kit/prepare@e76ee82e2484d53c18350a33e6530e8b8c33ca08 # v0.19.1
         with:
           sha: ${{ github.event.workflow_run.head_sha }}
           token: ${{ github.token }}
@@ -75,7 +75,7 @@ jobs:
         run: echo "commit=$(sed -n 's/^commit *= *//p' tools/release-kit.pin)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (node24)
         with:
-          repository: StefanBartl/appkit
+          repository: WKDSteve/appkit
           token: ${{ secrets.PRIVATE_READ_TOKEN }}
           ref: ${{ steps.kit.outputs.commit }}
           path: .kit
@@ -121,7 +121,7 @@ jobs:
           pattern: rolling-*
           path: dist
           merge-multiple: true
-      - uses: StefanBartl/appkit/release-kit/publish@e76ee82e2484d53c18350a33e6530e8b8c33ca08 # v0.19.1
+      - uses: WKDSteve/appkit/release-kit/publish@e76ee82e2484d53c18350a33e6530e8b8c33ca08 # v0.19.1
         with:
           token: ${{ github.token }}
           tag: latest

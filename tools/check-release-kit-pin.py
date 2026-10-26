@@ -2,11 +2,11 @@
 """Fail when the release-kit actions of the workflows are not the commit tools/release-kit.pin names.
 
 The workflows take the actions `prepare` and `publish` of appkit's release-kit by the full commit of a tag
-(`uses: StefanBartl/appkit/release-kit/publish@<sha> # vX.Y.Z`). tools/release-kit.pin names that tag once,
+(`uses: WKDSteve/appkit/release-kit/publish@<sha> # vX.Y.Z`). tools/release-kit.pin names that tag once,
 together with the commit it named when it was taken. This checks that
 
   * the tag still names that commit (a tag that was moved would change the actions under the same name);
-  * every `uses: StefanBartl/appkit/...@<ref>` of a workflow, however it is written (quoted, in another
+  * every `uses: WKDSteve/appkit/...@<ref>` of a workflow, however it is written (quoted, in another
     case, from the root of the repository), is pinned by that full commit;
   * at least one such line exists (a pin that looked at nothing is no pass).
 
@@ -23,12 +23,12 @@ import re
 import subprocess
 import sys
 
-REPO_URL = "https://github.com/StefanBartl/appkit"
+REPO_URL = "https://github.com/WKDSteve/appkit"
 PIN = "tools/release-kit.pin"
 TAG = re.compile(r"^v\d+\.\d+\.\d+$")
 COMMIT = re.compile(r"^[0-9a-f]{40}$")
 USES = re.compile(
-    r"""^\s*-?\s*uses:\s*["']?StefanBartl/appkit(?:/(?P<path>[^@\s"']+))?@(?P<ref>[^\s"'#]+)""",
+    r"""^\s*-?\s*uses:\s*["']?WKDSteve/appkit(?:/(?P<path>[^@\s"']+))?@(?P<ref>[^\s"'#]+)""",
     re.M | re.I,
 )
 
@@ -71,13 +71,13 @@ def workflow_problems(texts, commit):
         for match in USES.finditer(text):
             steps += 1
             ref = match.group("ref")
-            where = f"{name}: StefanBartl/appkit/{match.group('path') or ''}@{ref}"
+            where = f"{name}: WKDSteve/appkit/{match.group('path') or ''}@{ref}"
             if not COMMIT.match(ref):
                 problems.append(f"{where}: not pinned by a full commit")
             elif ref != commit:
                 problems.append(f"{where}: {PIN} names {commit}, one commit for every step")
     if steps == 0:
-        problems.append("no 'uses: StefanBartl/appkit/...' step in the workflows: the pin looked at nothing")
+        problems.append("no 'uses: WKDSteve/appkit/...' step in the workflows: the pin looked at nothing")
     return steps, problems
 
 

@@ -3,13 +3,13 @@
 **Install it with the script** (Windows; for the current user, no administrator rights, and no SmartScreen stop: the script downloads the installer itself and checks it against `SHA256SUMS`). In your own PowerShell, not elevated:
 
 ```
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/StefanBartl/ai-desktop/releases/download/latest/install.ps1 | iex"
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/WKDSteve/ai-desktop/releases/download/latest/install.ps1 | iex"
 ```
 
 That installs without the "add to PATH" step. With it (and any other argument of the script), use the form that takes arguments:
 
 ```
-& ([scriptblock]::Create((irm https://github.com/StefanBartl/ai-desktop/releases/download/latest/install.ps1))) -InstallArgs '/TASKS=addtopath'
+& ([scriptblock]::Create((irm https://github.com/WKDSteve/ai-desktop/releases/download/latest/install.ps1))) -InstallArgs '/TASKS=addtopath'
 ```
 
 Run it again to update to the newest rolling build (stop ai-desktop first if it is running). Or take the file yourself:

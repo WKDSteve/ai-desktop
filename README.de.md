@@ -20,7 +20,7 @@ GitHub-Adresse leitet auf dieses Repository um.
 
 ## ai-desktop herunterladen
 
-[**Neuestes Release herunterladen**](https://github.com/StefanBartl/ai-desktop/releases/latest)
+[**Neuestes Release herunterladen**](https://github.com/WKDSteve/ai-desktop/releases/latest)
 -- `ai-desktop-setup-<version>-x64.exe`, ein Windows-Installer, ohne Compiler oder
 MSYS2. Er installiert für den aktuellen Benutzer (keine Administratorrechte),
 legt einen Startmenü-Eintrag an und kann optional den Befehl `ai-desktop` in den
@@ -46,7 +46,7 @@ das Release gemacht hat). In der eigenen PowerShell, nicht erhöht:
 
 ```powershell
 # der neueste Stand von main (die Vorabversion "latest")
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/StefanBartl/ai-desktop/releases/download/latest/install.ps1 | iex"
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/WKDSteve/ai-desktop/releases/download/latest/install.ps1 | iex"
 
 # ein Release: dasselbe mit dem Tag statt latest, z. B. .../releases/download/v0.1.1/install.ps1
 ```
@@ -61,7 +61,7 @@ starten. Für den Schritt oder ein anderes Argument des Skripts die Form
 verwenden, die Argumente annimmt:
 
 ```powershell
-& ([scriptblock]::Create((irm https://github.com/StefanBartl/ai-desktop/releases/download/latest/install.ps1))) -InstallArgs '/TASKS=addtopath'
+& ([scriptblock]::Create((irm https://github.com/WKDSteve/ai-desktop/releases/download/latest/install.ps1))) -InstallArgs '/TASKS=addtopath'
 ```
 
 Als Datei gespeichert startet man das Skript mit `powershell -ExecutionPolicy
@@ -72,7 +72,7 @@ installiert ein vorhandenes Setup; dessen Prüfsumme kommt dann aus `-Sums`,
 `-Sha256` oder einer `SHA256SUMS` daneben. Zum Reparieren oder Aktualisieren
 das Skript erneut ausführen (ai-desktop vorher beenden, falls es läuft). Die
 Skripte sind die des
-[Release-Kits](https://github.com/StefanBartl/appkit/tree/main/release-kit) von
+[Release-Kits](https://github.com/WKDSteve/appkit/tree/main/release-kit) von
 appkit, beim Anhängen für diese App und den Kanal gestempelt. (v0.1.0 ist
 älter und hat kein Skript.)
 

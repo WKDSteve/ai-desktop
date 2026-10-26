@@ -9,14 +9,14 @@ Start ai-desktop from the Start menu (or with `ai-desktop` when you chose that s
 nothing runs that does not match the checksum. In your own PowerShell, not elevated:
 
 ```
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/StefanBartl/ai-desktop/releases/download/{tag}/install.ps1 | iex"
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/WKDSteve/ai-desktop/releases/download/{tag}/install.ps1 | iex"
 ```
 
 That installs without the "add to PATH" step. With it (and any other argument of the script), use the form
 that takes arguments:
 
 ```
-& ([scriptblock]::Create((irm https://github.com/StefanBartl/ai-desktop/releases/download/{tag}/install.ps1))) -InstallArgs '/TASKS=addtopath'
+& ([scriptblock]::Create((irm https://github.com/WKDSteve/ai-desktop/releases/download/{tag}/install.ps1))) -InstallArgs '/TASKS=addtopath'
 ```
 
 Run the script again to repair this release (to update, take the script of a newer release). Stop ai-desktop

@@ -25,7 +25,7 @@ PIN_FILE = f"# a comment\ntag = v0.18.1\ncommit = {SHA}\n"
 
 def flow(*refs, path="release-kit/publish"):
     return "jobs:\n  publish:\n    steps:\n" + "".join(
-        f"      - uses: StefanBartl/appkit/{path}@{ref} # v0.18.1\n" for ref in refs
+        f"      - uses: WKDSteve/appkit/{path}@{ref} # v0.18.1\n" for ref in refs
     )
 
 
@@ -64,10 +64,10 @@ class Workflows(unittest.TestCase):
 
     def test_every_spelling_of_a_step_is_read(self):
         for line in (
-            f'      - uses: "StefanBartl/appkit/release-kit/publish@{OTHER}"\n',
-            f"      - uses: stefanbartl/APPKIT/release-kit/publish@{OTHER}\n",
-            f"      - uses: StefanBartl/appkit@{OTHER}\n",
-            f"        uses: 'StefanBartl/appkit/release-kit/prepare@{OTHER}' # v0\n",
+            f'      - uses: "WKDSteve/appkit/release-kit/publish@{OTHER}"\n',
+            f"      - uses: WKDSteve/APPKIT/release-kit/publish@{OTHER}\n",
+            f"      - uses: WKDSteve/appkit@{OTHER}\n",
+            f"        uses: 'WKDSteve/appkit/release-kit/prepare@{OTHER}' # v0\n",
         ):
             with self.subTest(line=line):
                 steps, problems = pin.workflow_problems({"a.yml": line}, SHA)
