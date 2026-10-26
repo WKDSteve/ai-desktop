@@ -9,5 +9,5 @@
 # lines and the `uses:` lines of rolling.yml and release.yml, then
 #
 #     python tools/check-release-kit-pin.py
-tag = v0.19.1
-commit = e76ee82e2484d53c18350a33e6530e8b8c33ca08
+tag = v0.23.1
+commit = 2d0f4a6921d11848bbb579e2760614e88723e42d

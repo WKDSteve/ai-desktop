@@ -11,6 +11,11 @@
 #
 # There is no install.sh and no Linux file: ai-desktop is built from source there (scripts/setup.sh).
 #
+# Runs on the self-hosted Windows runner of the author (the repository is private and has no paid plan, so
+# hosted runners do not start; see $REPOS_DIR/tasks-vault/TOOLS/self-hosted-runner.md). The release-kit actions
+# run there by Git Bash (appkit v0.23.1 and later); the private appkit is read with the login of `gh`, not with
+# a token secret.
+#
 # Deciding (only the tip of main is built) and publishing (SHA256SUMS first, the words of the page last) are
 # the actions prepare and publish of appkit's release-kit, pinned by the commit of tools/release-kit.pin
 # (tools/check-release-kit-pin.py checks that they agree). The build is ours: its file goes to publish as an
@@ -36,11 +41,18 @@ concurrency:
 permissions:
   contents: read
 
+# `shell: bash` resolves to the WSL launcher on this machine; Git Bash is named explicitly, in 8.3 form because the
+# shell string is split at spaces.
+defaults:
+  run:
+    shell: C:\PROGRA~1\Git\bin\bash.exe --noprofile --norc -e -o pipefail {0}
+
 jobs:
   prepare:
     # Only a green run that came from a push to main (not a pull request).
     if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, windows]
+    timeout-minutes: 10
     permissions:
       contents: write
     outputs:
@@ -48,7 +60,7 @@ jobs:
       sha: ${{ steps.prepare.outputs.sha }}
     steps:
       - id: prepare
-        uses: WKDSteve/appkit/release-kit/prepare@e76ee82e2484d53c18350a33e6530e8b8c33ca08 # v0.19.1
+        uses: WKDSteve/appkit/release-kit/prepare@2d0f4a6921d11848bbb579e2760614e88723e42d # v0.23.1
         with:
           sha: ${{ github.event.workflow_run.head_sha }}
           token: ${{ github.token }}
@@ -56,30 +68,23 @@ jobs:
   build:
     needs: prepare
     if: ${{ needs.prepare.outputs.current == 'true' }}
-    runs-on: windows-latest
+    runs-on: [self-hosted, windows]
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (node24)
         with:
           ref: ${{ needs.prepare.outputs.sha }}
           persist-credentials: false
-      - uses: ./.github/actions/private-read
-        with:
-          token: ${{ secrets.PRIVATE_READ_TOKEN }}
 
       # The install script the installer is tried through is the one that will be stamped and attached: the
-      # release-kit at the commit of tools/release-kit.pin.
-      - name: Read the pinned release-kit commit
-        id: kit
-        shell: bash
-        run: echo "commit=$(sed -n 's/^commit *= *//p' tools/release-kit.pin)" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (node24)
-        with:
-          repository: WKDSteve/appkit
-          token: ${{ secrets.PRIVATE_READ_TOKEN }}
-          ref: ${{ steps.kit.outputs.commit }}
-          path: .kit
-          persist-credentials: false
+      # release-kit at the commit of tools/release-kit.pin. appkit is private; the runner clones it with the
+      # login of `gh` (Git's own credentials), no token secret.
+      - name: Fetch the pinned release-kit
+        run: |
+          commit="$(sed -n 's/^commit *= *//p' tools/release-kit.pin)"
+          rm -rf .kit
+          git clone --quiet https://github.com/WKDSteve/appkit .kit
+          git -C .kit checkout --quiet "$commit"
 
       - uses: ./.github/actions/installer-build
         id: installer
@@ -108,7 +113,8 @@ jobs:
   # so only then does it name this commit.
   publish:
     needs: [prepare, build]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, windows]
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
@@ -121,7 +127,7 @@ jobs:
           pattern: rolling-*
           path: dist
           merge-multiple: true
-      - uses: WKDSteve/appkit/release-kit/publish@e76ee82e2484d53c18350a33e6530e8b8c33ca08 # v0.19.1
+      - uses: WKDSteve/appkit/release-kit/publish@2d0f4a6921d11848bbb579e2760614e88723e42d # v0.23.1
         with:
           token: ${{ github.token }}
           tag: latest
@@ -141,7 +147,7 @@ jobs:
   # the installer with the unstamped script of the same kit; this proves the stamp and the published files.
   published:
     needs: [prepare, publish]
-    runs-on: windows-latest
+    runs-on: [self-hosted, windows]
     timeout-minutes: 15
     steps:
       - name: Install from latest, start, ask /health, uninstall
