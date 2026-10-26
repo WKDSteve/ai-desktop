@@ -93,7 +93,6 @@ jobs:
           install-script: .kit/release-kit/scripts/install.ps1
 
       - name: Name the installer
-        shell: bash
         env:
           FILE: ${{ steps.installer.outputs.file }}
         run: |
