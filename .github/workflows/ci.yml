@@ -97,6 +97,9 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (node24)
         with:
           persist-credentials: false
+      - uses: ./.github/actions/private-read
+        with:
+          token: ${{ secrets.PRIVATE_READ_TOKEN }}
       # A control or invisible character in a tracked text file (a backspace in a path, a bidirectional
       # override in source) is refused; the tool tests itself.
       - run: python3 -m unittest discover -s tools -p "test_*.py"

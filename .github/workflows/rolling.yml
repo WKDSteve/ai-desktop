@@ -63,6 +63,9 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.sha }}
           persist-credentials: false
+      - uses: ./.github/actions/private-read
+        with:
+          token: ${{ secrets.PRIVATE_READ_TOKEN }}
 
       # The install script the installer is tried through is the one that will be stamped and attached: the
       # release-kit at the commit of tools/release-kit.pin.
@@ -73,6 +76,7 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (node24)
         with:
           repository: StefanBartl/appkit
+          token: ${{ secrets.PRIVATE_READ_TOKEN }}
           ref: ${{ steps.kit.outputs.commit }}
           path: .kit
           persist-credentials: false
