@@ -52,12 +52,20 @@ runs:
     - name: make sure Inno Setup is installed
       shell: pwsh
       run: |
-        $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
-        if (-not (Test-Path $iscc)) {
+        # A hosted runner has it (or Chocolatey); a self-hosted one has the per-user install of
+        # `winget install JRSoftware.InnoSetup --scope user`.
+        $candidates = @(
+          (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'),
+          (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe'),
+          (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe')
+        )
+        $iscc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+        if (-not $iscc -and (Get-Command choco -ErrorAction SilentlyContinue)) {
           choco install innosetup --no-progress -y
           if ($LASTEXITCODE -ne 0) { throw "choco install innosetup failed ($LASTEXITCODE)" }
+          $iscc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
         }
-        if (-not (Test-Path $iscc)) { throw "ISCC.exe not found at $iscc" }
+        if (-not $iscc) { throw "ISCC.exe not found (looked in: $($candidates -join '; '))" }
         "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
     - name: build the installer
