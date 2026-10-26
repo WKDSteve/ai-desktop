@@ -132,10 +132,19 @@ function Find-Mingw64Bin {
     $gpp = Get-Command g++ -ErrorAction SilentlyContinue
     if ($gpp) { $candidates += Split-Path -Parent $gpp.Source }
     $candidates += $fromRoot
-    foreach ($dir in $candidates) {
-        if (Test-Path (Join-Path $dir 'g++.exe')) { return $dir }
+    $withCompiler = @($candidates | Where-Object { Test-Path (Join-Path $_ 'g++.exe') })
+    # A g++ on PATH without OpenSSL (WinLibs, Strawberry Perl) must not hide a complete MSYS2
+    # toolchain: the first one with the OpenSSL files wins, else the first g++ (the check below
+    # then names what is missing).
+    foreach ($dir in $withCompiler) {
+        if (Test-MingwOpenSsl (Split-Path -Parent $dir)) { return $dir }
     }
+    if ($withCompiler.Count -gt 0) { return $withCompiler[0] }
     return $null
+}
+
+function Test-MingwOpenSsl([string]$Root) {
+    return (Test-Path (Join-Path $Root 'include\openssl\ssl.h')) -and (Test-Path (Join-Path $Root 'lib\libssl.dll.a'))
 }
 
 function Find-CMake {
@@ -336,7 +345,7 @@ try {
         if (-not (Test-Path (Join-Path $mingwBin 'objdump.exe'))) {
             $problems.Add("objdump.exe not found in $mingwBin (needed to collect runtime DLLs) -- pacman -S mingw-w64-x86_64-binutils")
         }
-        if ((Test-Path (Join-Path $mingwRoot 'include\openssl\ssl.h')) -and (Test-Path (Join-Path $mingwRoot 'lib\libssl.dll.a'))) {
+        if (Test-MingwOpenSsl $mingwRoot) {
             Write-Ok "OpenSSL headers + libs ($mingwRoot)"
         } else {
             $problems.Add("OpenSSL dev files not found under $mingwRoot -- pacman -S mingw-w64-x86_64-openssl (or rerun with -InstallDeps)")

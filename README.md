@@ -87,7 +87,18 @@ Windows (MSYS2/MinGW-w64; CMake >= 3.20 must be installed already):
 adds the install directory to your user `PATH`. Further switches: `-Prefix`
 (default `%LOCALAPPDATA%\ai-desktop`), `-BuildType`, `-Clean`, `-CheckOnly`,
 `-SkipInstall`, `-SkipSmokeTest`, `-Uninstall`. Run
-`Get-Help .\scripts\setup.ps1 -Detailed` for details.
+`Get-Help .\scripts\setup.ps1 -Detailed` for details. A g++ on `PATH` without
+OpenSSL (WinLibs, Strawberry Perl) does not hide a complete MSYS2 toolchain:
+the first one with the OpenSSL files is used.
+
+The same entry points the other desktop apps have, for a terminal on a machine
+where no setup may be started (build, install with the launcher on `PATH`;
+remove both the copy of the scripts and the one of the setup):
+
+```powershell
+.\scripts\build-install.ps1 [-BuildOnly] [-NoPath]
+.\scripts\uninstall.ps1
+```
 
 Linux/macOS (CMake >= 3.20, a C++17 compiler, curl, OpenSSL dev files):
 
