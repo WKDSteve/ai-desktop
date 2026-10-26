@@ -152,10 +152,18 @@ jobs:
       - name: Install from latest, start, ask /health, uninstall
         shell: pwsh
         env:
-          URL: https://github.com/${{ github.repository }}/releases/download/latest/install.ps1
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $text = Invoke-RestMethod -Uri $env:URL
+          # The repository is private: an anonymous download is answered with a login page, so the script
+          # comes through the API with the token of the run, and install.ps1 reads the same token from
+          # GH_TOKEN for its own downloads (the way a person with access runs it).
+          $dir0 = Join-Path $env:RUNNER_TEMP 'published'
+          New-Item -ItemType Directory -Force -Path $dir0 | Out-Null
+          gh release download latest --repo $env:REPO --pattern install.ps1 --dir $dir0 --clobber
+          if ($LASTEXITCODE -ne 0) { throw "gh release download failed ($LASTEXITCODE)" }
+          $text = Get-Content -Raw -Path (Join-Path $dir0 'install.ps1')
           & ([scriptblock]::Create($text)) -AllowElevated
           $dir = Join-Path $env:LOCALAPPDATA 'Programs\ai-desktop'
           if (-not (Test-Path (Join-Path $dir 'app\ai-desktop.exe'))) { throw "no app\ai-desktop.exe in $dir" }
