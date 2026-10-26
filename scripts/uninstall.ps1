@@ -38,6 +38,13 @@ if (Test-Path -LiteralPath $key) {
     Write-Output "running the uninstaller of the setup silently ($uninstaller)"
     $proc = Start-Process -FilePath $uninstaller -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
     if ($proc.ExitCode -ne 0) { throw "uninstall.ps1: the uninstaller failed with exit code $($proc.ExitCode)" }
+    # The Inno uninstaller runs a copy of itself from the temporary folder: the entry going away is the answer,
+    # not the exit of the first process.
+    $deadline = (Get-Date).AddSeconds(60)
+    while ((Test-Path -LiteralPath $key) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+    if (Test-Path -LiteralPath $key) {
+        throw 'uninstall.ps1: the uninstaller ran, but ai-desktop is still registered; remove it in Settings > Apps'
+    }
     Write-Output 'removed the installation of the setup'
 }
 

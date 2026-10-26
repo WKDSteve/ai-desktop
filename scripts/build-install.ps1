@@ -18,6 +18,9 @@ Build build\ai-desktop.exe and stop (setup.ps1 -SkipInstall).
 .PARAMETER NoPath
 Install, but leave the user PATH alone.
 
+.PARAMETER AllowElevated
+Install although the session is elevated (for a build machine).
+
 .EXAMPLE
 .\scripts\build-install.ps1
 .\scripts\build-install.ps1 -BuildOnly
@@ -25,14 +28,22 @@ Install, but leave the user PATH alone.
 [CmdletBinding()]
 param(
     [switch] $BuildOnly,
-    [switch] $NoPath
+    [switch] $NoPath,
+    [switch] $AllowElevated
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-if (-not $BuildOnly -and $env:CLAUDECODE) {
-    throw 'build-install.ps1: install in a normal terminal, not in a Claude session (the app redirects AppData and the registry); -BuildOnly builds'
+if (-not $BuildOnly) {
+    if ($env:CLAUDECODE) {
+        throw 'build-install.ps1: install in a normal terminal, not in a Claude session (the app redirects AppData and the registry); -BuildOnly builds'
+    }
+    # The copy and the PATH entry go to the account that runs this: elevated, that may be the administrator's.
+    $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+    if (-not $AllowElevated -and $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        throw 'build-install.ps1: do not run this elevated: it installs for one user (-AllowElevated for a build machine)'
+    }
 }
 
 $setupArgs = @{}
