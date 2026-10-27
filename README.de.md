@@ -20,6 +20,11 @@ GitHub-Adresse leitet auf dieses Repository um.
 
 ## ai-desktop herunterladen
 
+Das Repository ist **privat**: Die Links unten brauchen eine GitHub-Anmeldung mit Leserecht, und das Laden per
+Skript braucht ein Token (siehe unten). Releases enthalten nur den Windows-Installer; Linux und macOS werden
+aus dem Quelltext gebaut (die CI läuft auf dem selbst gehosteten Windows-Runner des Autors, ein privates
+Repository ohne bezahlten Tarif hat keine gehosteten).
+
 [**Neuestes Release herunterladen**](https://github.com/WKDSteve/ai-desktop/releases/latest)
 -- `ai-desktop-setup-<version>-x64.exe`, ein Windows-Installer, ohne Compiler oder
 MSYS2. Er installiert für den aktuellen Benutzer (keine Administratorrechte),
@@ -34,21 +39,25 @@ außerdem eine `SHA256SUMS`-Datei (v0.1.0: eine `.sha256`-Datei), um den
 Download mit `Get-FileHash` zu prüfen.
 Gebaut von [`.github/workflows/release.yml`](.github/workflows/release.yml)
 aus einem gepushten Tag `vX.Y.Z` und dort vor der Freigabe durch Installieren,
-Starten und Deinstallieren geprüft. Unter Linux/macOS oder zum Selbstbauen die
-Skripte unten verwenden.
+Starten und Deinstallieren geprüft. Unter Linux/macOS (von der CI weder gebaut noch
+getestet) oder zum Selbstbauen die Skripte unten verwenden.
 
 **Oder per Skript installieren** -- für den aktuellen Benutzer, ohne
 Administratorrechte, und ohne dass SmartScreen etwas aufhält: Eine Datei, die
 das Skript selbst lädt, trägt keine „aus dem Internet"-Markierung. Das Skript
 prüft sie stattdessen gegen `SHA256SUMS` und führt nichts aus, was nicht passt
 (das belegt, dass die Datei vollständig und die des Releases ist, nicht, wer
-das Release gemacht hat). In der eigenen PowerShell, nicht erhöht:
+das Release gemacht hat). In der eigenen PowerShell, nicht erhöht. Das Repository
+ist privat, ein anonymer Download wird mit einer Anmeldeseite beantwortet: das
+Skript mit `gh` holen und ihm in `GH_TOKEN` ein Token mit Leserecht auf das Repository
+geben (es nutzt es für seine eigenen Downloads):
 
 ```powershell
 # der neueste Stand von main (die Vorabversion "latest")
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/WKDSteve/ai-desktop/releases/download/latest/install.ps1 | iex"
+gh release download latest -R WKDSteve/ai-desktop -p install.ps1 -D $env:TEMP --clobber
+$env:GH_TOKEN = (gh auth token); & "$env:TEMP\install.ps1"
 
-# ein Release: dasselbe mit dem Tag statt latest, z. B. .../releases/download/v0.1.1/install.ps1
+# ein Release: dasselbe mit dem Tag statt latest, z. B. gh release download v0.1.1 ...
 ```
 
 Das Skript eines Releases installiert genau dieses Release, das von `latest`
@@ -61,8 +70,12 @@ starten. Für den Schritt oder ein anderes Argument des Skripts die Form
 verwenden, die Argumente annimmt:
 
 ```powershell
-& ([scriptblock]::Create((irm https://github.com/WKDSteve/ai-desktop/releases/download/latest/install.ps1))) -InstallArgs '/TASKS=addtopath'
+$env:GH_TOKEN = (gh auth token); & "$env:TEMP\install.ps1" -InstallArgs '/TASKS=addtopath'
 ```
+
+(Der Weg mit Token für das private Repository ist aus dem dokumentierten Verhalten des Skripts geschrieben;
+die `published`-Prüfung des Workflows installiert das Skript genauso, mit dem Token des Laufs, und ist grün.
+Von Hand ist er seit der Umstellung auf privat nicht ausprobiert.)
 
 Als Datei gespeichert startet man das Skript mit `powershell -ExecutionPolicy
 Bypass -File .\install.ps1 -InstallArgs '/TASKS=addtopath'` (ein Wert je

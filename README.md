@@ -19,6 +19,11 @@ The old GitHub address redirects to this repository.
 
 ## Get ai-desktop
 
+The repository is **private**: the links below need a GitHub login with read access, and a script
+download needs a token (see below). Releases carry the Windows installer only; Linux and macOS are
+built from source (CI runs on the author's self-hosted Windows runner, a private repository without a
+paid plan has no hosted ones).
+
 [**Download the latest release**](https://github.com/WKDSteve/ai-desktop/releases/latest)
 -- `ai-desktop-setup-<version>-x64.exe`, a Windows installer, no compiler or MSYS2
 needed. It installs for the current user (no administrator rights), adds a
@@ -31,21 +36,24 @@ then "Run anyway"). Each release also carries a `SHA256SUMS` file (v0.1.0: a
 `.sha256` file) to check the download against `Get-FileHash`. Built by
 [`.github/workflows/release.yml`](.github/workflows/release.yml) from a pushed
 `vX.Y.Z` tag, and verified there by installing, starting and uninstalling it
-before it is offered. On Linux/macOS, or to build it yourself, use the scripts
-below.
+before it is offered. On Linux/macOS (not built or tested by CI), or to build it
+yourself, use the scripts below.
 
 **Or install it with a script** -- for the current user, no administrator
 rights, and nothing for SmartScreen to stop: a file the script downloads
 carries no "from the internet" mark, so the script checks it against
 `SHA256SUMS` instead and runs nothing that does not match (that proves the
 file is whole and the release's own, not who made the release). In your own
-PowerShell, not elevated:
+PowerShell, not elevated. The repository is private, so an anonymous download is answered with a login
+page: fetch the script with `gh` and give the script a token that may read the repository in `GH_TOKEN`
+(it uses it for its own downloads):
 
 ```powershell
 # the newest state of main (the pre-release "latest")
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/WKDSteve/ai-desktop/releases/download/latest/install.ps1 | iex"
+gh release download latest -R WKDSteve/ai-desktop -p install.ps1 -D $env:TEMP --clobber
+$env:GH_TOKEN = (gh auth token); & "$env:TEMP\install.ps1"
 
-# a release: the same with the tag in place of latest, e.g. .../releases/download/v0.1.1/install.ps1
+# a release: the same with the tag in place of latest, e.g. gh release download v0.1.1 ...
 ```
 
 The script of a release installs exactly that release, the script of `latest`
@@ -57,8 +65,12 @@ terminals; start ai-desktop from the Start menu. For the step, or any other
 argument of the script, use the form that takes arguments:
 
 ```powershell
-& ([scriptblock]::Create((irm https://github.com/WKDSteve/ai-desktop/releases/download/latest/install.ps1))) -InstallArgs '/TASKS=addtopath'
+$env:GH_TOKEN = (gh auth token); & "$env:TEMP\install.ps1" -InstallArgs '/TASKS=addtopath'
 ```
+
+(The token route for the private repository was written from the script's documented behaviour; the
+workflow's own `published` check installs the script the same way, with the token of the run, and is
+green. By hand it has not been tried since the repository became private.)
 
 Saved as a file, the script is run as `powershell -ExecutionPolicy Bypass -File
 .\install.ps1 -InstallArgs '/TASKS=addtopath'` (one value per `-File` command
