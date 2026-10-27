@@ -149,16 +149,16 @@ jobs:
     runs-on: [self-hosted, windows]
     timeout-minutes: 15
     steps:
-      # PowerShell 7. Under Windows PowerShell 5.1, the one a person has by default, the token route of install.ps1
-      # for a private repository fails today ("maximum number of redirections", `Invoke-WebRequest
-      # -MaximumRedirection 0` throws an exception without a response there; found 2026-10-27, task
-      # ALL/install-ps1-token-pfad-unter-powershell-5-1). Switch this step to `shell: powershell` (with
-      # PSModulePath set, as appkit's ci.yml does) once the release-kit is fixed: that is the test.
+      # Windows PowerShell 5.1, the one a person has by default: the token route of install.ps1 for a private
+      # repository went wrong there until release-kit v0.23.2 ("maximum number of redirections": `Invoke-WebRequest
+      # -MaximumRedirection 0` throws without a response in 5.1). This step is the test that it stays right.
       - name: Install from latest, start, ask /health, uninstall
-        shell: pwsh
+        shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          # A 5.1 started from the runner finds no Get-FileHash without its own module path.
+          PSModulePath: C:\Program Files\WindowsPowerShell\Modules;C:\Windows\system32\WindowsPowerShell\v1.0\Modules
         run: |
           $ErrorActionPreference = 'Stop'
           # The repository is private: an anonymous download is answered with a login page, so the script
