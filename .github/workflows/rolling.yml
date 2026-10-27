@@ -149,11 +149,15 @@ jobs:
     runs-on: [self-hosted, windows]
     timeout-minutes: 15
     steps:
+      # Windows PowerShell 5.1, the one a person has by default (its web cmdlets and redirect handling differ from
+      # PowerShell 7, and the token route of install.ps1 for a private repository goes through them).
       - name: Install from latest, start, ask /health, uninstall
-        shell: pwsh
+        shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          # A 5.1 started from the runner finds no Get-FileHash without its own module path.
+          PSModulePath: C:\Program Files\WindowsPowerShell\Modules;C:\Windows\system32\WindowsPowerShell\v1.0\Modules
         run: |
           $ErrorActionPreference = 'Stop'
           # The repository is private: an anonymous download is answered with a login page, so the script
@@ -163,7 +167,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $dir0 | Out-Null
           gh release download latest --repo $env:REPO --pattern install.ps1 --dir $dir0 --clobber
           if ($LASTEXITCODE -ne 0) { throw "gh release download failed ($LASTEXITCODE)" }
-          $text = Get-Content -Raw -Path (Join-Path $dir0 'install.ps1')
+          $text = Get-Content -Raw -Encoding UTF8 -Path (Join-Path $dir0 'install.ps1')
           & ([scriptblock]::Create($text)) -AllowElevated
           $dir = Join-Path $env:LOCALAPPDATA 'Programs\ai-desktop'
           if (-not (Test-Path (Join-Path $dir 'app\ai-desktop.exe'))) { throw "no app\ai-desktop.exe in $dir" }
