@@ -178,7 +178,7 @@ jobs:
         with:
           name: ai-desktop-setup
           path: dist
-      - uses: WKDSteve/appkit/release-kit/publish@89a9f9109295e60794f7b3d647ef2404098744b8 # v0.23.2
+      - uses: WKDSteve/appkit/release-kit/publish@cac769a78b71d39357df193e5c7bd3c8f0450ddb # v0.25.1
         with:
           token: ${{ github.token }}
           tag: ${{ github.ref_name }}
