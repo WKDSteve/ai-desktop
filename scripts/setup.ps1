@@ -59,6 +59,9 @@
 # Placed after the help block on purpose: a #Requires line in front of it stops Get-Help from finding the block.
 #Requires -Version 5.1
 [CmdletBinding()]
+# Write-Host is the right tool for the coloured progress lines of an interactive setup: since PowerShell 5 it
+# writes to the information stream, and the output is for the person at the console, not for a pipeline.
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '', Justification = 'coloured console progress of an interactive setup; Write-Host writes to the information stream since PowerShell 5')]
 param(
     [string]$Prefix = (Join-Path $env:LOCALAPPDATA 'ai-desktop'),
     [ValidateSet('Release', 'Debug', 'RelWithDebInfo', 'MinSizeRel')]
@@ -190,7 +193,12 @@ public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wP
     [void][AiDesktop.NativeMethods]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$result)
 }
 
-function Set-UserPath([string]$Value, [Microsoft.Win32.RegistryValueKind]$Kind) {
+function Set-UserPath {
+    [CmdletBinding(SupportsShouldProcess)]
+    param([string]$Value, [Microsoft.Win32.RegistryValueKind]$Kind)
+    # ShouldProcess answers $true unless -WhatIf is in effect or a confirmation is due ($ConfirmPreference at
+    # or below the impact); the callers pass -Confirm:$false, so the plain run is unchanged whatever the profile sets.
+    if (-not $PSCmdlet.ShouldProcess("HKCU\$EnvRegPath\Path", 'Set user PATH')) { return }
     $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($EnvRegPath)
     try {
         $key.SetValue('Path', $Value, $Kind)
@@ -204,16 +212,19 @@ function Add-UserPathEntry([string]$Entry) {
     $current = Get-UserPath
     $entries = @($current.Value -split ';' | Where-Object { $_ })
     if (@($entries | Where-Object { Test-SamePath $_ $Entry }).Count -gt 0) { return $false }
-    Set-UserPath (($entries + $Entry) -join ';') $current.Kind
+    Set-UserPath (($entries + $Entry) -join ';') $current.Kind -Confirm:$false
     return $true
 }
 
-function Remove-UserPathEntry([string]$Entry) {
+function Remove-UserPathEntry {
+    [CmdletBinding(SupportsShouldProcess)]
+    param([string]$Entry)
     $current = Get-UserPath
     $entries = @($current.Value -split ';' | Where-Object { $_ })
     $kept = @($entries | Where-Object { -not (Test-SamePath $_ $Entry) })
     if ($kept.Count -eq $entries.Count) { return $false }
-    Set-UserPath ($kept -join ';') $current.Kind
+    if (-not $PSCmdlet.ShouldProcess($Entry, 'Remove from user PATH')) { return $false }
+    Set-UserPath ($kept -join ';') $current.Kind -Confirm:$false
     return $true
 }
 
@@ -282,7 +293,7 @@ try {
         } else {
             Write-Info "$Prefix still holds other files, left in place"
         }
-        if (Remove-UserPathEntry $Prefix) {
+        if (Remove-UserPathEntry $Prefix -Confirm:$false) {
             Write-Ok 'removed from user PATH (restart open terminals)'
         }
         return
@@ -541,7 +552,12 @@ try {
                 while (-not $health -and [DateTime]::UtcNow -lt $deadline) {
                     Start-Sleep -Milliseconds 250
                     if ($proc.HasExited) { break }
-                    try { $health = Get-LocalJson "http://127.0.0.1:$Port/health" } catch { }
+                    try {
+                        $health = Get-LocalJson "http://127.0.0.1:$Port/health"
+                    } catch {
+                        # Expected while the server is still starting: the loop polls until the deadline.
+                        Write-Verbose "/health not ready yet: $($_.Exception.Message)"
+                    }
                 }
                 if ($health -and $health.status -eq 'ready') {
                     Write-Ok "/health: status=$($health.status)"

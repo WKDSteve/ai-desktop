@@ -3,8 +3,9 @@
 #   windows   scripts/setup.ps1 (MSYS2 / MinGW-w64): vendors the two header-only dependencies, builds, installs
 #             into a throw-away prefix and smoke-tests the installed copy against GET /health; then the unit
 #             tests (ctest) and the API tests (Node), which start the real binary on a free port.
-#   hygiene   no control or invisible character in a tracked text file (tools/check-control-chars.py), and the
-#             release-kit actions of the other workflows are the pinned commit (tools/check-release-kit-pin.py).
+#   hygiene   no control or invisible character in a tracked text file (tools/check-control-chars.py), the
+#             release-kit actions of the other workflows are the pinned commit (tools/check-release-kit-pin.py),
+#             and PSScriptAnalyzer finds nothing of severity Error or Warning in scripts/ and installer/.
 #
 # The repository is private and has no paid plan, so hosted runners do not start: every job runs on the
 # self-hosted Windows runner of the author (see $REPOS_DIR/tasks-vault/TOOLS/self-hosted-runner.md). That is why
@@ -90,3 +91,19 @@ jobs:
       # The release-kit actions of rolling.yml and release.yml are the commit of tools/release-kit.pin, and
       # that tag still names it (git ls-remote of the private appkit, with the login of the runner).
       - run: python tools/check-release-kit-pin.py
+      # The PowerShell scripts (setup, build-install, uninstall, the installer check) against PSScriptAnalyzer,
+      # one pinned version so the rule set does not move under the scripts. Suppressions are local to a function
+      # or a script and carry their reason; there is no settings file that hides a rule for everything.
+      - name: PSScriptAnalyzer on the scripts
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -RequiredVersion 1.24.0 -Scope CurrentUser -Force
+          # Import by version too: autoloading would take the newest copy on the runner, not the pinned one.
+          Import-Module PSScriptAnalyzer -RequiredVersion 1.24.0
+          (Get-Module PSScriptAnalyzer).Version
+          $found = @()
+          foreach ($dir in 'scripts', 'installer') {
+            $found += @(Invoke-ScriptAnalyzer -Path $dir -Recurse -Severity Error, Warning)
+          }
+          $found | Format-Table -AutoSize | Out-String | Write-Output
+          if ($found) { exit 1 }

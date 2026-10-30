@@ -30,6 +30,11 @@
     Run outside CI.
 #>
 [CmdletBinding()]
+# Write-Host is the right tool for the progress lines of a CI check that a person reads in the job log: since
+# PowerShell 5 it writes to the information stream, and nothing downstream consumes the output.
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '', Justification = 'progress lines of a CI check read in the job log; Write-Host writes to the information stream since PowerShell 5')]
+# -InstallScript is read inside Install-Setup; the rule does not look into functions.
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'InstallScript', Justification = 'read inside Install-Setup; the rule does not look into functions')]
 param(
     [Parameter(Mandatory)][string]$Setup,
     [string]$WorkDir = (Join-Path $env:RUNNER_TEMP 'verify-install'),
@@ -79,12 +84,20 @@ function Wait-ForHealth {
         try {
             $health = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/health" -TimeoutSec 2
             if ($health.status -eq 'ready') { return $health }
-        } catch { }
+        } catch {
+            # Expected while the server is still starting: the loop polls until the deadline.
+            Write-Verbose "/health not ready yet: $($_.Exception.Message)"
+        }
     }
     return $null
 }
 
 function Stop-InstalledServer {
+    [CmdletBinding(SupportsShouldProcess)]
+    param()
+    # ShouldProcess answers $true unless -WhatIf is in effect or a confirmation is due ($ConfirmPreference at
+    # or below the impact); the callers pass -Confirm:$false, so the plain run is unchanged whatever the profile sets.
+    if (-not $PSCmdlet.ShouldProcess($InstallDir, 'Stop the installed server and its launcher')) { return }
     $exe = Join-Path $InstallDir 'app\ai-desktop.exe'
     Get-Process ai-desktop -ErrorAction SilentlyContinue |
         Where-Object { $_.Path -ieq $exe } |
@@ -123,7 +136,7 @@ function Install-Setup {
     }
 }
 
-function Assert-InstalledFiles {
+function Assert-InstalledLayout {
     foreach ($rel in @('app\ai-desktop.exe', 'app\dashboard\index.html', 'ai-desktop.cmd', 'unins000.exe')) {
         Assert-That (Test-Path (Join-Path $InstallDir $rel)) "missing $rel"
     }
@@ -134,6 +147,9 @@ function Assert-InstalledFiles {
 # The server through the launcher, as a user starts it: a minimal PATH (no MinGW on it that could hide a
 # missing DLL) and a foreign working directory.
 function Start-InstalledServer {
+    [CmdletBinding(SupportsShouldProcess)]
+    param()
+    if (-not $PSCmdlet.ShouldProcess((Join-Path $InstallDir 'ai-desktop.cmd'), 'Start the installed server')) { return }
     $savedPath = $env:Path
     $env:Path = "$env:SystemRoot\System32;$env:SystemRoot"
     try {
@@ -163,7 +179,7 @@ try {
     $installed = $true
 
     Write-Host "`n==> Checking the installed files"
-    Assert-InstalledFiles
+    Assert-InstalledLayout
 
     Write-Host "`n==> Checking the user PATH (task addtopath)"
     $pathInstalled = Get-RawUserPath
@@ -175,8 +191,7 @@ try {
     Write-Ok 'install directory added, existing entries untouched'
 
     Write-Host "`n==> Starting the server through the launcher (minimal PATH, foreign working directory)"
-    Start-InstalledServer
-
+    Start-InstalledServer -Confirm:$false
     # "Run it again to update" is what the scripts tell a user, and the server is a console process that keeps
     # its files open: the setup must not fail on it, and what is installed afterwards must be whole and start.
     # Whether the setup closes the running server is told, not required (a user can stop it).
@@ -189,10 +204,10 @@ try {
     } else {
         Write-Host '  [INFO] the setup closed the running server'
     }
-    Stop-InstalledServer
-    Assert-InstalledFiles
+    Stop-InstalledServer -Confirm:$false
+    Assert-InstalledLayout
     Write-Host "`n==> Starting the updated copy"
-    Start-InstalledServer
+    Start-InstalledServer -Confirm:$false
 } catch {
     if (Test-Path $SetupLog) {
         Write-Host '--- installer log (tail) ---'
@@ -200,7 +215,7 @@ try {
     }
     throw
 } finally {
-    Stop-InstalledServer
+    Stop-InstalledServer -Confirm:$false
 }
 
 if ($installed) {
