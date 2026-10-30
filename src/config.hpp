@@ -43,7 +43,18 @@ nlohmann::json settings_json();
 // All-or-nothing: either every key validates and the file is written, or nothing
 // changes. 400 for an unknown key or an invalid value, 409 for a key that an
 // environment variable locks, 500 if the file cannot be written.
+// The key "prices" takes an object instead of a string (see prices() below):
+// {"<model>": {"input_per_mtok": number, "output_per_mtok": number}}, where a
+// model set to null drops the stored entry; null for the whole key drops them all.
 Status update_settings(const nlohmann::json& patch);
+
+// Price table for the usage view, USD per million tokens:
+// {"<model>": {"input_per_mtok": number, "output_per_mtok": number}}. The
+// built-in defaults for the common cloud models, overlaid model by model with what
+// config.json stores under settings.prices. Not part of settings_json(), which
+// holds the string settings; the API reports it beside them.
+nlohmann::json prices();
+nlohmann::json default_prices();
 
 // Copy of the whole document (settings plus whatever other modules store).
 nlohmann::json snapshot();

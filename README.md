@@ -213,6 +213,9 @@ check only, never the key value itself).
 | `/health` | GET | Cheap readiness check |
 | `/ask` | POST | A single prompt → full answer (non-streaming) |
 | `/ask/stream` | POST | Same as `/ask`, but as an SSE token stream |
+| `/usage` | GET | Usage log: events, totals, by provider and by model (see "Usage log") |
+| `/usage/events` | POST | Records a usage event from another client (ai.nvim) |
+| `/settings` | GET/PUT | Settings and the price table `prices` for the usage view |
 
 `/health`:
 
@@ -261,6 +264,64 @@ data: [DONE]
 The motivation for this contract (what `ai.nvim` requires from a provider)
 lives in `ai.nvim`'s `lua/ai/providers/ai_desktop.lua` (the module doc comment
 at the top of the file).
+
+### Usage log
+
+Every `/ask` and `/ask/stream` request leaves one line in `usage.jsonl` in the
+configuration folder (the folder of `config.json`, including the loomAI
+fallback). **Metadata only**: provider, model, token counts, duration and
+outcome -- never the prompt, the system text or the answer. The dashboard's
+"Nutzung" section reads it; `ai.nvim` reports its own requests to the other
+providers through `POST /usage/events`. One event:
+
+```json
+{ "ts": "2026-10-30T12:34:56Z", "source": "ai-desktop", "provider": "anthropic", "model": "claude-haiku-4-5",
+  "stream": false, "ok": true, "error_kind": "backend_error (only when ok is false)",
+  "prompt_tokens": 37, "completion_tokens": 3, "duration_ms": 812 }
+```
+
+`provider` is the backend the ModelRouter picked (`ollama`, `openai`,
+`anthropic`, `gemini`, `openai-compatible`); `error_kind` is `backend_error`,
+`invalid_request`, `no_key` or `internal_error`. A streamed request is logged
+with zero tokens (the streaming backends report none). The request's `model`
+is stored as given, cut to 200 characters; one with a control character is
+stored as `(invalid)`. A line of the file that does not parse, or whose fields
+have the wrong type, is skipped when reading.
+
+`POST /usage/events` takes an event without `ts` and `source` (the server
+stamps the time; `source` defaults to `ai.nvim`, a given string is kept, 32
+characters at most). `provider` and `model` are required, the numbers must not
+be negative, the body may not exceed 4 KiB, and a body that carries a field
+named `prompt`, `text`, `system`, `messages`, `input`, `output`, `content` or
+`response` is refused with `400` naming the field -- the log must never hold
+conversation text. Answer: `200 {"ok":true}`.
+
+`GET /usage?provider=<id>&since=<ISO>&until=<ISO>&limit=<n>` answers with the
+newest matching events (`limit` default 200, at most 2000) and the sums over
+*all* matching events; `provider` matches exactly, `since`/`until` are
+inclusive on `ts` and must have exactly the stored shape
+`YYYY-MM-DDTHH:MM:SSZ` (UTC, whole seconds, no offset -- any other ISO 8601
+spelling is refused with `400`, because the comparison is a string
+comparison), no filter means everything:
+
+```json
+{ "events": [ ... newest first ... ],
+  "totals": { "requests": 12, "ok": 11, "failed": 1, "prompt_tokens": 4821, "completion_tokens": 930,
+              "cost_usd": 0.0123, "unpriced": 0 },
+  "by_provider": { "anthropic": { "requests": 7, "prompt_tokens": 3000, "completion_tokens": 600, "cost_usd": 0.0105, "unpriced": 0 } },
+  "by_model": { "claude-haiku-4-5": { ... same shape ... } } }
+```
+
+Costs come from the price table `prices` in the settings (USD per million
+tokens): `GET /settings` reports it beside `settings`, `PUT /settings
+{"prices": {"<model>": {"input_per_mtok": 1.0, "output_per_mtok": 5.0}}}`
+overrides or adds a model (`null` for a model drops the override, `null` for
+`prices` drops them all). A model is matched exactly first, else by the longest
+key that is a prefix of its name; Ollama models cost nothing. Built-in defaults
+cover the common OpenAI, Anthropic and Gemini models as priced in 2026-10 --
+prices change, so check them against the providers' pages. As soon as one event
+in a group has no price, that group's `cost_usd` is `null` and `unpriced`
+counts those events: no silent partial sums.
 
 ## ModelRouter
 

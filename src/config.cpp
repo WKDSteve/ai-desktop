@@ -34,6 +34,39 @@ constexpr SettingDef kSettings[] = {
     {"language", nullptr, "de"},
 };
 
+// Prices in USD per million tokens, as published by the providers when this
+// table was written (2026-10); they change, so the stored table may override any
+// entry. Ollama models are local and need no row: the usage module prices them
+// at zero. A key is matched exactly first, then as the longest prefix of the
+// model name (so "claude-haiku-4-5" also covers a dated snapshot of it).
+const json& builtin_prices() {
+    static const json table = {
+        {"claude-haiku-5-5", {{"input_per_mtok", 0.10}, {"output_per_mtok", 0.50}}},
+        {"claude-sonnet-5-5", {{"input_per_mtok", 2.0}, {"output_per_mtok", 10.0}}},
+        {"claude-opus-5-5", {{"input_per_mtok", 4.0}, {"output_per_mtok", 20.0}}},
+        {"claude-sonnet-5", {{"input_per_mtok", 2.0}, {"output_per_mtok", 10.0}}},
+        {"claude-opus-5", {{"input_per_mtok", 5.0}, {"output_per_mtok", 25.0}}},
+        {"claude-opus-4-8", {{"input_per_mtok", 5.0}, {"output_per_mtok", 25.0}}},
+        {"claude-opus-4-7", {{"input_per_mtok", 5.0}, {"output_per_mtok", 25.0}}},
+        {"claude-opus-4-6", {{"input_per_mtok", 5.0}, {"output_per_mtok", 25.0}}},
+        {"claude-sonnet-4-6", {{"input_per_mtok", 3.0}, {"output_per_mtok", 15.0}}},
+        {"claude-haiku-4-5", {{"input_per_mtok", 1.0}, {"output_per_mtok", 5.0}}},
+        {"claude-3-5-haiku", {{"input_per_mtok", 0.80}, {"output_per_mtok", 4.0}}},
+        {"claude-3-5-sonnet", {{"input_per_mtok", 3.0}, {"output_per_mtok", 15.0}}},
+        {"gpt-4o", {{"input_per_mtok", 2.50}, {"output_per_mtok", 10.0}}},
+        {"gpt-4o-mini", {{"input_per_mtok", 0.15}, {"output_per_mtok", 0.60}}},
+        {"gpt-4.1", {{"input_per_mtok", 2.0}, {"output_per_mtok", 8.0}}},
+        {"gpt-4.1-mini", {{"input_per_mtok", 0.40}, {"output_per_mtok", 1.60}}},
+        {"o1", {{"input_per_mtok", 15.0}, {"output_per_mtok", 60.0}}},
+        {"o3", {{"input_per_mtok", 2.0}, {"output_per_mtok", 8.0}}},
+        {"o3-mini", {{"input_per_mtok", 1.10}, {"output_per_mtok", 4.40}}},
+        {"gemini-2.5-pro", {{"input_per_mtok", 1.25}, {"output_per_mtok", 10.0}}},
+        {"gemini-2.5-flash", {{"input_per_mtok", 0.30}, {"output_per_mtok", 2.50}}},
+        {"gemini-2.0-flash", {{"input_per_mtok", 0.10}, {"output_per_mtok", 0.40}}},
+    };
+    return table;
+}
+
 std::mutex g_mutex;
 bool g_loaded = false;
 json g_doc;
@@ -239,6 +272,66 @@ Status validate(const std::string& key, std::string& value) {
     return {};
 }
 
+// Validates one entry of a "prices" patch: {"input_per_mtok": n, "output_per_mtok": n}.
+Status validate_price(const std::string& model, const json& entry) {
+    if (model.empty() || model.size() > kMaxModelNameLength) {
+        return {400, "prices: a model name must have 1 to 200 characters"};
+    }
+    for (unsigned char c : model) {
+        if (c < 0x20 || c == 0x7f) {
+            return {400, "prices: a model name must not contain control characters"};
+        }
+    }
+    if (!entry.is_object()) {
+        return {400, "prices." + model + ": expected an object or null"};
+    }
+    for (const char* key : {"input_per_mtok", "output_per_mtok"}) {
+        if (!entry.contains(key) || !entry[key].is_number()) {
+            return {400, "prices." + model + ": '" + key + "' (number) is required"};
+        }
+        if (entry[key].get<double>() < 0) {
+            return {400, "prices." + model + ": '" + key + "' must not be negative"};
+        }
+    }
+    for (const auto& item : entry.items()) {
+        if (item.key() != "input_per_mtok" && item.key() != "output_per_mtok") {
+            return {400, "prices." + model + ": unknown field '" + item.key() + "'"};
+        }
+    }
+    return {};
+}
+
+// Applies {"prices": <raw>} to `settings` in place: null drops the stored table, an
+// object merges model by model (an entry set to null drops that model).
+Status apply_prices(json& settings, const json& raw) {
+    if (raw.is_null()) {
+        settings.erase("prices");
+        return {};
+    }
+    if (!raw.is_object()) {
+        return {400, "prices: expected an object of {\"<model>\": {\"input_per_mtok\", \"output_per_mtok\"}}"};
+    }
+    json table = (settings.contains("prices") && settings["prices"].is_object()) ? settings["prices"] : json::object();
+    for (const auto& item : raw.items()) {
+        if (item.value().is_null()) {
+            table.erase(item.key());
+            continue;
+        }
+        Status checked = validate_price(item.key(), item.value());
+        if (!checked.ok()) {
+            return checked;
+        }
+        table[item.key()] = {{"input_per_mtok", item.value()["input_per_mtok"].get<double>()},
+                             {"output_per_mtok", item.value()["output_per_mtok"].get<double>()}};
+    }
+    if (table.empty()) {
+        settings.erase("prices");
+    } else {
+        settings["prices"] = std::move(table);
+    }
+    return {};
+}
+
 }  // namespace
 
 bool normalize_http_origin(std::string& url) {
@@ -382,6 +475,13 @@ Status update_settings(const json& patch) {
     for (const auto& item : patch.items()) {
         const std::string& key = item.key();
         const json& raw = item.value();
+        if (key == "prices") {
+            Status applied = apply_prices(next["settings"], raw);
+            if (!applied.ok()) {
+                return applied;
+            }
+            continue;
+        }
         const SettingDef* def = find_setting(key);
         if (!def) {
             return {400, "unknown setting '" + key + "'"};
@@ -417,6 +517,27 @@ Status update_settings(const json& patch) {
         g_doc = std::move(before);
     }
     return saved;
+}
+
+json default_prices() {
+    return builtin_prices();
+}
+
+json prices() {
+    json table = builtin_prices();
+    std::lock_guard<std::mutex> lock(g_mutex);
+    ensure_loaded_locked();
+    const json& settings = g_doc["settings"];
+    if (settings.contains("prices") && settings["prices"].is_object()) {
+        for (const auto& item : settings["prices"].items()) {
+            // Tolerant of a hand-edited file like the rest of the loader: only a
+            // row that would pass PUT /settings overlays the default.
+            if (validate_price(item.key(), item.value()).ok()) {
+                table[item.key()] = item.value();
+            }
+        }
+    }
+    return table;
 }
 
 json snapshot() {

@@ -209,6 +209,9 @@ Presence-Check, nie der Key-Wert selbst).
 | `/health` | GET | Billiger Readiness-Check |
 | `/ask` | POST | Einzelner Prompt → vollständige Antwort (nicht-streamend) |
 | `/ask/stream` | POST | Wie `/ask`, aber als SSE-Token-Stream |
+| `/usage` | GET | Nutzungsspeicher: Ereignisse, Summen, je Provider und je Modell (siehe „Nutzungsspeicher“) |
+| `/usage/events` | POST | Zeichnet ein Nutzungsereignis eines anderen Clients (ai.nvim) auf |
+| `/settings` | GET/PUT | Einstellungen und die Preistabelle `prices` für die Nutzungsansicht |
 
 `/health`:
 
@@ -258,6 +261,66 @@ data: [DONE]
 Die Motivation für diesen Vertrag (was `ai.nvim` als Provider-Kontrakt
 voraussetzt) steht in `ai.nvim`s `lua/ai/providers/ai_desktop.lua`
 (Modul-Doku-Kommentar am Dateikopf).
+
+### Nutzungsspeicher
+
+Jede Anfrage an `/ask` und `/ask/stream` hinterlässt eine Zeile in
+`usage.jsonl` im Konfigurationsordner (der Ordner von `config.json`, inklusive
+loomAI-Rückfall). **Nur Metadaten**: Provider, Modell, Token-Zahlen, Dauer und
+Ergebnis -- niemals der Prompt, der System-Text oder die Antwort. Der Abschnitt
+„Nutzung“ im Dashboard liest sie; `ai.nvim` meldet seine eigenen Anfragen an
+die anderen Provider über `POST /usage/events`. Ein Ereignis:
+
+```json
+{ "ts": "2026-10-30T12:34:56Z", "source": "ai-desktop", "provider": "anthropic", "model": "claude-haiku-4-5",
+  "stream": false, "ok": true, "error_kind": "backend_error (nur wenn ok false ist)",
+  "prompt_tokens": 37, "completion_tokens": 3, "duration_ms": 812 }
+```
+
+`provider` ist das Backend, das der ModelRouter gewählt hat (`ollama`,
+`openai`, `anthropic`, `gemini`, `openai-compatible`); `error_kind` ist
+`backend_error`, `invalid_request`, `no_key` oder `internal_error`. Eine
+gestreamte Anfrage wird mit null Tokens aufgezeichnet (die Streaming-Backends
+melden keine). Das `model` der Anfrage wird wie geliefert gespeichert, auf 200
+Zeichen gekürzt; eines mit Steuerzeichen als `(invalid)`. Eine Zeile der Datei,
+die nicht parst oder deren Felder den falschen Typ haben, wird beim Lesen
+übersprungen.
+
+`POST /usage/events` nimmt ein Ereignis ohne `ts` und `source` (der Server
+setzt die Zeit; `source` ist standardmäßig `ai.nvim`, ein gelieferter String
+bleibt, höchstens 32 Zeichen). `provider` und `model` sind Pflicht, die Zahlen
+dürfen nicht negativ sein, der Body höchstens 4 KiB groß, und ein Body mit einem
+Feld namens `prompt`, `text`, `system`, `messages`, `input`, `output`, `content`
+oder `response` wird mit `400` abgelehnt, die Meldung nennt das Feld -- der
+Speicher darf nie Gesprächstext enthalten. Antwort: `200 {"ok":true}`.
+
+`GET /usage?provider=<id>&since=<ISO>&until=<ISO>&limit=<n>` antwortet mit den
+neuesten passenden Ereignissen (`limit` Standard 200, höchstens 2000) und den
+Summen über *alle* passenden Ereignisse; `provider` exakt, `since`/`until`
+inklusiv auf `ts` und genau in der gespeicherten Form `YYYY-MM-DDTHH:MM:SSZ`
+(UTC, ganze Sekunden, kein Offset -- jede andere ISO-8601-Schreibweise wird
+mit `400` abgelehnt, weil der Vergleich ein String-Vergleich ist), ohne Filter
+alles:
+
+```json
+{ "events": [ ... neueste zuerst ... ],
+  "totals": { "requests": 12, "ok": 11, "failed": 1, "prompt_tokens": 4821, "completion_tokens": 930,
+              "cost_usd": 0.0123, "unpriced": 0 },
+  "by_provider": { "anthropic": { "requests": 7, "prompt_tokens": 3000, "completion_tokens": 600, "cost_usd": 0.0105, "unpriced": 0 } },
+  "by_model": { "claude-haiku-4-5": { ... gleiche Form ... } } }
+```
+
+Die Kosten kommen aus der Preistabelle `prices` in den Einstellungen (USD je
+Million Tokens): `GET /settings` liefert sie neben `settings`, `PUT /settings
+{"prices": {"<modell>": {"input_per_mtok": 1.0, "output_per_mtok": 5.0}}}`
+überschreibt oder ergänzt ein Modell (`null` für ein Modell entfernt die
+Überschreibung, `null` für `prices` alle). Ein Modell wird zuerst exakt
+gefunden, sonst über den längsten Schlüssel, der ein Präfix seines Namens ist;
+Ollama-Modelle kosten nichts. Eingebaute Defaults decken die gängigen OpenAI-,
+Anthropic- und Gemini-Modelle mit den Preisen von 2026-10 ab -- Preise ändern
+sich, also gegen die Seiten der Anbieter prüfen. Sobald ein Ereignis einer
+Gruppe keinen Preis hat, ist deren `cost_usd` `null` und `unpriced` zählt diese
+Ereignisse: keine stillen Teilsummen.
 
 ## ModelRouter
 

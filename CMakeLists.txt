@@ -24,6 +24,7 @@ add_library(ai_desktop_core STATIC
     src/config.cpp
     src/models.cpp
     src/secrets.cpp
+    src/usage.cpp
 )
 target_include_directories(ai_desktop_core PUBLIC src)
 target_link_libraries(ai_desktop_core PUBLIC third_party_headers)
@@ -72,6 +73,7 @@ if(AI_DESKTOP_BUILD_TESTS)
         tests/unit/test_config.cpp
         tests/unit/test_models.cpp
         tests/unit/test_secrets.cpp
+        tests/unit/test_usage.cpp
     )
     target_link_libraries(ai_desktop_tests PRIVATE ai_desktop_core)
     add_test(NAME ai_desktop_unit COMMAND ai_desktop_tests)

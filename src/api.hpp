@@ -6,8 +6,8 @@
 #include "nlohmann/json.hpp"
 
 // The management API of the dashboard / desktop app: model listing, settings,
-// keys and custom models. The ai.nvim contract (/health, /ask, /ask/stream)
-// stays in main.cpp, untouched.
+// keys, custom models and the usage log (/usage, /usage/events). The ai.nvim
+// contract (/health, /ask, /ask/stream) stays in main.cpp, untouched.
 namespace ai_desktop::api {
 
 // {"error":{"message":"..."}} with the given status, the error shape every

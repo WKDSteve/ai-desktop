@@ -102,6 +102,36 @@
       font-size: .82rem; line-height: 1.55;
     }
 
+    /* Usage panel */
+    .usage-filters { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap;
+                     margin-bottom: .75rem; }
+    .usage-filters select {
+      background: var(--bg); color: var(--text); border: 1px solid var(--border);
+      border-radius: 6px; padding: .4rem .6rem; font-family: inherit; font-size: .78rem;
+    }
+    .usage-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem;
+                  margin-bottom: .75rem; }
+    .kpi { background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+           padding: .6rem .75rem; }
+    .kpi-label { font-size: .66rem; color: var(--muted); text-transform: uppercase;
+                 letter-spacing: .08em; }
+    .kpi-value { font-size: 1.05rem; color: var(--text); margin-top: .25rem; }
+    .kpi-sub   { font-size: .68rem; color: var(--muted); margin-top: .15rem; }
+    .usage-table { width: 100%; border-collapse: collapse; font-size: .76rem;
+                   margin-bottom: .75rem; }
+    .usage-table th { text-align: left; color: var(--muted); font-weight: 600;
+                      font-size: .66rem; text-transform: uppercase; letter-spacing: .08em;
+                      padding: .3rem .4rem; border-bottom: 1px solid var(--border); }
+    .usage-table td { padding: .3rem .4rem; border-bottom: 1px solid #1e2130; }
+    .usage-table td.num, .usage-table th.num { text-align: right; }
+    #usage-events { max-height: 220px; overflow-y: auto; font-size: .74rem; }
+    .usage-event { display: flex; gap: .6rem; padding: .25rem 0;
+                   border-bottom: 1px solid #1e2130; line-height: 1.4; }
+    .usage-event .log-ts { min-width: 150px; }
+    .usage-ok  { color: var(--green); }
+    .usage-err { color: var(--red); }
+    #usage-status { font-size: .72rem; color: var(--muted); margin-top: .4rem; }
+
     /* Log */
     #log { height: 260px; overflow-y: auto; font-size: .76rem; }
     #log::-webkit-scrollbar { width: 4px; }
@@ -215,6 +245,59 @@
   </div>
   <div id="ask-status"></div>
   <div id="ask-output"></div>
+</div>
+
+<!-- Nutzung: GET /usage (Metadaten aus usage.jsonl, nie Prompt- oder
+     Antworttext), gefiltert nach Provider und Zeitraum. -->
+<div class="card">
+  <h2>Nutzung</h2>
+  <div class="usage-filters">
+    <select id="usage-provider" onchange="loadUsage()">
+      <option value="">Alle Provider</option>
+    </select>
+    <select id="usage-range" onchange="loadUsage()">
+      <option value="24h">Letzte 24 h</option>
+      <option value="7d" selected>Letzte 7 Tage</option>
+      <option value="30d">Letzte 30 Tage</option>
+      <option value="all">Alles</option>
+    </select>
+    <button class="btn btn-muted" onclick="loadUsage()">↻ Aktualisieren</button>
+  </div>
+  <div class="usage-kpis">
+    <div class="kpi">
+      <div class="kpi-label">Anfragen</div>
+      <div class="kpi-value" id="usage-requests">—</div>
+      <div class="kpi-sub" id="usage-requests-sub"></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Prompt-Tokens</div>
+      <div class="kpi-value" id="usage-prompt-tokens">—</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Antwort-Tokens</div>
+      <div class="kpi-value" id="usage-completion-tokens">—</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Kosten (USD)</div>
+      <div class="kpi-value" id="usage-cost">—</div>
+      <div class="kpi-sub" id="usage-cost-sub"></div>
+    </div>
+  </div>
+  <table class="usage-table">
+    <thead>
+      <tr>
+        <th>Provider</th>
+        <th class="num">Anfragen</th>
+        <th class="num">Prompt-Tokens</th>
+        <th class="num">Antwort-Tokens</th>
+        <th class="num">Kosten (USD)</th>
+      </tr>
+    </thead>
+    <tbody id="usage-by-provider"></tbody>
+  </table>
+  <h2>Letzte Ereignisse</h2>
+  <div id="usage-events"></div>
+  <div id="usage-status"></div>
 </div>
 
 <!-- Live-Log -->
@@ -427,12 +510,133 @@
       flushOutput();
       setAskBusy(false);
       askAbort = null;
+      loadUsage();  // the server logged this request; show it
     }
   }
 
   function stopAsk() {
     if (askAbort) askAbort.abort();
   }
+
+  // Nutzung: GET /usage mit Provider- und Zeitraumfilter. Provider- und
+  // Modellnamen kommen aus dem Store (also aus fremden Requests) und werden
+  // deshalb ausschließlich per textContent eingesetzt, nie per innerHTML.
+  const knownProviders = new Set();
+  const RANGE_MS = { '24h': 24 * 3600e3, '7d': 7 * 24 * 3600e3, '30d': 30 * 24 * 3600e3 };
+
+  function isoSeconds(date) {
+    return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  }
+
+  function fmtInt(n) {
+    return Number(n || 0).toLocaleString('de-AT');
+  }
+
+  function fmtCost(group) {
+    if (group.cost_usd === null || group.cost_usd === undefined) return '—';
+    return Number(group.cost_usd).toLocaleString('de-AT', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  }
+
+  function cell(row, text, numeric) {
+    const td = document.createElement('td');
+    if (numeric) td.className = 'num';
+    td.textContent = text;
+    row.appendChild(td);
+    return td;
+  }
+
+  function renderProviderSelect(byProvider) {
+    const select = document.getElementById('usage-provider');
+    Object.keys(byProvider || {}).forEach((p) => knownProviders.add(p));
+    const current = select.value;
+    while (select.options.length > 1) select.remove(1);
+    [...knownProviders].sort().forEach((p) => {
+      const opt = document.createElement('option');
+      opt.value = p;
+      opt.textContent = p;
+      select.appendChild(opt);
+    });
+    select.value = knownProviders.has(current) ? current : '';
+  }
+
+  async function loadUsage() {
+    const status = document.getElementById('usage-status');
+    const provider = document.getElementById('usage-provider').value;
+    const range = document.getElementById('usage-range').value;
+    const params = new URLSearchParams();
+    if (provider) params.set('provider', provider);
+    if (RANGE_MS[range]) params.set('since', isoSeconds(new Date(Date.now() - RANGE_MS[range])));
+    params.set('limit', '50');
+
+    let data;
+    try {
+      const res = await fetch('/usage?' + params.toString());
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      data = await res.json();
+    } catch (err) {
+      status.textContent = 'Nutzung nicht ladbar: ' + err.message;
+      status.style.color = 'var(--red)';
+      return;
+    }
+    status.style.color = 'var(--muted)';
+
+    const totals = data.totals || {};
+    document.getElementById('usage-requests').textContent = fmtInt(totals.requests);
+    document.getElementById('usage-requests-sub').textContent =
+      fmtInt(totals.ok) + ' ok · ' + fmtInt(totals.failed) + ' fehlgeschlagen';
+    document.getElementById('usage-prompt-tokens').textContent = fmtInt(totals.prompt_tokens);
+    document.getElementById('usage-completion-tokens').textContent = fmtInt(totals.completion_tokens);
+    document.getElementById('usage-cost').textContent = fmtCost(totals);
+    document.getElementById('usage-cost-sub').textContent =
+      totals.unpriced ? fmtInt(totals.unpriced) + ' Ereignis(se) ohne Preis' : '';
+
+    renderProviderSelect(data.by_provider);
+
+    const tbody = document.getElementById('usage-by-provider');
+    tbody.textContent = '';
+    const providers = Object.keys(data.by_provider || {}).sort();
+    if (providers.length === 0) {
+      const row = document.createElement('tr');
+      cell(row, 'Keine Ereignisse im gewählten Zeitraum.', false).colSpan = 5;
+      tbody.appendChild(row);
+    }
+    providers.forEach((p) => {
+      const g = data.by_provider[p];
+      const row = document.createElement('tr');
+      cell(row, p, false);
+      cell(row, fmtInt(g.requests), true);
+      cell(row, fmtInt(g.prompt_tokens), true);
+      cell(row, fmtInt(g.completion_tokens), true);
+      cell(row, fmtCost(g), true);
+      tbody.appendChild(row);
+    });
+
+    const list = document.getElementById('usage-events');
+    list.textContent = '';
+    (data.events || []).forEach((ev) => {
+      const line = document.createElement('div');
+      line.className = 'usage-event';
+      const ts = document.createElement('span');
+      ts.className = 'log-ts';
+      ts.textContent = new Date(ev.ts).toLocaleString('de-AT', { hour12: false });
+      const state = document.createElement('span');
+      state.className = ev.ok ? 'usage-ok' : 'usage-err';
+      state.textContent = ev.ok ? '✓' : '✗ ' + (ev.error_kind || 'fehler');
+      const what = document.createElement('span');
+      what.className = 'log-msg';
+      what.textContent =
+        ev.provider + ' · ' + (ev.model || '(Standard)') + (ev.stream ? ' · stream' : '') +
+        ' · ' + fmtInt(ev.prompt_tokens) + '/' + fmtInt(ev.completion_tokens) + ' Tokens · ' +
+        fmtInt(ev.duration_ms) + ' ms · ' + ev.source;
+      line.appendChild(ts);
+      line.appendChild(state);
+      line.appendChild(what);
+      list.appendChild(line);
+    });
+    status.textContent = 'Nur Metadaten (usage.jsonl im Konfigurationsordner), nie Prompt- oder Antworttext.';
+  }
+
+  loadUsage();
 
   // SSE-Verbindung
   const sseDot   = document.getElementById('sse-dot');

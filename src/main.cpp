@@ -22,6 +22,7 @@
 #include "ollama_client.hpp"
 #include "openai_client.hpp"
 #include "secrets.hpp"
+#include "usage.hpp"
 
 using json = nlohmann::json;
 
@@ -105,6 +106,61 @@ std::string route_ask_stream(const std::string& prompt,
                                           on_delta);
     }
     return ai_desktop::ollama::ask_stream(prompt, system, route.upstream_model, timeout_ms, on_delta);
+}
+
+// ---------------------------------------------------------------------------
+// Usage log: every /ask and /ask/stream request leaves one metadata line in
+// <config dir>/usage.jsonl (provider, model, tokens, duration, outcome; never
+// any text). Recording must not be able to fail a response, so a write error
+// only goes to the log.
+// ---------------------------------------------------------------------------
+using Clock = std::chrono::steady_clock;
+
+// A coarse class for a failed request, derived from the backend's message.
+std::string error_kind_for(const std::string& message) {
+    if (message.find("not set") != std::string::npos || message.find("no API key") != std::string::npos) {
+        return "no_key";
+    }
+    if (message.find("refusing to send") != std::string::npos) {
+        return "invalid_request";
+    }
+    return "backend_error";
+}
+
+// The model name of a request body for the usage log: "" unless it is a string
+// (a non-string must not throw here -- the 400 answer is already on its way).
+std::string model_of(const json& body) {
+    if (body.is_object() && body.contains("model") && body["model"].is_string()) {
+        return body["model"].get<std::string>();
+    }
+    return "";
+}
+
+void record_usage(const std::string& model, bool stream, Clock::time_point started, bool ok,
+                  const std::string& error_kind, long prompt_tokens, long completion_tokens) {
+    try {
+        ai_desktop::usage::Event event;
+        event.ts = ai_desktop::usage::now_iso8601();
+        event.source = "ai-desktop";
+        event.provider = ai_desktop::models::resolve(model).provider;
+        // The client's model name goes through the same bounds POST
+        // /usage/events enforces, so the log holds short identifiers only.
+        event.model = ai_desktop::usage::normalize_name(model, ai_desktop::usage::kMaxNameLength);
+        event.stream = stream;
+        event.ok = ok;
+        event.error_kind = ok ? "" : error_kind;
+        event.prompt_tokens = prompt_tokens < 0 ? 0 : prompt_tokens;
+        event.completion_tokens = completion_tokens < 0 ? 0 : completion_tokens;
+        event.duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - started).count();
+        std::string error;
+        if (!ai_desktop::usage::Store::for_config_dir().append(event, &error)) {
+            std::cerr << "ai-desktop: usage event not recorded: " << error << "\n";
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "ai-desktop: usage event not recorded: " << e.what() << "\n";
+    } catch (...) {
+        std::cerr << "ai-desktop: usage event not recorded\n";
+    }
 }
 
 }  // namespace
@@ -272,6 +328,7 @@ int main(int argc, char** argv) {
     std::cout << "Health:    " << base << "/health\n";
     std::cout << "Ask:       POST " << base << "/ask\n";
     std::cout << "Stream:    POST " << base << "/ask/stream\n";
+    std::cout << "Usage:     " << base << "/usage (metadata only, usage.jsonl in the config folder)\n";
     std::cout << "Ollama:    " << ai_desktop::ollama::host()
                << " (model default: " << ai_desktop::ollama::default_model() << ")\n";
     std::cout << "OpenAI:    "
@@ -389,10 +446,12 @@ int main(int argc, char** argv) {
     // Anthropic/Gemini -- der HTTP-Kontrakt selbst ändert sich dadurch
     // nicht (kein neues Request-Feld nötig).
     svr.Post("/ask", [](const httplib::Request& req, httplib::Response& res) {
+        const auto started = Clock::now();
         auto body = json::parse(req.body, nullptr, false);
         if (body.is_discarded() || !body.contains("prompt") ||
             !body["prompt"].is_string()) {
             send_json_error(res, 400, "invalid request: 'prompt' (string) is required");
+            record_usage(model_of(body), false, started, false, "invalid_request", 0, 0);
             return;
         }
 
@@ -402,6 +461,8 @@ int main(int argc, char** argv) {
         int timeout_ms     = body.value("timeout_ms", default_timeout_for(model));
 
         auto result = route_ask(prompt, system, model, timeout_ms);
+        record_usage(model, false, started, result.ok, error_kind_for(result.error_message), result.prompt_tokens,
+                     result.completion_tokens);
         if (!result.ok) {
             send_json_error(res, 502, result.error_message);
             return;
@@ -427,10 +488,12 @@ int main(int argc, char** argv) {
         res.set_header("Cache-Control", "no-cache");
         res.set_header("X-Accel-Buffering", "no");
 
+        const auto started = Clock::now();
         auto body = json::parse(req.body, nullptr, false);
         if (body.is_discarded() || !body.contains("prompt") ||
             !body["prompt"].is_string()) {
             send_json_error(res, 400, "invalid request: 'prompt' (string) is required");
+            record_usage(model_of(body), true, started, false, "invalid_request", 0, 0);
             return;
         }
 
@@ -441,7 +504,7 @@ int main(int argc, char** argv) {
 
         res.set_chunked_content_provider(
             "text/event-stream",
-            [prompt, system, model, timeout_ms](size_t, httplib::DataSink& sink) {
+            [prompt, system, model, timeout_ms, started](size_t, httplib::DataSink& sink) {
                 auto write_event = [&sink](const json& payload) {
                     std::string data = "data: " + payload.dump() + "\n\n";
                     sink.write(data.c_str(), data.size());
@@ -467,10 +530,15 @@ int main(int argc, char** argv) {
                         static const std::string done_event = "data: [DONE]\n\n";
                         sink.write(done_event.c_str(), done_event.size());
                     }
+                    // The streaming clients report no token counts, so a
+                    // streamed request is logged with zero tokens.
+                    record_usage(model, true, started, err.empty(), error_kind_for(err), 0, 0);
                 } catch (const std::exception& e) {
                     write_event(json{{"error", {{"message", std::string("ai-desktop: ") + e.what()}}}});
+                    record_usage(model, true, started, false, "internal_error", 0, 0);
                 } catch (...) {
                     write_event(json{{"error", {{"message", "ai-desktop: unknown internal error"}}}});
+                    record_usage(model, true, started, false, "internal_error", 0, 0);
                 }
 
                 sink.done();
