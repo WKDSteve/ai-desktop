@@ -53,6 +53,24 @@ describe("server basics", () => {
     assert.equal(bad.status, 400);
     assert.match(bad.json.error.message, /prompt/);
   });
+
+  // The handlers read the optional fields with body.value(), which throws on a wrong type: a valid prompt with
+  // `model: 1` used to answer 500 from the catch-all.
+  it("answers 400, not 500, when an optional /ask field has the wrong type", async () => {
+    const cases = [
+      [{ prompt: "hi", model: 1 }, /model/],
+      [{ prompt: "hi", model: null }, /model/],
+      [{ prompt: "hi", system: ["x"] }, /system/],
+      [{ prompt: "hi", timeout_ms: "5000" }, /timeout_ms/],
+    ];
+    for (const [body, pattern] of cases) {
+      for (const path of ["/ask", "/ask/stream"]) {
+        const res = await server.post(path, body);
+        assert.equal(res.status, 400, `${path} ${JSON.stringify(body)}`);
+        assert.match(res.json.error.message, pattern);
+      }
+    }
+  });
 });
 
 describe("--port and error handling", () => {

@@ -136,6 +136,24 @@ std::string model_of(const json& body) {
     return "";
 }
 
+// The request body of /ask and /ask/stream: `prompt` (string) is required, `system` and `model` are optional
+// strings, `timeout_ms` an optional integer. Returns the 400 message, or "" when the body is fine -- the
+// handlers used to read `model` with body.value(), which throws (so answers 500) on a non-string.
+std::string ask_body_error(const json& body) {
+    if (body.is_discarded() || !body.is_object() || !body.contains("prompt") || !body["prompt"].is_string()) {
+        return "invalid request: 'prompt' (string) is required";
+    }
+    for (const char* field : {"system", "model"}) {
+        if (body.contains(field) && !body[field].is_string()) {
+            return std::string("invalid request: '") + field + "' must be a string";
+        }
+    }
+    if (body.contains("timeout_ms") && !body["timeout_ms"].is_number_integer()) {
+        return "invalid request: 'timeout_ms' must be an integer";
+    }
+    return "";
+}
+
 void record_usage(const std::string& model, bool stream, Clock::time_point started, bool ok,
                   const std::string& error_kind, long prompt_tokens, long completion_tokens) {
     try {
@@ -448,9 +466,8 @@ int main(int argc, char** argv) {
     svr.Post("/ask", [](const httplib::Request& req, httplib::Response& res) {
         const auto started = Clock::now();
         auto body = json::parse(req.body, nullptr, false);
-        if (body.is_discarded() || !body.contains("prompt") ||
-            !body["prompt"].is_string()) {
-            send_json_error(res, 400, "invalid request: 'prompt' (string) is required");
+        if (const auto error = ask_body_error(body); !error.empty()) {
+            send_json_error(res, 400, error);
             record_usage(model_of(body), false, started, false, "invalid_request", 0, 0);
             return;
         }
@@ -490,9 +507,8 @@ int main(int argc, char** argv) {
 
         const auto started = Clock::now();
         auto body = json::parse(req.body, nullptr, false);
-        if (body.is_discarded() || !body.contains("prompt") ||
-            !body["prompt"].is_string()) {
-            send_json_error(res, 400, "invalid request: 'prompt' (string) is required");
+        if (const auto error = ask_body_error(body); !error.empty()) {
+            send_json_error(res, 400, error);
             record_usage(model_of(body), true, started, false, "invalid_request", 0, 0);
             return;
         }
