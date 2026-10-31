@@ -1,0 +1,95 @@
+# Pull-request CI of ai-desktop, on GitHub-hosted runners.
+#
+# Pushes to main run on the author's self-hosted runner (ci.yml). A pull request -- above all one from a fork -- must
+# never reach that machine, so it runs here instead: a throwaway GitHub VM, a read-only token, no secrets. It is the
+# same checks as ci.yml, step for step (setup.ps1 build + install + smoke test, ctest, the API tests, the hygiene
+# checks); a difference between the two is a finding, not a second pipeline to maintain. The one exception: the
+# release-kit pin is checked offline (the workflows against tools/release-kit.pin); whether the appkit tag still
+# names that commit is the push run's job, a pull request cannot move it.
+#
+# Windows only, like ci.yml: Linux is built from source with scripts/setup.sh and not checked by CI yet.
+#
+# A fork can edit this file in its pull request (e.g. `runs-on: self-hosted`). The repository therefore requires
+# approval before a workflow of an outside contributor runs; never approve a pull request that touches `.github/`.
+
+name: PR
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    # Git Bash on the Windows image.
+    shell: bash
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (node24)
+        with:
+          persist-credentials: false
+
+      # The image has several g++ on PATH (Strawberry Perl, C:\mingw64), none with OpenSSL; setup.ps1 is pointed at
+      # this toolchain with -Msys2Root, which wins over PATH.
+      - uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
+        id: msys2
+        with:
+          msystem: MINGW64
+          install: mingw-w64-x86_64-gcc mingw-w64-x86_64-make mingw-w64-x86_64-openssl
+
+      - name: build, install and smoke-test with scripts/setup.ps1
+        shell: pwsh
+        run: |
+          .\scripts\setup.ps1 `
+            -Msys2Root '${{ steps.msys2.outputs.msys2-location }}' `
+            -Prefix "$env:RUNNER_TEMP\stage" `
+            -BuildType Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: unit tests (ctest)
+        shell: pwsh
+        run: |
+          $env:PATH = '${{ steps.msys2.outputs.msys2-location }}\mingw64\bin;' + $env:PATH
+          ctest --test-dir build --output-on-failure
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: API tests (Node, the real binary)
+        shell: pwsh
+        run: |
+          $env:PATH = '${{ steps.msys2.outputs.msys2-location }}\mingw64\bin;' + $env:PATH
+          node --version
+          $tests = Get-ChildItem tests -Filter '*.test.mjs' | ForEach-Object { $_.FullName }
+          node --test @tests
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  hygiene:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (node24)
+        with:
+          persist-credentials: false
+      - run: python -m unittest discover -s tools -p "test_*.py"
+      - run: python tools/check-control-chars.py
+      - run: python tools/check-release-kit-pin.py --offline
+      - name: PSScriptAnalyzer on the scripts
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -RequiredVersion 1.24.0 -Scope CurrentUser -Force
+          Import-Module PSScriptAnalyzer -RequiredVersion 1.24.0
+          (Get-Module PSScriptAnalyzer).Version
+          $found = @()
+          foreach ($dir in 'scripts', 'installer') {
+            $found += @(Invoke-ScriptAnalyzer -Path $dir -Recurse -Severity Error, Warning)
+          }
+          $found | Format-Table -AutoSize | Out-String | Write-Output
+          if ($found) { exit 1 }

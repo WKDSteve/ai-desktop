@@ -9,7 +9,7 @@
 #
 # Every job runs on the self-hosted Windows runner of the author, by choice. That is why there is no Linux job;
 # scripts/setup.sh stays for people who build from source there. There is no pull_request trigger: a pull request
-# from a fork must never run its code on that runner, so changes are checked once they are on main.
+# from a fork must never run its code on that runner. Pull requests run in pr.yml on GitHub-hosted runners.
 #
 # The rolling build (rolling.yml) starts after a green run of this workflow on main, so what it publishes
 # has passed all of it. Actions are pinned by commit, the tag is in the comment; a job gets only the rights

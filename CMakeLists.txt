@@ -11,8 +11,7 @@ else()
     add_compile_options(-Wall -Wextra)
 endif()
 
-# Header-only third-party deps, vendored into third_party/ (see
-# wkdbook-ai-desktop/Guides/setup-guide.md (author notes, not in this repo), Phase 2 -- gitignored, fetch locally).
+# Header-only third-party deps, vendored into third_party/ (gitignored; scripts/setup.ps1 / setup.sh fetch them).
 add_library(third_party_headers INTERFACE)
 target_include_directories(third_party_headers INTERFACE third_party)
 

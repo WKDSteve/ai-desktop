@@ -205,8 +205,7 @@ void push_event(const std::string& type,
 }
 
 // ---------------------------------------------------------------------------
-// ai.nvim-Provider-Kontrakt (/health, /ask, /ask/stream)
-// see wkdbook-native/ai-desktop/Backlog/FEATURES/ai-desktop-ai-nvim-integration.md (author notes, not in this repo)
+// ai.nvim provider contract (/health, /ask, /ask/stream)
 // ---------------------------------------------------------------------------
 void send_json_error(httplib::Response& res, int status, const std::string& message) {
     ai_desktop::api::send_error(res, status, message);

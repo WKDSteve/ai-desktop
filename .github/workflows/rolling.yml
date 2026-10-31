@@ -13,7 +13,8 @@
 #
 # Runs on the self-hosted Windows runner of the author by choice: the jobs need the MSYS2 toolchain and the
 # installer tooling set up there. The release-kit actions run there by Git Bash (appkit v0.23.1 and later);
-# appkit is cloned over plain HTTPS, no token secret.
+# appkit is cloned over plain HTTPS without a token secret (anonymous once appkit is public; until then
+# Git's credential helper on the runner answers, and tools/check-release-kit-pin.py needs it the same way).
 #
 # Deciding (only the tip of main is built) and publishing (SHA256SUMS first, the words of the page last) are
 # the actions prepare and publish of appkit's release-kit, pinned by the commit of tools/release-kit.pin
@@ -76,7 +77,7 @@ jobs:
           persist-credentials: false
 
       # The install script the installer is tried through is the one that will be stamped and attached: the
-      # release-kit at the commit of tools/release-kit.pin, cloned over plain HTTPS (no token secret).
+      # release-kit at the commit of tools/release-kit.pin, cloned over plain HTTPS (no token secret; see the top).
       - name: Fetch the pinned release-kit
         run: |
           commit="$(sed -n 's/^commit *= *//p' tools/release-kit.pin)"
