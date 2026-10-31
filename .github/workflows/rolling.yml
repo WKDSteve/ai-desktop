@@ -11,10 +11,9 @@
 #
 # There is no install.sh and no Linux file: ai-desktop is built from source there (scripts/setup.sh).
 #
-# Runs on the self-hosted Windows runner of the author (the repository is private and has no paid plan, so
-# hosted runners do not start; see $REPOS_DIR/tasks-vault/TOOLS/self-hosted-runner.md). The release-kit actions
-# run there by Git Bash (appkit v0.23.1 and later); the private appkit is read with the login of `gh`, not with
-# a token secret.
+# Runs on the self-hosted Windows runner of the author by choice: the jobs need the MSYS2 toolchain and the
+# installer tooling set up there. The release-kit actions run there by Git Bash (appkit v0.23.1 and later);
+# appkit is cloned over plain HTTPS, no token secret.
 #
 # Deciding (only the tip of main is built) and publishing (SHA256SUMS first, the words of the page last) are
 # the actions prepare and publish of appkit's release-kit, pinned by the commit of tools/release-kit.pin
@@ -77,8 +76,7 @@ jobs:
           persist-credentials: false
 
       # The install script the installer is tried through is the one that will be stamped and attached: the
-      # release-kit at the commit of tools/release-kit.pin. appkit is private; the runner clones it with the
-      # login of `gh` (Git's own credentials), no token secret.
+      # release-kit at the commit of tools/release-kit.pin, cloned over plain HTTPS (no token secret).
       - name: Fetch the pinned release-kit
         run: |
           commit="$(sed -n 's/^commit *= *//p' tools/release-kit.pin)"
@@ -149,8 +147,8 @@ jobs:
     runs-on: [self-hosted, windows]
     timeout-minutes: 15
     steps:
-      # Windows PowerShell 5.1, the one a person has by default: the token route of install.ps1 for a private
-      # repository went wrong there until release-kit v0.23.2 ("maximum number of redirections": `Invoke-WebRequest
+      # Windows PowerShell 5.1, the one a person has by default: the token route of install.ps1 (GH_TOKEN)
+      # went wrong there until release-kit v0.23.2 ("maximum number of redirections": `Invoke-WebRequest
       # -MaximumRedirection 0` throws without a response in 5.1). This step is the test that it stays right.
       - name: Install from latest, start, ask /health, uninstall
         shell: powershell
@@ -161,9 +159,9 @@ jobs:
           PSModulePath: C:\Program Files\WindowsPowerShell\Modules;C:\Windows\system32\WindowsPowerShell\v1.0\Modules
         run: |
           $ErrorActionPreference = 'Stop'
-          # The repository is private: an anonymous download is answered with a login page, so the script
-          # comes through the API with the token of the run, and install.ps1 reads the same token from
-          # GH_TOKEN for its own downloads (the way a person with access runs it).
+          # The script comes through the API with the token of the run, and install.ps1 reads the same
+          # token from GH_TOKEN for its own downloads: this keeps the token route tested, which a private
+          # repository needs.
           $dir0 = Join-Path $env:RUNNER_TEMP 'published'
           New-Item -ItemType Directory -Force -Path $dir0 | Out-Null
           gh release download latest --repo $env:REPO --pattern install.ps1 --dir $dir0 --clobber

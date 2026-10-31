@@ -34,10 +34,9 @@
 # script it attaches is stamped for this tag: it installs exactly this release, without a browser download
 # in the way of SmartScreen. The installer is not code-signed; the release notes say so.
 #
-# Runs on the self-hosted Windows runner of the author (the repository is private and has no paid plan, so
-# hosted runners do not start; see $REPOS_DIR/tasks-vault/TOOLS/self-hosted-runner.md). The release-kit actions
-# run there by Git Bash (appkit v0.23.1 and later); the private appkit is read with the login of `gh`, not with
-# a token secret.
+# Runs on the self-hosted Windows runner of the author by choice: the jobs need the MSYS2 toolchain and the
+# installer tooling set up there. The release-kit actions run there by Git Bash (appkit v0.23.1 and later);
+# appkit is cloned over plain HTTPS, no token secret.
 #
 # Actions are pinned by commit; a job gets only the rights it needs.
 
@@ -140,8 +139,7 @@ jobs:
           Write-Host "version: $version"
 
       # The install script the installer is tried through is the one that will be stamped and attached: the
-      # release-kit at the commit of tools/release-kit.pin. appkit is private; the runner clones it with the
-      # login of `gh` (Git's own credentials), no token secret.
+      # release-kit at the commit of tools/release-kit.pin, cloned over plain HTTPS (no token secret).
       - name: Fetch the pinned release-kit
         run: |
           commit="$(sed -n 's/^commit *= *//p' tools/release-kit.pin)"

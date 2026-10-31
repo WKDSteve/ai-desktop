@@ -8,10 +8,8 @@
 
 // Shared result shape and SSE helpers for every backend client (ollama,
 // openai, anthropic, gemini) that main.cpp's /ask and /ask/stream handlers
-// dispatch to by model-name prefix -- see wkdbook-native/ai-desktop/Guides/
-// ki-agenten-framework-architektur.md (private repo) and the ai.nvim
-// handover's ai-desktop ModelRouter scoping for the reasoning behind the
-// prefix-based router.
+// dispatch to by model-name prefix -- one prefix-based router keeps every backend behind the same HTTP
+// response shape.
 namespace ai_desktop {
 
 struct AskResult {

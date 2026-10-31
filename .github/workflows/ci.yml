@@ -1,4 +1,4 @@
-# The checks of every push to main and every pull request: the same build the release makes, then the tests.
+# The checks of every push to main (and of a manual run): the same build the release makes, then the tests.
 #
 #   windows   scripts/setup.ps1 (MSYS2 / MinGW-w64): vendors the two header-only dependencies, builds, installs
 #             into a throw-away prefix and smoke-tests the installed copy against GET /health; then the unit
@@ -7,9 +7,9 @@
 #             release-kit actions of the other workflows are the pinned commit (tools/check-release-kit-pin.py),
 #             and PSScriptAnalyzer finds nothing of severity Error or Warning in scripts/ and installer/.
 #
-# The repository is private and has no paid plan, so hosted runners do not start: every job runs on the
-# self-hosted Windows runner of the author (see $REPOS_DIR/tasks-vault/TOOLS/self-hosted-runner.md). That is why
-# there is no Linux job any more; scripts/setup.sh stays for people who build from source there.
+# Every job runs on the self-hosted Windows runner of the author, by choice. That is why there is no Linux job;
+# scripts/setup.sh stays for people who build from source there. There is no pull_request trigger: a pull request
+# from a fork must never run its code on that runner, so changes are checked once they are on main.
 #
 # The rolling build (rolling.yml) starts after a green run of this workflow on main, so what it publishes
 # has passed all of it. Actions are pinned by commit, the tag is in the comment; a job gets only the rights
@@ -20,7 +20,6 @@ name: ci
 on:
   push:
     branches: [main]
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -89,7 +88,7 @@ jobs:
       - run: python -m unittest discover -s tools -p "test_*.py"
       - run: python tools/check-control-chars.py
       # The release-kit actions of rolling.yml and release.yml are the commit of tools/release-kit.pin, and
-      # that tag still names it (git ls-remote of the private appkit, with the login of the runner).
+      # that tag still names it (git ls-remote of appkit).
       - run: python tools/check-release-kit-pin.py
       # The PowerShell scripts (setup, build-install, uninstall, the installer check) against PSScriptAnalyzer,
       # one pinned version so the rule set does not move under the scripts. Suppressions are local to a function

@@ -6,9 +6,8 @@
 #include "model_client.hpp"
 
 // Minimal client for Ollama's local REST API (POST /api/generate), used to
-// back ai-desktop's /ask and /ask/stream endpoints. See wkdbook-native/ai-desktop/Guides/
-// ki-agenten-framework-architektur.md (private repo), Phase 1, "Ollama
-// REST-Client in C++".
+// back ai-desktop's /ask and /ask/stream endpoints (phase 1 of the
+// agent framework: a plain Ollama REST client in C++).
 //
 // Returns the shared ai_desktop::AskResult (see model_client.hpp) rather than a
 // private struct: main.cpp's model-name-prefix router dispatches to this or
