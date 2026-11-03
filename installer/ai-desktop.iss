@@ -40,7 +40,9 @@ Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 ChangesEnvironment=yes
-UninstallDisplayIcon={app}\app\ai-desktop.exe
+; The icon (assets/ai-desktop.svg rendered to .ico) for the setup, the Start menu and Apps & features.
+SetupIconFile=..\assets\ai-desktop.ico
+UninstallDisplayIcon={app}\app\ai-desktop.ico
 
 [Tasks]
 Name: "addtopath"; Description: "Add ai-desktop to the user &PATH (the ""ai-desktop"" command in new terminals)"; Flags: unchecked
@@ -48,6 +50,7 @@ Name: "addtopath"; Description: "Add ai-desktop to the user &PATH (the ""ai-desk
 [Files]
 Source: "{#StageDir}\app\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#StageDir}\ai-desktop.cmd"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\assets\ai-desktop.ico"; DestDir: "{app}\app"; Flags: ignoreversion
 
 [InstallDelete]
 ; The program was called loomAI before: an upgrade of that installation takes its old files and its shortcut away,
@@ -57,7 +60,7 @@ Type: files; Name: "{app}\loomai.cmd"
 Type: files; Name: "{autoprograms}\loomAI.lnk"
 
 [Icons]
-Name: "{autoprograms}\ai-desktop"; Filename: "{app}\app\ai-desktop.exe"; WorkingDir: "{app}\app"; Comment: "Start the local ai-desktop server on 127.0.0.1:8080"
+Name: "{autoprograms}\ai-desktop"; Filename: "{app}\app\ai-desktop.exe"; WorkingDir: "{app}\app"; IconFilename: "{app}\app\ai-desktop.ico"; Comment: "Start the local ai-desktop server on 127.0.0.1:8080"
 
 [Run]
 Filename: "{app}\app\ai-desktop.exe"; WorkingDir: "{app}\app"; Description: "Start ai-desktop now"; Flags: postinstall nowait skipifsilent unchecked
