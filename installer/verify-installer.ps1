@@ -78,7 +78,8 @@ function Get-NormalizedUserPath {
 }
 
 function Wait-ForHealth {
-    $deadline = [DateTime]::UtcNow.AddSeconds(20)
+    # Generous: a cold start on a busy runner took 17 s once, and a limit of 20 s failed a rolling run that way.
+    $deadline = [DateTime]::UtcNow.AddSeconds(60)
     while ([DateTime]::UtcNow -lt $deadline) {
         Start-Sleep -Milliseconds 250
         try {
@@ -159,7 +160,7 @@ function Start-InstalledServer {
         $env:Path = $savedPath
     }
     $health = Wait-ForHealth
-    Assert-That ($null -ne $health) 'the installed server did not answer /health within 20 s'
+    Assert-That ($null -ne $health) 'the installed server did not answer /health within 60 s'
     Write-Ok "/health: status=$($health.status)"
     $dashboard = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$Port/" -TimeoutSec 5
     Assert-That ($dashboard.StatusCode -eq 200) "dashboard answered $($dashboard.StatusCode)"
@@ -169,6 +170,23 @@ function Start-InstalledServer {
 function Get-InstalledServer {
     $exe = Join-Path $InstallDir 'app\ai-desktop.exe'
     return @(Get-Process ai-desktop -ErrorAction SilentlyContinue | Where-Object { $_.Path -ieq $exe })
+}
+
+# A run that failed after installing never got to the uninstall below: its copy and its user PATH entry are still
+# there. Remove them first, or this run takes that entry for one of the user's, and its own uninstall then fails
+# the PATH check (seen after a failed rolling run, then in the release run of v0.2.0).
+$leftover = Join-Path $InstallDir 'unins000.exe'
+if (Test-Path $leftover) {
+    Write-Host "`n==> Removing the installation a failed earlier run left in $InstallDir"
+    Stop-InstalledServer -Confirm:$false
+    $null = Start-Process -FilePath $leftover -Wait -PassThru -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+    $deadline = [DateTime]::UtcNow.AddSeconds(60)
+    while ((Test-Path $leftover) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 500 }
+    Assert-That (-not (Test-Path $leftover)) 'the installation of an earlier run could not be removed'
+    $deadline = [DateTime]::UtcNow.AddSeconds(10)
+    while (@((Get-RawUserPath) -split ';' | Where-Object { $_.TrimEnd('\') -ieq $InstallDir.TrimEnd('\') }).Count -gt 0 -and
+        [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 500 }
+    Write-Ok 'earlier installation removed'
 }
 
 $pathBefore = Get-RawUserPath
