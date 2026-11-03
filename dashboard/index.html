@@ -150,7 +150,10 @@
 <body>
 
 <header>
-  <h1 id="app-title">▸ ai Dashboard</h1>
+  <div style="display:flex;gap:.5rem;align-items:center">
+    <img id="app-icon" alt="" width="20" height="20">
+    <h1 id="app-title">▸ ai Dashboard</h1>
+  </div>
   <div style="display:flex;gap:.5rem;align-items:center">
     <span id="sse-dot" class="dot"></span>
     <span id="sse-label" style="font-size:.75rem;color:var(--muted)">
@@ -313,6 +316,8 @@
   const APP_NAME = (navigator.language || '').toLowerCase().startsWith('de') ? 'KI' : 'ai';
   document.title = APP_NAME + ' Dashboard';
   document.getElementById('app-title').textContent = '▸ ' + APP_NAME + ' Dashboard';
+  // The mark of the app (rule APP-11) is the favicon: the icon generator rewrites only that one inline copy.
+  document.getElementById('app-icon').src = document.querySelector('link[rel="icon"]').href;
   let currentDecisionTs = null;
 
   const COLORS = {

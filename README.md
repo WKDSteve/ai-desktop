@@ -1,3 +1,5 @@
+![ai-desktop](assets/icons/ai-desktop/png/ai-desktop-128.png)
+
 # ai-desktop
 
 Local agent-framework server (C++17, `cpp-httplib`). Serves as the backend

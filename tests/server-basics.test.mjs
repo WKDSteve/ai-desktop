@@ -25,6 +25,13 @@ describe("server basics", () => {
     assert.match(res.text, /<html/i);
   });
 
+  it("gives the header icon the favicon, the one copy the icon generator rewrites", async () => {
+    const res = await server.get("/");
+    assert.match(res.text, /<link rel="icon" href="data:image\/svg\+xml,/);
+    assert.match(res.text, /<img id="app-icon"/);
+    assert.match(res.text, /getElementById\('app-icon'\)\.src = document\.querySelector\('link\[rel="icon"\]'\)\.href/);
+  });
+
   it("allows an Origin that matches its own port", async () => {
     for (const host of ["127.0.0.1", "localhost"]) {
       const res = await server.get("/health", { Origin: `http://${host}:${server.port}` });
