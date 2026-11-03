@@ -65,15 +65,8 @@ irm https://github.com/WKDSteve/ai-desktop/releases/download/latest/install.ps1 
 & "$env:TEMP\install.ps1" -InstallArgs '/TASKS=addtopath'
 ```
 
-Where GitHub answers an anonymous download with a login page or 404 (a private copy of the
-repository), fetch the script with `gh` and give it a token that may read the repository in
-`GH_TOKEN`; it then downloads through the API (the workflow's own `published` check installs it this
-way, with the token of the run):
-
-```powershell
-gh release download latest -R WKDSteve/ai-desktop -p install.ps1 -D $env:TEMP --clobber
-$env:GH_TOKEN = (gh auth token); & "$env:TEMP\install.ps1"
-```
+(For a private fork, where anonymous downloads fail: download the script with `gh release download`
+and set `GH_TOKEN` to a token that can read the repository; the script then downloads through the API.)
 
 Saved as a file, the script is run as `powershell -ExecutionPolicy Bypass -File
 .\install.ps1 -InstallArgs '/TASKS=addtopath'` (one value per `-File` command
