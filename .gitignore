@@ -77,3 +77,8 @@ Testing/
 # Local builds of the installer and the rolling build (installer-build, rolling.yml)
 /dist/
 /out/
+
+# Browser checks of the dashboard (e2e/)
+e2e/node_modules/
+e2e/test-results/
+e2e/playwright-report/

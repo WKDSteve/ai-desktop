@@ -1,0 +1,13 @@
+{
+  "name": "ai-desktop-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Browser checks of the dashboard against the real binary (axe, light and dark).",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.64.1"
+  }
+}

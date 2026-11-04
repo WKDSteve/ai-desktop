@@ -163,6 +163,17 @@ cmake -B build -G "MinGW Makefiles" -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=
 cmake --build build -j4
 ```
 
+### Dashboard colours and browser checks
+
+The dashboard follows the system's light or dark mode. Its colours are the palette of ai's icon in
+`dashboard/palette.css`, a generated file that is never edited by hand; `dashboard/style.css` only uses its tokens,
+and `python tools/check-color-literals.py --root dashboard --tokens dashboard/palette.css` refuses a colour written
+anywhere else. `e2e/` checks the page with axe in light and dark against the built binary, in the system's Chrome:
+
+```bash
+cd e2e && pnpm install && pnpm test
+```
+
 ## Running
 
 ```bash

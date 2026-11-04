@@ -5,147 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ai Dashboard</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22 viewBox%3D%220 0 64 64%22%3E%3Crect width%3D%2264%22 height%3D%2264%22 rx%3D%2212%22 fill%3D%22%231B1B1A%22%2F%3E%3Cpath d%3D%22M0 12A12 12 0 0 1 12 0H52A12 12 0 0 1 64 12V18H0Z%22 fill%3D%22%231F5FBF%22%2F%3E%3Crect x%3D%228%22 y%3D%225%22 width%3D%2248%22 height%3D%228%22 rx%3D%224%22 fill%3D%22%23fff%22 fill-opacity%3D%220.9%22%2F%3E%3Ctext x%3D%2232%22 y%3D%2252%22 text-anchor%3D%22middle%22 font-family%3D%22Consolas%2C 'Cascadia Mono'%2C Menlo%2C 'DejaVu Sans Mono'%2C monospace%22 font-size%3D%2230%22 font-weight%3D%22700%22 fill%3D%22%2385B7EB%22%3Eai%3C%2Ftext%3E%3C%2Fsvg%3E">
-  <style>
-    :root {
-      --bg: #0f1117; --card: #1a1d27; --border: #2a2d3e;
-      --text: #e2e8f0; --muted: #64748b;
-      --teal: #14b8a6; --amber: #f59e0b;
-      --red: #ef4444; --green: #22c55e; --purple: #a78bfa;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: var(--bg); color: var(--text);
-      font-family: 'Cascadia Code', 'JetBrains Mono', monospace;
-      font-size: 14px; padding: 1.5rem;
-    }
-    header {
-      display: flex; justify-content: space-between; align-items: center;
-      margin-bottom: 1.5rem;
-    }
-    h1 { color: var(--teal); font-size: 1.1rem;
-         letter-spacing: .08em; text-transform: uppercase; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
-            margin-bottom: 1rem; }
-    .card { background: var(--card); border: 1px solid var(--border);
-            border-radius: 8px; padding: 1rem; }
-    .card h2 { font-size: .72rem; color: var(--muted);
-               text-transform: uppercase; letter-spacing: .1em;
-               margin-bottom: .75rem; }
-    .agent { display: flex; align-items: flex-start; gap: .6rem;
-             padding: .5rem 0; border-bottom: 1px solid var(--border); }
-    .agent:last-child { border-bottom: none; }
-    .dot { width: 8px; height: 8px; border-radius: 50%;
-           background: var(--muted); margin-top: 5px; flex-shrink: 0;
-           transition: background .3s; }
-    .dot.active { background: var(--teal);
-                  box-shadow: 0 0 6px var(--teal); }
-    .dot.waiting { background: var(--amber);
-                   box-shadow: 0 0 6px var(--amber); }
-    .agent-name { color: var(--purple); font-weight: 600; font-size: .8rem; }
-    .agent-msg  { color: var(--muted); font-size: .78rem; margin-top: .2rem;
-                  line-height: 1.4; }
-    .status-row { display: flex; gap: .5rem; align-items: center;
-                  padding: .3rem 0; font-size: .78rem; }
-    .badge { padding: .15rem .5rem; border-radius: 4px; font-size: .68rem;
-             text-transform: uppercase; letter-spacing: .05em; flex-shrink: 0; }
-    .badge-ok   { background: #14402a; color: var(--green); }
-    .badge-warn { background: #2d2a10; color: var(--amber); }
-    .badge-err  { background: #2d1515; color: var(--red); }
-
-    /* Decision Banner */
-    #decision-banner {
-      display: none; margin-bottom: 1rem;
-      background: #1e1010; border: 1px solid var(--red);
-      border-radius: 8px; padding: 1rem;
-      animation: pulse-border 1.5s ease-in-out infinite;
-    }
-    #decision-banner.visible { display: block; }
-    @keyframes pulse-border {
-      0%, 100% { border-color: var(--red); }
-      50%       { border-color: #7f1d1d; }
-    }
-    #decision-banner h3 {
-      color: var(--red); font-size: .75rem;
-      text-transform: uppercase; letter-spacing: .1em;
-      margin-bottom: .5rem;
-    }
-    #decision-text { color: var(--text); margin-bottom: .75rem;
-                     font-size: .85rem; line-height: 1.5; }
-    .btn { border: none; border-radius: 5px; padding: .4rem 1rem;
-           font-family: inherit; font-size: .8rem; cursor: pointer;
-           transition: opacity .15s; font-weight: 600; }
-    .btn:hover { opacity: .75; }
-    .btn-green { background: var(--green); color: #000; }
-    .btn-red   { background: var(--red);   color: #fff; }
-
-    /* Ask panel */
-    #ask-prompt {
-      width: 100%; min-height: 70px; resize: vertical;
-      background: var(--bg); color: var(--text); border: 1px solid var(--border);
-      border-radius: 6px; padding: .6rem; font-family: inherit; font-size: .82rem;
-    }
-    .ask-row { display: flex; gap: .5rem; align-items: center;
-               margin-top: .6rem; flex-wrap: wrap; }
-    #ask-model {
-      flex: 1; min-width: 200px;
-      background: var(--bg); color: var(--text); border: 1px solid var(--border);
-      border-radius: 6px; padding: .45rem .6rem; font-family: inherit; font-size: .78rem;
-    }
-    .btn-teal  { background: var(--teal); color: #000; }
-    .btn-muted { background: var(--border); color: var(--text); }
-    .btn:disabled { opacity: .4; cursor: default; }
-    #ask-hint { font-size: .68rem; color: var(--muted); margin-top: .4rem; }
-    #ask-status { font-size: .74rem; color: var(--muted); margin-top: .5rem; }
-    #ask-output {
-      margin-top: .5rem; background: var(--bg); border: 1px solid var(--border);
-      border-radius: 6px; padding: .75rem; min-height: 60px; max-height: 340px;
-      overflow-y: auto; white-space: pre-wrap; word-break: break-word;
-      font-size: .82rem; line-height: 1.55;
-    }
-
-    /* Usage panel */
-    .usage-filters { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap;
-                     margin-bottom: .75rem; }
-    .usage-filters select {
-      background: var(--bg); color: var(--text); border: 1px solid var(--border);
-      border-radius: 6px; padding: .4rem .6rem; font-family: inherit; font-size: .78rem;
-    }
-    .usage-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem;
-                  margin-bottom: .75rem; }
-    .kpi { background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
-           padding: .6rem .75rem; }
-    .kpi-label { font-size: .66rem; color: var(--muted); text-transform: uppercase;
-                 letter-spacing: .08em; }
-    .kpi-value { font-size: 1.05rem; color: var(--text); margin-top: .25rem; }
-    .kpi-sub   { font-size: .68rem; color: var(--muted); margin-top: .15rem; }
-    .usage-table { width: 100%; border-collapse: collapse; font-size: .76rem;
-                   margin-bottom: .75rem; }
-    .usage-table th { text-align: left; color: var(--muted); font-weight: 600;
-                      font-size: .66rem; text-transform: uppercase; letter-spacing: .08em;
-                      padding: .3rem .4rem; border-bottom: 1px solid var(--border); }
-    .usage-table td { padding: .3rem .4rem; border-bottom: 1px solid #1e2130; }
-    .usage-table td.num, .usage-table th.num { text-align: right; }
-    #usage-events { max-height: 220px; overflow-y: auto; font-size: .74rem; }
-    .usage-event { display: flex; gap: .6rem; padding: .25rem 0;
-                   border-bottom: 1px solid #1e2130; line-height: 1.4; }
-    .usage-event .log-ts { min-width: 150px; }
-    .usage-ok  { color: var(--green); }
-    .usage-err { color: var(--red); }
-    #usage-status { font-size: .72rem; color: var(--muted); margin-top: .4rem; }
-
-    /* Log */
-    #log { height: 260px; overflow-y: auto; font-size: .76rem; }
-    #log::-webkit-scrollbar { width: 4px; }
-    #log::-webkit-scrollbar-track { background: var(--card); }
-    #log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-    .log-line { padding: .25rem 0; border-bottom: 1px solid #1e2130;
-                display: flex; gap: .6rem; line-height: 1.4; }
-    .log-ts    { color: var(--muted); flex-shrink: 0; font-size: .7rem;
-                 padding-top: .05rem; }
-    .log-agent { flex-shrink: 0; min-width: 72px; font-weight: 600;
-                 font-size: .74rem; }
-    .log-msg   { color: var(--text); }
-  </style>
+  <meta name="color-scheme" content="light dark">
+  <!-- The colours of ai's icon (generated, never edited here), then the rules that use them. -->
+  <link rel="stylesheet" href="palette.css">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -162,9 +25,10 @@
   </div>
 </header>
 
+<main>
 <!-- Decision Banner (Hard Stop) -->
 <div id="decision-banner">
-  <h3>⚠ Entscheidung erforderlich — Agent wartet</h3>
+  <h2>⚠ Entscheidung erforderlich — Agent wartet</h2>
   <div id="decision-text"></div>
   <div style="margin-top:.75rem;display:flex;gap:.5rem">
     <button class="btn btn-green" onclick="sendDecision('allow')">
@@ -229,9 +93,9 @@
      ModelRouter-Backend, ohne curl oder ai.nvim zu brauchen. -->
 <div class="card">
   <h2>Ask</h2>
-  <textarea id="ask-prompt" placeholder="Prompt eingeben..."></textarea>
+  <textarea id="ask-prompt" aria-label="Prompt" placeholder="Prompt eingeben..."></textarea>
   <div class="ask-row">
-    <input id="ask-model" list="ask-model-presets"
+    <input id="ask-model" aria-label="Modell" list="ask-model-presets"
            placeholder="Modell (leer = Ollama-Standard)">
     <datalist id="ask-model-presets">
       <option value="gpt-4o-mini">
@@ -256,10 +120,10 @@
 <div class="card">
   <h2>Nutzung</h2>
   <div class="usage-filters">
-    <select id="usage-provider" onchange="loadUsage()">
+    <select id="usage-provider" aria-label="Provider" onchange="loadUsage()">
       <option value="">Alle Provider</option>
     </select>
-    <select id="usage-range" onchange="loadUsage()">
+    <select id="usage-range" aria-label="Zeitraum" onchange="loadUsage()">
       <option value="24h">Letzte 24 h</option>
       <option value="7d" selected>Letzte 7 Tage</option>
       <option value="30d">Letzte 30 Tage</option>
@@ -309,6 +173,7 @@
   <h2>Live-Log</h2>
   <div id="log"></div>
 </div>
+</main>
 
 <script>
   // The name the page shows for the program: "KI" in German, "ai" in every other language (the program itself is
@@ -321,10 +186,11 @@
   let currentDecisionTs = null;
 
   const COLORS = {
-    Planer:   'var(--purple)',
-    Executor: 'var(--teal)',
-    human:    'var(--green)',
-    SYSTEM:   'var(--amber)',
+    // Who wrote a line, not how it went: the colours of the app, never those of ok/warn/bad.
+    Planer:   'var(--secondary)',
+    Executor: 'var(--accent)',
+    human:    'var(--tertiary)',
+    SYSTEM:   'var(--muted)',
   };
 
   function ts() {
@@ -335,7 +201,7 @@
     const log = document.getElementById('log');
     const line = document.createElement('div');
     line.className = 'log-line';
-    const c = color || COLORS[agent] || 'var(--purple)';
+    const c = color || COLORS[agent] || 'var(--secondary)';
     line.innerHTML =
       `<span class="log-ts">${ts()}</span>` +
       `<span class="log-agent" style="color:${c}">${agent}</span>` +
@@ -362,7 +228,7 @@
       document.getElementById('decision-text').textContent = ev.message;
       document.getElementById('decision-banner').classList.add('visible');
       setAgent(ev.agent, '⏸ Warte auf Entscheidung...', 'waiting');
-      appendLog('SYSTEM', '⚠ Decision Point: ' + ev.message, 'var(--red)');
+      appendLog('SYSTEM', '⚠ Decision Point: ' + ev.message, 'var(--bad)');
     }
 
     if (ev.type === 'decision_answer') {
@@ -379,7 +245,7 @@
       body: JSON.stringify({ id: currentDecisionTs, answer })
     }).catch(console.error);
     document.getElementById('decision-banner').classList.remove('visible');
-    appendLog('human', 'Entscheidung gesendet: ' + answer, 'var(--green)');
+    appendLog('human', 'Entscheidung gesendet: ' + answer, 'var(--ok)');
   }
 
   // Backend-Status (ersetzt die frühere fest eingetragene "Model:
@@ -391,7 +257,7 @@
       const backends = data.backends || {};
       const parts = Object.keys(names).map((id) => {
         const ok = !!backends[id];
-        const color = ok ? 'var(--green)' : 'var(--muted)';
+        const color = ok ? 'var(--ok)' : 'var(--muted)';
         return `<span style="color:${color}">${names[id]} ${ok ? '✓' : '✗'}</span>`;
       });
       document.getElementById('backends-status').innerHTML = parts.join('&nbsp;&nbsp;');
@@ -457,7 +323,7 @@
 
       if (!res.ok || !res.body) {
         status.textContent = 'Fehler: HTTP ' + res.status;
-        status.style.color = 'var(--red)';
+        status.style.color = 'var(--bad)';
         setAskBusy(false);
         return;
       }
@@ -493,7 +359,7 @@
             gotError = true;
             const msg = (obj.error && obj.error.message) || obj.error;
             status.textContent = 'Fehler: ' + msg;
-            status.style.color = 'var(--red)';
+            status.style.color = 'var(--bad)';
           } else if (typeof obj.delta === 'string') {
             pendingOutput += obj.delta;
             scheduleFlush();
@@ -503,14 +369,14 @@
 
       if (!gotError) {
         status.textContent = 'Fertig.';
-        status.style.color = 'var(--green)';
+        status.style.color = 'var(--ok)';
       }
     } catch (err) {
       if (err.name === 'AbortError') {
         status.textContent = 'Abgebrochen.';
       } else {
         status.textContent = 'Fehler: ' + err.message;
-        status.style.color = 'var(--red)';
+        status.style.color = 'var(--bad)';
       }
     } finally {
       flushOutput();
@@ -581,7 +447,7 @@
       data = await res.json();
     } catch (err) {
       status.textContent = 'Nutzung nicht ladbar: ' + err.message;
-      status.style.color = 'var(--red)';
+      status.style.color = 'var(--bad)';
       return;
     }
     status.style.color = 'var(--muted)';
@@ -654,10 +520,10 @@
   sse.onopen = () => {
     sseDot.className = 'dot active';
     sseLabel.textContent = 'Verbunden';
-    sseLabel.style.color = 'var(--green)';
+    sseLabel.style.color = 'var(--ok)';
     sseStatus.textContent = 'Verbunden';
-    sseStatus.style.color = 'var(--green)';
-    appendLog('SYSTEM', 'Dashboard verbunden mit ' + APP_NAME, 'var(--teal)');
+    sseStatus.style.color = 'var(--ok)';
+    appendLog('SYSTEM', 'Dashboard verbunden mit ' + APP_NAME, 'var(--accent)');
   };
 
   sse.onmessage = (e) => {
@@ -667,9 +533,9 @@
   sse.onerror = () => {
     sseDot.className = 'dot';
     sseLabel.textContent = 'Getrennt – reconnecting...';
-    sseLabel.style.color = 'var(--red)';
+    sseLabel.style.color = 'var(--bad)';
     sseStatus.textContent = 'Getrennt';
-    sseStatus.style.color = 'var(--red)';
+    sseStatus.style.color = 'var(--bad)';
   };
 </script>
 </body>
