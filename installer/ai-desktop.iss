@@ -45,6 +45,7 @@ SetupIconFile=..\assets\ai-desktop.ico
 UninstallDisplayIcon={app}\app\ai-desktop.ico
 
 [Tasks]
+Name: "desktopicon"; Description: "Create a &desktop shortcut"; Flags: unchecked
 Name: "addtopath"; Description: "Add ai-desktop to the user &PATH (the ""ai-desktop"" command in new terminals)"; Flags: unchecked
 
 [Files]
@@ -61,6 +62,7 @@ Type: files; Name: "{autoprograms}\loomAI.lnk"
 
 [Icons]
 Name: "{autoprograms}\ai-desktop"; Filename: "{app}\app\ai-desktop.exe"; WorkingDir: "{app}\app"; IconFilename: "{app}\app\ai-desktop.ico"; Comment: "Start the local ai-desktop server on 127.0.0.1:8080"
+Name: "{autodesktop}\ai-desktop"; Filename: "{app}\app\ai-desktop.exe"; WorkingDir: "{app}\app"; IconFilename: "{app}\app\ai-desktop.ico"; Comment: "Start the local ai-desktop server on 127.0.0.1:8080"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\app\ai-desktop.exe"; WorkingDir: "{app}\app"; Description: "Start ai-desktop now"; Flags: postinstall nowait skipifsilent unchecked

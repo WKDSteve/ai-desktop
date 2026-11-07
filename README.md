@@ -59,7 +59,7 @@ the rolling build ([`rolling.yml`](.github/workflows/rolling.yml), rebuilt
 after every green CI run on `main` and proven by installing, starting,
 updating and uninstalling it, for trying what is new). The line above installs
 without the "add to PATH" step, so the `ai-desktop` command is not in new
-terminals; start ai-desktop from the Start menu. For the step, or any other
+terminals; start ai-desktop from the Start menu (add `/TASKS=desktopicon` to `-InstallArgs` for a shortcut on the desktop as well). For the step, or any other
 argument of the script, save the script first and pass the arguments:
 
 ```powershell
