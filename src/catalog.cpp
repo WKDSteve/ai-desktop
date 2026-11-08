@@ -14,6 +14,7 @@
 #include "model_client.hpp"
 #include "models.hpp"
 #include "ollama_client.hpp"
+#include "providers.hpp"
 #include "secrets.hpp"
 
 using json = nlohmann::json;
@@ -29,7 +30,6 @@ constexpr auto kOllamaTtl = std::chrono::seconds(15);
 constexpr auto kErrorTtl = std::chrono::seconds(30);
 constexpr auto kInfoTtl = std::chrono::seconds(60);
 constexpr size_t kMaxInfoCacheEntries = 64;
-constexpr const char* kAnthropicVersion = "2023-06-01";
 
 struct Remote {
     std::string fingerprint;  // what the fetch depended on (host / key hash); a change forces a refetch
@@ -85,22 +85,15 @@ Fetched fetch_ollama() {
     return fetched;
 }
 
-Fetched fetch_provider(const std::string& provider, const std::string& key) {
+Fetched fetch_provider(const providers::Cloud& provider, const std::string& key) {
     Fetched fetched;
     json body;
-    bool ok = false;
-    if (provider == "openai") {
-        ok = get_json("https://api.openai.com", "/v1/models", {{"Authorization", "Bearer " + key}}, "openai", body,
-                      fetched.error);
-        if (ok) fetched.entries = parse_openai_models(body);
-    } else if (provider == "anthropic") {
-        ok = get_json("https://api.anthropic.com", "/v1/models?limit=1000",
-                      {{"x-api-key", key}, {"anthropic-version", kAnthropicVersion}}, "anthropic", body, fetched.error);
-        if (ok) fetched.entries = parse_anthropic_models(body);
-    } else if (provider == "gemini") {
-        ok = get_json("https://generativelanguage.googleapis.com", "/v1beta/models?pageSize=1000",
-                      {{"x-goog-api-key", key}}, "gemini", body, fetched.error);
-        if (ok) fetched.entries = parse_gemini_models(body);
+    httplib::Headers headers;
+    for (auto& [name, value] : providers::list_headers(provider, key)) {
+        headers.emplace(std::move(name), std::move(value));
+    }
+    if (get_json(provider.list_origin, provider.list_path, headers, provider.name, body, fetched.error)) {
+        fetched.entries = provider.parse_list(body);
     }
     return fetched;
 }
@@ -136,10 +129,8 @@ std::string key_fingerprint(const std::string& key) {
 
 json custom_entry(const json& view) {
     const std::string provider = view.value("provider", "");
-    bool available = true;
-    if (provider == "openai") available = !secrets::get("OPENAI_API_KEY").empty();
-    if (provider == "anthropic") available = !secrets::get("ANTHROPIC_API_KEY").empty();
-    if (provider == "gemini") available = !secrets::get("GEMINI_API_KEY").empty();
+    const auto* cloud = providers::find(provider);
+    const bool available = !cloud || !secrets::get(cloud->key_name).empty();
     json details = {{"upstream_model", view.value("upstream_model", view.value("id", ""))}};
     if (view.contains("base_url")) {
         details["base_url"] = view["base_url"];
@@ -156,13 +147,6 @@ json custom_entry(const json& view) {
 }  // namespace
 
 json list(bool refresh) {
-    struct Provider {
-        const char* name;
-        const char* key_name;
-    };
-    const Provider providers[] = {{"anthropic", "ANTHROPIC_API_KEY"}, {"openai", "OPENAI_API_KEY"},
-                                  {"gemini", "GEMINI_API_KEY"}};
-
     // Everything that needs the network runs at once, so a slow or dead provider
     // costs one timeout, not the sum of them.
     auto ollama_future = std::async(std::launch::async, [&] {
@@ -170,16 +154,16 @@ json list(bool refresh) {
     });
     std::vector<std::pair<std::string, std::future<Remote>>> cloud_futures;
     std::map<std::string, bool> has_key;
-    for (const auto& provider : providers) {
+    for (const auto& provider : providers::cloud()) {
         const std::string key = secrets::get(provider.key_name);
         has_key[provider.name] = !key.empty();
         if (key.empty()) {
             continue;
         }
         const std::string name = provider.name;
-        cloud_futures.emplace_back(name, std::async(std::launch::async, [name, key, refresh] {
-                                       return cached(name, key_fingerprint(key), kCloudTtl, refresh,
-                                                     [&] { return fetch_provider(name, key); });
+        cloud_futures.emplace_back(name, std::async(std::launch::async, [&provider, key, refresh] {
+                                       return cached(provider.name, key_fingerprint(key), kCloudTtl, refresh,
+                                                     [&] { return fetch_provider(provider, key); });
                                    }));
     }
 
@@ -211,7 +195,7 @@ json list(bool refresh) {
     for (auto& [name, future] : cloud_futures) {
         cloud[name] = future.get();
     }
-    for (const auto& provider : providers) {
+    for (const auto& provider : providers::cloud()) {
         const std::string name = provider.name;
         if (!has_key[name]) {
             add(presets(name));

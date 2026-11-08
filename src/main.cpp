@@ -6,6 +6,9 @@
 #include <string>
 #include <ctime>
 #include <chrono>
+#include <functional>
+#include <iterator>
+#include <string_view>
 
 #include "httplib.h"
 #include "nlohmann/json.hpp"
@@ -21,6 +24,7 @@
 #include "models.hpp"
 #include "ollama_client.hpp"
 #include "openai_client.hpp"
+#include "providers.hpp"
 #include "secrets.hpp"
 #include "usage.hpp"
 
@@ -66,46 +70,74 @@ ai_desktop::openai::Endpoint endpoint_for(const ai_desktop::models::Route& route
     return endpoint;
 }
 
+using OnDelta = std::function<void(const std::string&)>;
+
+// How a request reaches a provider: one entry per provider name. The cloud
+// providers come from providers::cloud() (key, prefixes, model list); this
+// table only adds the client that sends the request. A route whose provider
+// has no entry goes to the local fallback, Ollama.
+struct Backend {
+    std::string_view provider;
+    ai_desktop::AskResult (*ask)(const ai_desktop::models::Route&, const std::string& prompt, const std::string& system,
+                                 int timeout_ms);
+    std::string (*ask_stream)(const ai_desktop::models::Route&, const std::string& prompt, const std::string& system,
+                              int timeout_ms, const OnDelta& on_delta);
+};
+
+const Backend kBackends[] = {
+    {"anthropic",
+     [](const auto& r, const auto& p, const auto& s, int t) { return ai_desktop::anthropic::ask(p, s, r.upstream_model, t); },
+     [](const auto& r, const auto& p, const auto& s, int t, const OnDelta& d) {
+         return ai_desktop::anthropic::ask_stream(p, s, r.upstream_model, t, d);
+     }},
+    {"openai",
+     [](const auto& r, const auto& p, const auto& s, int t) { return ai_desktop::openai::ask(p, s, r.upstream_model, t); },
+     [](const auto& r, const auto& p, const auto& s, int t, const OnDelta& d) {
+         return ai_desktop::openai::ask_stream(p, s, r.upstream_model, t, d);
+     }},
+    {"gemini",
+     [](const auto& r, const auto& p, const auto& s, int t) { return ai_desktop::gemini::ask(p, s, r.upstream_model, t); },
+     [](const auto& r, const auto& p, const auto& s, int t, const OnDelta& d) {
+         return ai_desktop::gemini::ask_stream(p, s, r.upstream_model, t, d);
+     }},
+    {ai_desktop::providers::kCompatible,
+     [](const auto& r, const auto& p, const auto& s, int t) {
+         return ai_desktop::openai::ask(p, s, r.upstream_model, t, endpoint_for(r));
+     },
+     [](const auto& r, const auto& p, const auto& s, int t, const OnDelta& d) {
+         return ai_desktop::openai::ask_stream(p, s, r.upstream_model, t, endpoint_for(r), d);
+     }},
+    {ai_desktop::providers::kLocal,
+     [](const auto& r, const auto& p, const auto& s, int t) { return ai_desktop::ollama::ask(p, s, r.upstream_model, t); },
+     [](const auto& r, const auto& p, const auto& s, int t, const OnDelta& d) {
+         return ai_desktop::ollama::ask_stream(p, s, r.upstream_model, t, d);
+     }},
+};
+
+const Backend& backend_for(const std::string& provider) {
+    for (const auto& backend : kBackends) {
+        if (backend.provider == provider) {
+            return backend;
+        }
+    }
+    return kBackends[std::size(kBackends) - 1];  // Ollama
+}
+
 ai_desktop::AskResult route_ask(const std::string& prompt,
                              const std::string& system,
                              const std::string& model,
                              int timeout_ms) {
     const auto route = ai_desktop::models::resolve(model);
-    if (route.provider == "anthropic") {
-        return ai_desktop::anthropic::ask(prompt, system, route.upstream_model, timeout_ms);
-    }
-    if (route.provider == "openai") {
-        return ai_desktop::openai::ask(prompt, system, route.upstream_model, timeout_ms);
-    }
-    if (route.provider == "gemini") {
-        return ai_desktop::gemini::ask(prompt, system, route.upstream_model, timeout_ms);
-    }
-    if (route.provider == "openai-compatible") {
-        return ai_desktop::openai::ask(prompt, system, route.upstream_model, timeout_ms, endpoint_for(route));
-    }
-    return ai_desktop::ollama::ask(prompt, system, route.upstream_model, timeout_ms);
+    return backend_for(route.provider).ask(route, prompt, system, timeout_ms);
 }
 
 std::string route_ask_stream(const std::string& prompt,
                               const std::string& system,
                               const std::string& model,
                               int timeout_ms,
-                              const std::function<void(const std::string&)>& on_delta) {
+                              const OnDelta& on_delta) {
     const auto route = ai_desktop::models::resolve(model);
-    if (route.provider == "anthropic") {
-        return ai_desktop::anthropic::ask_stream(prompt, system, route.upstream_model, timeout_ms, on_delta);
-    }
-    if (route.provider == "openai") {
-        return ai_desktop::openai::ask_stream(prompt, system, route.upstream_model, timeout_ms, on_delta);
-    }
-    if (route.provider == "gemini") {
-        return ai_desktop::gemini::ask_stream(prompt, system, route.upstream_model, timeout_ms, on_delta);
-    }
-    if (route.provider == "openai-compatible") {
-        return ai_desktop::openai::ask_stream(prompt, system, route.upstream_model, timeout_ms, endpoint_for(route),
-                                          on_delta);
-    }
-    return ai_desktop::ollama::ask_stream(prompt, system, route.upstream_model, timeout_ms, on_delta);
+    return backend_for(route.provider).ask_stream(route, prompt, system, timeout_ms, on_delta);
 }
 
 // ---------------------------------------------------------------------------
@@ -449,12 +481,10 @@ int main(int argc, char** argv) {
         // key values themselves. Lets a manual `curl /health` (see the
         // ai.nvim live-testing-plan) see which cloud backends are even
         // worth trying without guessing from an /ask error message.
-        body["backends"] = {
-            {"ollama", true},
-            {"openai", ai_desktop::openai::configured()},
-            {"anthropic", ai_desktop::anthropic::configured()},
-            {"gemini", ai_desktop::gemini::configured()},
-        };
+        body["backends"] = {{std::string(ai_desktop::providers::kLocal), true}};
+        for (const auto& cloud : ai_desktop::providers::cloud()) {
+            body["backends"][cloud.name] = !ai_desktop::secrets::get(cloud.key_name).empty();
+        }
         res.set_content(body.dump(), "application/json");
     });
 

@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "models.hpp"
+#include "providers.hpp"
 
 using json = nlohmann::json;
 
@@ -263,21 +264,14 @@ json parse_ollama_show(const json& response) {
 
 json presets(const std::string& provider) {
     json out = json::array();
-    auto add = [&](std::initializer_list<std::pair<const char*, const char*>> list) {
-        for (const auto& preset : list) {
-            json e = entry(preset.first, preset.second, "cloud", provider.c_str(), {{"preset", true}});
-            e["available"] = false;
-            out.push_back(std::move(e));
-        }
-    };
-    if (provider == "openai") {
-        add({{"gpt-4o", "GPT-4o"}, {"gpt-4o-mini", "GPT-4o mini"}, {"o3-mini", "o3-mini"}});
-    } else if (provider == "anthropic") {
-        add({{"claude-opus-5-5", "Claude Opus 5.5"},
-             {"claude-sonnet-5-5", "Claude Sonnet 5.5"},
-             {"claude-haiku-4-5-20251001", "Claude Haiku 4.5"}});
-    } else if (provider == "gemini") {
-        add({{"gemini-2.5-pro", "Gemini 2.5 Pro"}, {"gemini-2.5-flash", "Gemini 2.5 Flash"}});
+    const auto* cloud = providers::find(provider);
+    if (!cloud) {
+        return out;
+    }
+    for (const auto& [id, name] : cloud->presets) {
+        json e = entry(id, name, "cloud", provider.c_str(), {{"preset", true}});
+        e["available"] = false;
+        out.push_back(std::move(e));
     }
     return out;
 }

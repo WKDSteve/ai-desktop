@@ -1,11 +1,11 @@
 #include "models.hpp"
 
 #include <cstdlib>
-#include <initializer_list>
 
 #include "ids.hpp"
 #include "legacy.hpp"
 #include "net_util.hpp"
+#include "providers.hpp"
 #include "secrets.hpp"
 
 using json = nlohmann::json;
@@ -36,12 +36,12 @@ std::vector<std::string> split_csv(const std::string& value) {
 // `env_var`, if set, REPLACES `fallback` wholesale (comma-separated), e.g.
 // AI_DESKTOP_PREFIXES_OPENAI=gpt-,o1-,o3-,o4- to pick up a new model family without
 // a rebuild. Read once per provider (function-local static).
-std::vector<std::string> prefixes_for(const char* env_var, std::initializer_list<const char*> fallback) {
+std::vector<std::string> prefixes_for(const char* env_var, const std::vector<std::string>& fallback) {
     const char* override_value = legacy::env(env_var);
     if (override_value) {
         return split_csv(override_value);
     }
-    return std::vector<std::string>(fallback.begin(), fallback.end());
+    return fallback;
 }
 
 bool matches_any(const std::string& model, const std::vector<std::string>& list) {
@@ -54,8 +54,7 @@ bool matches_any(const std::string& model, const std::vector<std::string>& list)
 }
 
 bool valid_provider(const std::string& provider) {
-    return provider == "ollama" || provider == "openai" || provider == "anthropic" || provider == "gemini" ||
-           provider == "openai-compatible";
+    return providers::known(provider);
 }
 
 bool has_control_chars(const std::string& text) {
@@ -68,23 +67,21 @@ bool has_control_chars(const std::string& text) {
 }
 
 std::string key_name_for_provider(const std::string& provider) {
-    if (provider == "openai") return "OPENAI_API_KEY";
-    if (provider == "anthropic") return "ANTHROPIC_API_KEY";
-    if (provider == "gemini") return "GEMINI_API_KEY";
-    return "";
+    const auto* cloud = providers::find(provider);
+    return cloud ? cloud->key_name : "";
 }
 
 Route route_from_custom(const json& record) {
     Route route;
     route.custom = true;
-    route.provider = record.value("provider", "ollama");
+    route.provider = record.value("provider", std::string(providers::kLocal));
     const std::string id = record.value("id", "");
     route.upstream_model = record.value("upstream_model", "");
     if (route.upstream_model.empty()) {
         route.upstream_model = id;
     }
     route.label = id;
-    if (route.provider == "openai-compatible") {
+    if (route.provider == providers::kCompatible) {
         std::string origin;
         std::string path;
         if (split_base_url(record.value("base_url", ""), origin, path)) {
@@ -95,7 +92,7 @@ Route route_from_custom(const json& record) {
         route.key_name = "custom:" + id;
     } else {
         route.key_name = key_name_for_provider(route.provider);
-        route.local = route.provider == "ollama";
+        route.local = route.provider == providers::kLocal;
     }
     return route;
 }
@@ -109,7 +106,7 @@ json public_view(const json& record) {
         view["base_url"] = record["base_url"];
     }
     const std::string id = record.value("id", "");
-    view["has_key"] = record.value("provider", "") == "openai-compatible" &&
+    view["has_key"] = record.value("provider", "") == providers::kCompatible &&
                       secrets::source("custom:" + id) != "none";
     return view;
 }
@@ -117,14 +114,21 @@ json public_view(const json& record) {
 }  // namespace
 
 const std::vector<std::string>& prefixes(std::string_view provider) {
-    static const std::vector<std::string> anthropic = prefixes_for("AI_DESKTOP_PREFIXES_CLAUDE", {"claude-"});
-    static const std::vector<std::string> openai =
-        prefixes_for("AI_DESKTOP_PREFIXES_OPENAI", {"gpt-", "o1-", "o3-"});
-    static const std::vector<std::string> gemini = prefixes_for("AI_DESKTOP_PREFIXES_GEMINI", {"gemini-"});
+    // Read once, in the order of the table (function-local static).
+    static const std::vector<std::vector<std::string>> by_provider = [] {
+        std::vector<std::vector<std::string>> all;
+        for (const auto& cloud : providers::cloud()) {
+            all.push_back(prefixes_for(cloud.prefix_env.c_str(), cloud.default_prefixes));
+        }
+        return all;
+    }();
     static const std::vector<std::string> none;
-    if (provider == "anthropic") return anthropic;
-    if (provider == "openai") return openai;
-    if (provider == "gemini") return gemini;
+    const auto& table = providers::cloud();
+    for (size_t i = 0; i < table.size(); ++i) {
+        if (table[i].name == provider) {
+            return by_provider[i];
+        }
+    }
     return none;
 }
 
@@ -188,15 +192,14 @@ Route resolve(const std::string& model) {
 
     Route route;
     route.upstream_model = model;
-    if (matches_any(model, prefixes("anthropic"))) {
-        route.provider = "anthropic";
-    } else if (matches_any(model, prefixes("openai"))) {
-        route.provider = "openai";
-    } else if (matches_any(model, prefixes("gemini"))) {
-        route.provider = "gemini";
-    } else {
-        route.provider = "ollama";
-        route.local = true;
+    route.provider = std::string(providers::kLocal);
+    route.local = true;
+    for (const auto& cloud : providers::cloud()) {
+        if (matches_any(model, prefixes(cloud.name))) {
+            route.provider = cloud.name;
+            route.local = false;
+            break;
+        }
     }
     route.label = route.provider;
     route.key_name = key_name_for_provider(route.provider);
@@ -263,7 +266,7 @@ config::Status custom_add(const json& body, json& created) {
     if (!upstream.empty()) {
         record["upstream_model"] = upstream;
     }
-    if (provider == "openai-compatible") {
+    if (provider == providers::kCompatible) {
         std::string origin;
         std::string path;
         if (!split_base_url(base_url, origin, path)) {
