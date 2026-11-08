@@ -280,8 +280,10 @@ Every `/ask` and `/ask/stream` request leaves one line in `usage.jsonl` in the
 configuration folder (the folder of `config.json`, including the loomAI
 fallback). **Metadata only**: provider, model, token counts, duration and
 outcome -- never the prompt, the system text or the answer. The dashboard's
-"Nutzung" section reads it; `ai.nvim` reports its own requests to the other
-providers through `POST /usage/events`. One event:
+"Nutzung" section reads it (filtered by provider and time span; while a
+provider is chosen, an x in the choice takes it away in one click, as do Delete
+and Backspace); `ai.nvim` reports its own requests to the other providers
+through `POST /usage/events`. One event:
 
 ```json
 { "ts": "2026-10-30T12:34:56Z", "source": "ai-desktop", "provider": "anthropic", "model": "claude-haiku-4-5",

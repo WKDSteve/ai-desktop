@@ -112,6 +112,17 @@ h1 { color: var(--accent); font-size: 1.1rem;
   background: var(--bg); color: var(--text); border: 1px solid var(--line);
   border-radius: 6px; padding: .4rem .6rem; font-family: inherit; font-size: .78rem;
 }
+/* The x of a choice sits inside its border, before the arrow of the browser. */
+.clear-select { position: relative; display: inline-flex; align-items: center; }
+.usage-filters .clear-select > select.clearable { padding-right: 2.6rem; }
+.clear-select .clear {
+  position: absolute; top: 50%; right: 1.4rem; transform: translateY(-50%);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.2rem; height: 1.2rem; padding: 0; border: none; border-radius: 4px;
+  background: none; color: var(--muted); cursor: pointer; line-height: 1;
+}
+.clear-select .clear[hidden] { display: none; }
+.clear-select .clear:hover, .clear-select .clear:focus-visible { background: var(--surface); color: var(--text); }
 .usage-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem;
               margin-bottom: .75rem; }
 .kpi { background: var(--bg); border: 1px solid var(--line); border-radius: 6px;

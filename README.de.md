@@ -277,8 +277,10 @@ Jede Anfrage an `/ask` und `/ask/stream` hinterlässt eine Zeile in
 `usage.jsonl` im Konfigurationsordner (der Ordner von `config.json`, inklusive
 loomAI-Rückfall). **Nur Metadaten**: Provider, Modell, Token-Zahlen, Dauer und
 Ergebnis -- niemals der Prompt, der System-Text oder die Antwort. Der Abschnitt
-„Nutzung“ im Dashboard liest sie; `ai.nvim` meldet seine eigenen Anfragen an
-die anderen Provider über `POST /usage/events`. Ein Ereignis:
+„Nutzung“ im Dashboard liest sie (nach Provider und Zeitraum gefiltert; ist ein
+Provider gewählt, nimmt ein x in der Auswahl ihn mit einem Klick zurück, ebenso
+Entf und Rücktaste); `ai.nvim` meldet seine eigenen Anfragen an die anderen
+Provider über `POST /usage/events`. Ein Ereignis:
 
 ```json
 { "ts": "2026-10-30T12:34:56Z", "source": "ai-desktop", "provider": "anthropic", "model": "claude-haiku-4-5",

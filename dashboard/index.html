@@ -120,9 +120,16 @@
 <div class="card">
   <h2>Nutzung</h2>
   <div class="usage-filters">
-    <select id="usage-provider" aria-label="Provider" onchange="loadUsage()">
-      <option value="">Alle Provider</option>
-    </select>
+    <!-- Ein x im Feld nimmt die Wahl mit einem Klick zurueck (wie die Auswahllisten der anderen Desktop-Apps,
+         appkit-ui ClearSelect); ohne Wahl gibt es kein x. -->
+    <span class="clear-select">
+      <select id="usage-provider" aria-label="Provider" onchange="providerChanged()">
+        <option value="">Alle Provider</option>
+      </select>
+      <button type="button" id="usage-provider-clear" class="clear" aria-label="Auswahl Provider entfernen"
+              title="Auswahl Provider entfernen" hidden
+              onmousedown="event.preventDefault()" onclick="clearProvider()"><span aria-hidden="true">×</span></button>
+    </span>
     <select id="usage-range" aria-label="Zeitraum" onchange="loadUsage()">
       <option value="24h">Letzte 24 h</option>
       <option value="7d" selected>Letzte 7 Tage</option>
@@ -429,7 +436,36 @@
       select.appendChild(opt);
     });
     select.value = knownProviders.has(current) ? current : '';
+    syncProviderClear();
   }
+
+  // Das x zeigt sich nur bei einer Wahl; das Feld bekommt dann Platz dafuer.
+  function syncProviderClear() {
+    const select = document.getElementById('usage-provider');
+    const chosen = select.value !== '';
+    document.getElementById('usage-provider-clear').hidden = !chosen;
+    select.classList.toggle('clearable', chosen);
+  }
+
+  function providerChanged() {
+    syncProviderClear();
+    loadUsage();
+  }
+
+  // Ein Klick auf das x (oder Entf/Backspace im Feld) nimmt die Wahl zurueck; der Fokus geht ins Feld, das x ist weg.
+  function clearProvider() {
+    const select = document.getElementById('usage-provider');
+    select.value = '';
+    providerChanged();
+    select.focus();
+  }
+
+  document.getElementById('usage-provider').addEventListener('keydown', (e) => {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && e.currentTarget.value !== '') {
+      e.preventDefault();
+      clearProvider();
+    }
+  });
 
   async function loadUsage() {
     const status = document.getElementById('usage-status');
