@@ -190,6 +190,16 @@ selbst als Bind-Adresse des Ollama-*Servers* belegt, z. B. `0.0.0.0:11434`,
 und damit kein gültiges Client-Ziel). Standardmodell via
 `AI_DESKTOP_DEFAULT_MODEL`, sonst `llama3.1:8b-q5_K_M`.
 
+Jede Ollama-Anfrage fordert ein Kontextfenster von 32768 Tokens an
+(`options.num_ctx`). Ohne diese Angabe nimmt Ollama einen Standard, der von der
+GPU abhängt -- 4096 Tokens auf einer 12-GB-Karte --, und ein längerer Prompt
+schlägt nicht fehl: sein Anfang wird verworfen, das Modell antwortet aus dem
+Rest. Ändern über die Einstellung `ollama_num_ctx` (`PUT /settings`) oder
+`AI_DESKTOP_OLLAMA_NUM_CTX`: eine ganze Zahl von 0 bis 1048576, `0` schickt
+keine (dann gilt Ollamas eigener Standard bzw. `OLLAMA_CONTEXT_LENGTH` am
+Ollama-Server). Mehr Kontext kostet VRAM; einen festen Wert behalten, denn eine
+Anfrage mit anderem Wert lässt Ollama das Modell neu laden.
+
 Für die drei Cloud-Backends je ein API-Key als Env-Var, sonst meldet `/ask*`
 einen klaren Konfigurationsfehler statt einen Request zu versuchen:
 

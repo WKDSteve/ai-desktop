@@ -31,8 +31,34 @@ constexpr SettingDef kSettings[] = {
     {"theme", nullptr, "system"},
     {"default_model", "AI_DESKTOP_DEFAULT_MODEL", "llama3.1:8b-q5_K_M"},
     {"ollama_host", "AI_DESKTOP_OLLAMA_HOST", "http://127.0.0.1:11434"},
+    // Context window (tokens) every Ollama request asks for. Without one Ollama
+    // picks a default that depends on the GPU -- 4096 on a 12 GB card -- and
+    // silently drops the beginning of a longer prompt. "0" sends none.
+    {"ollama_num_ctx", "AI_DESKTOP_OLLAMA_NUM_CTX", "32768"},
     {"language", nullptr, "de"},
 };
+
+// Largest context window accepted; current models top out at about a million tokens.
+constexpr long kMaxNumCtx = 1048576;
+
+// A whole number of tokens from 0 to kMaxNumCtx, digits only (no sign, no blanks).
+bool parse_num_ctx(const std::string& text, int& out) {
+    if (text.empty() || text.size() > 7) {
+        return false;
+    }
+    long value = 0;
+    for (char c : text) {
+        if (c < '0' || c > '9') {
+            return false;
+        }
+        value = value * 10 + (c - '0');
+    }
+    if (value > kMaxNumCtx) {
+        return false;
+    }
+    out = static_cast<int>(value);
+    return true;
+}
 
 // Prices in USD per million tokens, as published by the providers when this
 // table was written (2026-10); they change, so the stored table may override any
@@ -268,6 +294,12 @@ Status validate(const std::string& key, std::string& value) {
         if (!normalize_http_origin(value)) {
             return {400, "ollama_host: expected an http(s) address like http://127.0.0.1:11434"};
         }
+    } else if (key == "ollama_num_ctx") {
+        value = trimmed(value);
+        int parsed = 0;
+        if (!value.empty() && !parse_num_ctx(value, parsed)) {
+            return {400, "ollama_num_ctx: expected a whole number of tokens from 0 (send none) to 1048576"};
+        }
     }
     return {};
 }
@@ -435,6 +467,18 @@ std::string effective(const std::string& key) {
         return stored[key].get<std::string>();
     }
     return def->fallback;
+}
+
+int ollama_num_ctx() {
+    int parsed = 0;
+    if (parse_num_ctx(trimmed(effective("ollama_num_ctx")), parsed)) {
+        return parsed;
+    }
+    // Only an environment value can be malformed here (a stored one was validated
+    // on write): fall back to the built-in default rather than sending none.
+    const SettingDef* def = find_setting("ollama_num_ctx");
+    parse_num_ctx(def->fallback, parsed);
+    return parsed;
 }
 
 json settings_json() {

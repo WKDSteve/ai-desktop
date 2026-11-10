@@ -35,6 +35,11 @@ std::string directory();
 // Effective value of a setting: env > config.json > default. Unknown key -> "".
 std::string effective(const std::string& key);
 
+// Context window for Ollama requests from the "ollama_num_ctx" setting; 0 = send
+// none (Ollama's own default). A malformed environment value yields the built-in
+// default (32768).
+int ollama_num_ctx();
+
 // Every setting as {"<key>": {"value", "source": "env|config|default",
 // "locked": bool, "default": "..."}}.
 nlohmann::json settings_json();

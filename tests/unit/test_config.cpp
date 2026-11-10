@@ -123,6 +123,45 @@ TEST(ollama_host_is_normalised_on_write) {
     CHECK_EQ(config::effective("ollama_host"), std::string("http://10.0.0.5:11434"));
 }
 
+TEST(ollama_num_ctx_defaults_to_32768) {
+    Sandbox box("numctx-default");
+    CHECK_EQ(config::effective("ollama_num_ctx"), std::string("32768"));
+    CHECK_EQ(config::ollama_num_ctx(), 32768);
+}
+
+TEST(ollama_num_ctx_is_stored_trimmed_and_zero_means_none) {
+    Sandbox box("numctx-store");
+    CHECK(config::update_settings({{"ollama_num_ctx", " 8192 "}}).ok());
+    CHECK_EQ(config::effective("ollama_num_ctx"), std::string("8192"));
+    CHECK_EQ(config::ollama_num_ctx(), 8192);
+    CHECK(config::update_settings({{"ollama_num_ctx", "0"}}).ok());
+    CHECK_EQ(config::ollama_num_ctx(), 0);
+    CHECK(config::update_settings({{"ollama_num_ctx", "1048576"}}).ok());
+    CHECK_EQ(config::ollama_num_ctx(), 1048576);
+    // empty resets to the built-in default, like default_model
+    CHECK(config::update_settings({{"ollama_num_ctx", ""}}).ok());
+    CHECK_EQ(config::ollama_num_ctx(), 32768);
+}
+
+TEST(ollama_num_ctx_rejects_what_is_not_a_token_count) {
+    Sandbox box("numctx-bad");
+    for (const char* bad : {"-1", "abc", "1.5", "1e5", "+8192", "8 192", "1048577", "99999999"}) {
+        CHECK_EQ(config::update_settings({{"ollama_num_ctx", bad}}).http, 400);
+    }
+    CHECK_EQ(config::update_settings({{"ollama_num_ctx", 8192}}).http, 400);  // a string, like every setting
+    CHECK(!fs::exists(box.file()));
+}
+
+TEST(ollama_num_ctx_from_a_malformed_environment_value_falls_back_to_the_default) {
+    Sandbox box("numctx-env");
+    minitest::set_env("AI_DESKTOP_OLLAMA_NUM_CTX", "4096");
+    CHECK_EQ(config::ollama_num_ctx(), 4096);
+    minitest::set_env("AI_DESKTOP_OLLAMA_NUM_CTX", "lots");
+    CHECK_EQ(config::ollama_num_ctx(), 32768);
+    minitest::set_env("AI_DESKTOP_OLLAMA_NUM_CTX", "");
+    CHECK_EQ(config::ollama_num_ctx(), 32768);
+}
+
 TEST(environment_variable_wins_and_locks_the_setting) {
     Sandbox box("envlock");
     CHECK(config::update_settings({{"default_model", "from-config"}}).ok());

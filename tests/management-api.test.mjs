@@ -51,7 +51,7 @@ describe("/settings", () => {
   it("reports every setting with its source and the config directory", async () => {
     const res = await server.get("/settings");
     assert.equal(res.status, 200);
-    assert.deepEqual(Object.keys(res.json.settings).sort(), ["default_model", "language", "ollama_host", "theme"]);
+    assert.deepEqual(Object.keys(res.json.settings).sort(), ["default_model", "language", "ollama_host", "ollama_num_ctx", "theme"]);
     assert.equal(res.json.settings.theme.value, "system");
     assert.equal(res.json.settings.theme.source, "default");
     assert.equal(res.json.settings.theme.locked, false);
@@ -146,6 +146,42 @@ describe("changing ollama_host while the server runs", () => {
     const second = await server.post("/ask", { prompt: "hi", model: "beta:1b" });
     assert.equal(second.json.text, "from-beta", "the request must go to the new host, not the first one");
     assert.equal(b.hits.filter((h) => h.url === "/api/generate").length, 1);
+  });
+});
+
+describe("ollama_num_ctx reaches the Ollama request", () => {
+  let mock;
+  let server;
+  before(async () => {
+    mock = await ollamaMock("ctx");
+    server = await startServer({ env: { AI_DESKTOP_OLLAMA_HOST: `http://127.0.0.1:${mock.port}`, AI_DESKTOP_OLLAMA_NUM_CTX: "" } });
+  });
+  after(async () => {
+    await server.stop();
+    await mock.close();
+  });
+
+  const lastGenerate = () => mock.hits.filter((h) => h.url === "/api/generate").at(-1).body;
+
+  it("sends the default 32768 as options.num_ctx", async () => {
+    assert.equal((await server.post("/ask", { prompt: "hi", model: "ctx:1b" })).json.text, "from-ctx");
+    assert.deepEqual(lastGenerate().options, { num_ctx: 32768 });
+  });
+
+  it("sends a changed value, and none at all for 0", async () => {
+    assert.equal((await server.put("/settings", { ollama_num_ctx: "8192" })).status, 200);
+    await server.post("/ask", { prompt: "hi", model: "ctx:1b" });
+    assert.deepEqual(lastGenerate().options, { num_ctx: 8192 });
+
+    assert.equal((await server.put("/settings", { ollama_num_ctx: "0" })).status, 200);
+    await server.post("/ask", { prompt: "hi", model: "ctx:1b" });
+    assert.equal(lastGenerate().options, undefined);
+  });
+
+  it("rejects a value that is not a token count", async () => {
+    for (const bad of ["-1", "lots", "1.5", "2000000"]) {
+      assert.equal((await server.put("/settings", { ollama_num_ctx: bad })).status, 400, bad);
+    }
   });
 });
 

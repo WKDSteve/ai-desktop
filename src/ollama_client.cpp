@@ -39,6 +39,12 @@ json build_request(const std::string& prompt,
     if (!system.empty()) {
         body["system"] = system;
     }
+    // Without num_ctx Ollama uses a GPU-dependent default (4096 on a 12 GB card)
+    // and drops the beginning of a longer prompt instead of failing. One fixed
+    // value per server: a request with another one makes Ollama reload the model.
+    if (int num_ctx = config::ollama_num_ctx(); num_ctx > 0) {
+        body["options"] = {{"num_ctx", num_ctx}};
+    }
     return body;
 }
 
