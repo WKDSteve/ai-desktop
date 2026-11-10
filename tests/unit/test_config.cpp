@@ -162,6 +162,16 @@ TEST(ollama_num_ctx_from_a_malformed_environment_value_falls_back_to_the_default
     CHECK_EQ(config::ollama_num_ctx(), 32768);
 }
 
+TEST(ollama_num_ctx_from_a_hand_edited_config_falls_back_to_the_default) {
+    Sandbox box("numctx-file");
+    minitest::write_file(box.file(), R"({"version": 1, "settings": {"ollama_num_ctx": "a lot"}})");
+    config::reload();
+    CHECK_EQ(config::ollama_num_ctx(), 32768);
+    minitest::write_file(box.file(), R"({"version": 1, "settings": {"ollama_num_ctx": "4096"}})");
+    config::reload();
+    CHECK_EQ(config::ollama_num_ctx(), 4096);
+}
+
 TEST(environment_variable_wins_and_locks_the_setting) {
     Sandbox box("envlock");
     CHECK(config::update_settings({{"default_model", "from-config"}}).ok());

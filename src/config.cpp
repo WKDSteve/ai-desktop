@@ -474,8 +474,9 @@ int ollama_num_ctx() {
     if (parse_num_ctx(trimmed(effective("ollama_num_ctx")), parsed)) {
         return parsed;
     }
-    // Only an environment value can be malformed here (a stored one was validated
-    // on write): fall back to the built-in default rather than sending none.
+    // A malformed environment value, or a config.json edited by hand (PUT /settings
+    // validates on write, a text editor does not): fall back to the built-in
+    // default rather than sending none.
     const SettingDef* def = find_setting("ollama_num_ctx");
     parse_num_ctx(def->fallback, parsed);
     return parsed;
