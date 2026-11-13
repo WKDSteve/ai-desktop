@@ -2,6 +2,8 @@
 
 # ai-desktop
 
+[![wkd](https://img.shields.io/badge/wkd-family-c6ff3d)](https://wkdsteve.github.io/wkd/apps/ai-desktop/)
+
 Local agent-framework server (C++17, `cpp-httplib`). Serves as the backend
 for a live dashboard (SSE) and as an ask/stream endpoint for editor
 integrations (see [`ai.nvim`](../ai.nvim)'s `ai_desktop` provider, there
