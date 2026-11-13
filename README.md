@@ -396,3 +396,14 @@ body, Gemini builds the path directly from the model name
   hardcoded in `main.cpp`'s router, no configuration option for
   custom/future prefixes -- no need for that so far, since all three
   providers prefix their model names stably this way.
+
+<!-- connections:begin (written by the app-icons tool of the workshop; change integrations.json there, not this block) -->
+## Connections
+
+![ai-desktop: what it uses and what uses it](assets/graphs/ai-desktop.png)
+
+**Used by**
+
+- [ai.nvim](https://github.com/WKDSteve/ai.nvim): The `ai_desktop` provider of ai.nvim sends its ask and stream requests (`/ask`, `/ask/stream`) to a local ai-desktop server. ([picture](assets/graphs/pair/ai.nvim--ai-desktop.png))
+- [hub-desktop](https://github.com/WKDSteve/hub-desktop): hub-desktop shows ai-desktop as a tile and starts it. ([picture](assets/graphs/pair/hub-desktop--ai-desktop.png))
+<!-- connections:end -->
