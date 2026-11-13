@@ -29,7 +29,31 @@ describe("server basics", () => {
     const res = await server.get("/");
     assert.match(res.text, /<link rel="icon" href="data:image\/svg\+xml,/);
     assert.match(res.text, /<img id="app-icon"/);
-    assert.match(res.text, /getElementById\('app-icon'\)\.src = document\.querySelector\('link\[rel="icon"\]'\)\.href/);
+    const script = await server.get("/app.js");
+    assert.equal(script.status, 200);
+    assert.match(script.text, /getElementById\('app-icon'\)\.src = document\.querySelector\('link\[rel="icon"\]'\)\.href/);
+  });
+
+  it("sends the dashboard's Content-Security-Policy on the page, its script and the API", async () => {
+    for (const route of ["/", "/app.js", "/health"]) {
+      const res = await server.get(route);
+      const csp = res.headers["content-security-policy"] || "";
+      assert.match(csp, /default-src 'none'/, route);
+      assert.match(csp, /script-src 'self'(;|$)/, `${route}: no inline script`);
+      assert.match(csp, /style-src 'self'(;|$)/, `${route}: no inline style`);
+      assert.match(csp, /require-trusted-types-for 'script'/, route);
+      assert.match(csp, /frame-ancestors 'none'/, route);
+      assert.equal(res.headers["x-content-type-options"], "nosniff", route);
+    }
+  });
+
+  it("keeps the page free of what the policy refuses: inline script, handlers, style attributes", async () => {
+    const res = await server.get("/");
+    assert.doesNotMatch(res.text, /<script>/, "no inline script");
+    assert.doesNotMatch(res.text, /\son[a-z]+="/, "no inline handler");
+    assert.doesNotMatch(res.text, /\sstyle="/, "no style attribute");
+    const script = await server.get("/app.js");
+    assert.doesNotMatch(script.text, /\.innerHTML\s*=/, "no string becomes HTML");
   });
 
   it("allows an Origin that matches its own port", async () => {

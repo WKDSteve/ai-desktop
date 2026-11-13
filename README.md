@@ -169,6 +169,12 @@ cmake --build build -j4
 
 ### Dashboard colours and browser checks
 
+The server sends a strict Content-Security-Policy with every answer: scripts and styles of its own origin only, no
+inline script, no inline handler (`onclick=`), no `style` attribute, and Trusted Types refuse any string turned into
+HTML. So the page's script lives in `dashboard/app.js`, a control names its action in `data-on-click` /
+`data-on-change`, and what an event carries (foreign text, any local program may send one) is set with
+`textContent` only. `tests/server-basics.test.mjs` checks the header and that the page keeps to it.
+
 The dashboard follows the system's light or dark mode. Its colours are the palette of ai's icon in
 `dashboard/palette.css`, a generated file that is never edited by hand; `dashboard/style.css` only uses its tokens,
 and `python tools/check-color-literals.py --root dashboard --tokens dashboard/palette.css` refuses a colour written

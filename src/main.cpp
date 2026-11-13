@@ -401,6 +401,19 @@ int main(int argc, char** argv) {
     // the server buffer.
     svr.set_payload_max_length(1024 * 1024);
 
+    // Every answer carries the policy of the dashboard: scripts and styles of this origin only (no inline
+    // script, handler or style attribute), and Trusted Types refuse any string turned into HTML, so a line of
+    // an event (foreign text: any local program may send one) can only ever become text. The icon is a data:
+    // image. httplib puts these on the response before the handler runs, static files included.
+    svr.set_default_headers({
+        {"Content-Security-Policy",
+         "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+         "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; "
+         "object-src 'none'; require-trusted-types-for 'script'; trusted-types 'none'"},
+        {"X-Content-Type-Options", "nosniff"},
+        {"Referrer-Policy", "no-referrer"},
+    });
+
     // Statische Dashboard-Dateien ausliefern
     if (!svr.set_mount_point("/", dashboard_dir)) {
         std::cerr << "[FEHLER] Dashboard-Verzeichnis '" << dashboard_dir

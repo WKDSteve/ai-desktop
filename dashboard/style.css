@@ -158,3 +158,9 @@ h1 { color: var(--accent); font-size: 1.1rem;
 .log-agent { flex-shrink: 0; min-width: 72px; font-weight: 600;
              font-size: .74rem; }
 .log-msg   { color: var(--text); }
+
+/* Layout helpers that were inline styles (the CSP allows no style attribute). */
+.row     { display: flex; gap: .5rem; align-items: center; }
+.actions { margin-top: .75rem; display: flex; gap: .5rem; }
+.muted   { color: var(--muted); }
+.small   { font-size: .75rem; }
