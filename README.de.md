@@ -7,6 +7,8 @@ ein Live-Dashboard (SSE) und als Ask/Stream-Endpoint für Editor-Integrationen
 (siehe [`ai.nvim`](../ai.nvim)s `ai_desktop`-Provider,
 dort `lua/ai/providers/ai_desktop.lua`).
 
+**Status: Alpha.** In Versionen veröffentlicht (zuletzt v0.2.0); die Schnittstellen können sich noch ändern.
+
 *[English version](README.md)*
 
 ## Früher loomAI
