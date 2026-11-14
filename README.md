@@ -405,5 +405,6 @@ body, Gemini builds the path directly from the model name
 **Used by**
 
 - [ai.nvim](https://github.com/WKDSteve/ai.nvim): The `ai_desktop` provider of ai.nvim sends its ask and stream requests (`/ask`, `/ask/stream`) to a local ai-desktop server. ([picture](assets/graphs/pair/ai.nvim--ai-desktop.png))
+- [docmap-desktop](https://github.com/WKDSteve/docmap-desktop): The agent of docmap-desktop asks a local ai-desktop server (`GET /health`, `POST /ask`). ([picture](assets/graphs/pair/docmap-desktop--ai-desktop.png))
 - [hub-desktop](https://github.com/WKDSteve/hub-desktop): hub-desktop shows ai-desktop as a tile and starts it. ([picture](assets/graphs/pair/hub-desktop--ai-desktop.png))
 <!-- connections:end -->
