@@ -9,8 +9,10 @@ Start ai-desktop from the Start menu (or with `ai-desktop` when you chose that s
 nothing runs that does not match the checksum. In your own PowerShell, not elevated:
 
 ```
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/WKDSteve/ai-desktop/releases/download/{tag}/install.ps1 | iex"
+irm https://github.com/WKDSteve/ai-desktop/releases/download/{tag}/install.ps1 | iex
 ```
+
+Type the line into the PowerShell session as it is. Wrapped in a new `powershell -ExecutionPolicy Bypass -c "..."`, Microsoft Defender reports the command line as a trojan (`Trojan:Win32/Commando.B!ml`) and nothing is installed.
 
 That installs without the "add to PATH" step. With it (and any other argument of the script), use the form
 that takes arguments:

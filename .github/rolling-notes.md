@@ -3,8 +3,10 @@
 **Install it with the script** (Windows; for the current user, no administrator rights, and no SmartScreen stop: the script downloads the installer itself and checks it against `SHA256SUMS`). In your own PowerShell, not elevated:
 
 ```
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/WKDSteve/ai-desktop/releases/download/latest/install.ps1 | iex"
+irm https://github.com/WKDSteve/ai-desktop/releases/download/latest/install.ps1 | iex
 ```
+
+Type the line into the PowerShell session as it is. Wrapped in a new `powershell -ExecutionPolicy Bypass -c "..."`, Microsoft Defender reports the command line as a trojan (`Trojan:Win32/Commando.B!ml`) and nothing is installed.
 
 That installs without the "add to PATH" step. With it (and any other argument of the script), use the form that takes arguments:
 

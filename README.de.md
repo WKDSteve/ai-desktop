@@ -54,10 +54,12 @@ das Release gemacht hat). In der eigenen PowerShell, nicht erhöht:
 
 ```powershell
 # der neueste Stand von main (die Vorabversion "latest")
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/WKDSteve/ai-desktop/releases/download/latest/install.ps1 | iex"
+irm https://github.com/WKDSteve/ai-desktop/releases/download/latest/install.ps1 | iex
 
 # ein Release: dasselbe mit dem Tag statt latest, z. B. .../releases/download/v0.1.1/install.ps1
 ```
+
+Die Zeile so, wie sie ist, in die PowerShell-Sitzung tippen. Verpackt in ein neues `powershell -ExecutionPolicy Bypass -c "..."` meldet Microsoft Defender die Kommandozeile als Trojaner (`Trojan:Win32/Commando.B!ml`), und es wird nichts installiert.
 
 Das Skript eines Releases installiert genau dieses Release, das von `latest`
 den Rolling-Build ([`rolling.yml`](.github/workflows/rolling.yml), nach jedem
