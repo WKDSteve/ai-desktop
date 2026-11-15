@@ -8,8 +8,8 @@
 #   4. installs into <prefix>/app and writes the launcher <bin-dir>/ai-desktop
 #   5. smoke-tests the installed copy against GET /health
 #
-# The server mounts ./dashboard relative to its working directory, so it must
-# be started from <prefix>/app -- that is what the launcher does.
+# The server serves the dashboard folder next to its own binary, from any
+# working directory; the launcher only puts the command on PATH.
 #
 # The script never writes API keys anywhere. Set OPENAI_API_KEY,
 # ANTHROPIC_API_KEY and GEMINI_API_KEY yourself, see README.md.
@@ -268,8 +268,6 @@ mkdir -p "$BIN_DIR"
 {
     echo '#!/bin/sh'
     echo "$LAUNCHER_MARKER"
-    echo '# The server serves ./dashboard relative to its working directory.'
-    printf 'cd %q || exit 1\n' "$APP_DIR"
     # Absolute path, so running_install() can recognise the process by its command line.
     printf 'exec %q "$@"\n' "$APP_DIR/ai-desktop"
 } > "$LAUNCHER"

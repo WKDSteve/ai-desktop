@@ -22,6 +22,7 @@ add_library(ai_desktop_core STATIC
     src/catalog_parse.cpp
     src/config.cpp
     src/models.cpp
+    src/paths.cpp
     src/providers.cpp
     src/secrets.cpp
     src/usage.cpp
@@ -72,6 +73,7 @@ if(AI_DESKTOP_BUILD_TESTS)
         tests/unit/test_catalog_parse.cpp
         tests/unit/test_config.cpp
         tests/unit/test_models.cpp
+        tests/unit/test_paths.cpp
         tests/unit/test_providers.cpp
         tests/unit/test_secrets.cpp
         tests/unit/test_usage.cpp
@@ -80,9 +82,16 @@ if(AI_DESKTOP_BUILD_TESTS)
     add_test(NAME ai_desktop_unit COMMAND ai_desktop_tests)
 endif()
 
-# Flat install layout: the server mounts "./dashboard" relative to its working
-# directory, so the binary and the dashboard folder must sit side by side and
-# the server must be started from there. scripts/setup.ps1 and scripts/setup.sh
-# install into <prefix>/app and write a launcher that does the cd.
+# The server serves the "dashboard" folder next to its own binary (src/paths.cpp;
+# AI_DESKTOP_DASHBOARD_DIR goes first), whatever the working directory. The build
+# copies it next to the built binary, so `build/ai-desktop` serves the dashboard of
+# the last build (set AI_DESKTOP_DASHBOARD_DIR to the repo's folder to edit it live).
+add_custom_command(TARGET ai-desktop POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/dashboard $<TARGET_FILE_DIR:ai-desktop>/dashboard
+    COMMENT "Copying the dashboard next to ai-desktop")
+
+# Flat install layout: the binary and the dashboard folder side by side.
+# scripts/setup.ps1 and scripts/setup.sh install into <prefix>/app and write a
+# launcher that keeps <prefix>/app (on Windows with the runtime DLLs) off PATH.
 install(TARGETS ai-desktop RUNTIME DESTINATION .)
 install(DIRECTORY dashboard DESTINATION .)

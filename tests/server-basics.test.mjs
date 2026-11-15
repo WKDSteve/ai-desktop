@@ -2,7 +2,11 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 
-import { freePort, runToExit, startServer } from "./helpers/server.mjs";
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+import { binaryPath, freePort, runToExit, startServer } from "./helpers/server.mjs";
 
 describe("server basics", () => {
   let server;
@@ -23,6 +27,27 @@ describe("server basics", () => {
     const res = await server.get("/");
     assert.equal(res.status, 200);
     assert.match(res.text, /<html/i);
+  });
+
+  it("without AI_DESKTOP_DASHBOARD_DIR serves the dashboard next to the program, whatever the cwd", async () => {
+    // A copy of the program in a folder of its own, with a dashboard that only this test wrote: what the server
+    // serves must come from there, not from the working directory (the helper starts it in the temp folder).
+    const dir = mkdtempSync(path.join(os.tmpdir(), "ai-desktop-exe-"));
+    const own = await (async () => {
+      const exe = path.join(dir, path.basename(binaryPath()));
+      copyFileSync(binaryPath(), exe);
+      mkdirSync(path.join(dir, "dashboard"));
+      writeFileSync(path.join(dir, "dashboard", "index.html"), "<html><body>next-to-the-exe</body></html>");
+      return startServer({ bin: exe, env: { AI_DESKTOP_DASHBOARD_DIR: "", LOOMAI_DASHBOARD_DIR: "" } });
+    })();
+    try {
+      const res = await own.get("/");
+      assert.equal(res.status, 200);
+      assert.match(res.text, /next-to-the-exe/);
+    } finally {
+      await own.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("gives the header icon the favicon, the one copy the icon generator rewrites", async () => {

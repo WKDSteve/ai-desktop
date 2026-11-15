@@ -6,6 +6,7 @@
 #include <string>
 #include <ctime>
 #include <chrono>
+#include <filesystem>
 #include <functional>
 #include <iterator>
 #include <string_view>
@@ -22,6 +23,7 @@
 #include "gemini_client.hpp"
 #include "legacy.hpp"
 #include "models.hpp"
+#include "paths.hpp"
 #include "ollama_client.hpp"
 #include "openai_client.hpp"
 #include "providers.hpp"
@@ -364,11 +366,22 @@ int main(int argc, char** argv) {
     }
     const std::string base = "http://127.0.0.1:" + std::to_string(g_port);
 
-    // The dashboard is served from this directory; the desktop app's sidecar
-    // does not start inside it, so it can be pointed elsewhere.
-    std::string dashboard_dir = "./dashboard";
-    if (const char* env_dir = ai_desktop::legacy::env("AI_DESKTOP_DASHBOARD_DIR")) {
-        dashboard_dir = env_dir;
+    // The dashboard lies next to the program, not in the working directory, so the
+    // server starts from any folder; AI_DESKTOP_DASHBOARD_DIR points it elsewhere
+    // (the desktop app's sidecar, the tests).
+    const std::filesystem::path dashboard_path = ai_desktop::paths::dashboard_dir(
+        ai_desktop::legacy::env("AI_DESKTOP_DASHBOARD_DIR"), ai_desktop::paths::exe_dir());
+    std::string dashboard_dir;
+    try {
+        // cpp-httplib opens files by narrow name: the path in the system's code page.
+        dashboard_dir = dashboard_path.string();
+    } catch (const std::exception&) {
+        dashboard_dir.clear();
+    }
+    if (dashboard_dir.empty()) {
+        std::cerr << "ai-desktop: the folder of the program is unknown or cannot be named in the system's "
+                     "code page, so the dashboard is not found; set AI_DESKTOP_DASHBOARD_DIR." << std::endl;
+        return 1;
     }
 
     std::cout << "=== ai-desktop Framework ===\n";

@@ -12,9 +12,13 @@
          writes the launcher <Prefix>\ai-desktop.cmd
       5. smoke-tests the installed copy against GET /health
 
-    The server mounts ./dashboard relative to its working directory, so it
-    must be started from <Prefix>\app -- that is what ai-desktop.cmd does. Put
+    The server serves the dashboard folder next to its own binary, from any
+    working directory. ai-desktop.cmd starts <Prefix>\app\ai-desktop.exe so that
+    <Prefix>\app, which holds the MinGW runtime DLLs, stays off PATH: put
     <Prefix> (not <Prefix>\app) on PATH, or pass -AddToPath.
+
+    This script is the developer's way (build from source); people install with
+    the Windows installer of a release. Its smoke test runs the server hidden.
 
     The script never writes API keys anywhere. Set OPENAI_API_KEY,
     ANTHROPIC_API_KEY and GEMINI_API_KEY yourself, see README.md.
@@ -505,13 +509,8 @@ try {
     $launcherText = @(
         '@echo off',
         $LauncherMarker,
-        'rem The server serves .\dashboard relative to its working directory.',
-        'pushd "%~dp0app" || exit /b 1',
-        'rem Explicit path: cmd skips the current directory when NoDefaultCurrentDirectoryInExePath is set.',
-        '"%~dp0app\ai-desktop.exe" %*',
-        'set "AI_DESKTOP_RC=%errorlevel%"',
-        'popd',
-        'exit /b %AI_DESKTOP_RC%'
+        'rem The server finds its dashboard next to ai-desktop.exe; app\ (with the runtime DLLs) stays off PATH.',
+        '"%~dp0app\ai-desktop.exe" %*'
     ) -join "`r`n"
     Set-Content -LiteralPath $Launcher -Value $launcherText -Encoding ASCII
     Write-Ok "launcher $Launcher"

@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const repoRoot = path.resolve(here, "..", "..");
 
-function binaryPath() {
+export function binaryPath() {
   if (process.env.AI_DESKTOP_BIN) return process.env.AI_DESKTOP_BIN;
   const exe = process.platform === "win32" ? "ai-desktop.exe" : "ai-desktop";
   return path.join(repoRoot, "build", exe);
@@ -68,8 +68,7 @@ export function request(port, { method = "GET", pathname = "/", headers = {}, bo
 
 // Starts the server; resolves once /health answers. `env` overrides the
 // hermetic defaults, `args` are passed on the command line.
-export async function startServer({ env = {}, args = [], port, configDir } = {}) {
-  const bin = binaryPath();
+export async function startServer({ env = {}, args = [], port, configDir, bin = binaryPath() } = {}) {
   if (!existsSync(bin)) {
     throw new Error(`ai-desktop binary not found at ${bin} (build it first, or set AI_DESKTOP_BIN)`);
   }

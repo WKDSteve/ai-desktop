@@ -125,12 +125,16 @@ scripts/setup.sh
 Options: `--prefix`, `--bin-dir`, `--build-type`, `--clean`, `--check`,
 `--skip-install`, `--skip-smoke-test`, `--uninstall` (see `--help`).
 
-The server serves `./dashboard` relative to its working directory, so the
-installed layout is `<prefix>/app` (binary, dashboard, on Windows the runtime
-DLLs) plus a launcher -- `<prefix>\ai-desktop.cmd` on Windows, `~/.local/bin/ai-desktop`
-elsewhere -- that starts it from the right directory. Start ai-desktop with the
-launcher, not with `app/ai-desktop` directly. The scripts never write API keys;
-set them in your environment (see "Running").
+The server serves the `dashboard` folder next to its own binary, from any working
+directory (`AI_DESKTOP_DASHBOARD_DIR` points it elsewhere). The installed layout is
+`<prefix>/app` (binary, dashboard, on Windows the runtime DLLs) plus a launcher --
+`<prefix>\ai-desktop.cmd` on Windows, `~/.local/bin/ai-desktop` elsewhere -- that is
+the command on `PATH`; on Windows it keeps `app`, and with it the runtime DLLs, off
+`PATH`. The scripts never write API keys; set them in your environment (see "Running").
+
+`scripts/setup.ps1` and `scripts/setup.sh` are the developer's way (build from
+source, a smoke test that runs the server hidden for a moment); people on Windows
+install with the installer of a release.
 
 ## Building
 
@@ -191,6 +195,9 @@ cd e2e && pnpm install && pnpm test
 ```bash
 ./build/ai-desktop      # build/ai-desktop.exe on Windows
 ```
+
+The build copies `dashboard/` next to the binary; set `AI_DESKTOP_DASHBOARD_DIR=dashboard` to serve the repo's
+folder while you edit it.
 
 The server binds `127.0.0.1:8080` (deliberately not `0.0.0.0` -- an editor
 companion process shouldn't be accidentally reachable on the LAN).

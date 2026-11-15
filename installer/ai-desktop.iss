@@ -2,9 +2,9 @@
 ;
 ; It packs the output of scripts/setup.ps1 -- <StageDir>\app (binary, runtime
 ; DLLs, dashboard) and <StageDir>\ai-desktop.cmd -- so an installed copy has exactly
-; the layout a setup.ps1 install has. The server serves ./dashboard relative to
-; its working directory; the Start-menu shortcut and ai-desktop.cmd both start it
-; from <app>\app.
+; the layout a setup.ps1 install has. The server serves the dashboard next to its
+; binary from any working directory; the Start-menu shortcut still starts it in
+; <app>\app, and ai-desktop.cmd keeps <app>\app (runtime DLLs) off PATH.
 ;
 ; Per-user install (no admin rights, no UAC prompt). The optional "add to PATH"
 ; task edits the user PATH only and undoes that on uninstall.
