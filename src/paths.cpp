@@ -58,14 +58,58 @@ fs::path exe_dir() {
 #endif
 }
 
-fs::path dashboard_dir(const char* env_value, const fs::path& program_dir) {
+std::string file_api_name(const fs::path& path) {
+#ifdef _WIN32
+    // cpp-httplib opens files by narrow name (stat, ifstream): the system's code page (ACP), not UTF-8.
+    const std::wstring wide = path.wstring();
+    if (wide.empty()) {
+        return {};
+    }
+    const auto to_acp = [](const std::wstring& text) -> std::string {
+        const UINT page = GetACP();
+        // With CP_UTF8 neither flags nor the "default char used" answer are allowed; UTF-8 holds every name anyway.
+        const DWORD flags = page == CP_UTF8 ? 0 : WC_NO_BEST_FIT_CHARS;
+        BOOL lossy = FALSE;
+        BOOL* lossy_ptr = page == CP_UTF8 ? nullptr : &lossy;
+        const int length = WideCharToMultiByte(page, flags, text.data(), static_cast<int>(text.size()), nullptr, 0,
+                                               nullptr, lossy_ptr);
+        if (length <= 0 || lossy) {
+            return {};
+        }
+        std::string out(static_cast<size_t>(length), '\0');
+        WideCharToMultiByte(page, flags, text.data(), static_cast<int>(text.size()), out.data(), length, nullptr,
+                            nullptr);
+        return out;
+    };
+    if (std::string name = to_acp(wide); !name.empty()) {
+        return name;
+    }
+    // A name the code page cannot hold: its short (8.3) form is ASCII, where the volume keeps short names.
+    const DWORD need = GetShortPathNameW(wide.c_str(), nullptr, 0);
+    if (need == 0) {
+        return {};
+    }
+    std::wstring short_name(need, L'\0');
+    const DWORD got = GetShortPathNameW(wide.c_str(), short_name.data(), need);
+    if (got == 0 || got >= need) {
+        return {};
+    }
+    short_name.resize(got);
+    return to_acp(short_name);
+#else
+    return path.string();
+#endif
+}
+
+std::string dashboard_dir(const char* env_value, const fs::path& program_dir) {
     if (env_value && *env_value) {
-        return fs::path(env_value);
+        // As the environment holds it: already the narrow name the file calls take.
+        return env_value;
     }
     if (program_dir.empty()) {
         return {};
     }
-    return program_dir / "dashboard";
+    return file_api_name(program_dir / "dashboard");
 }
 
 }  // namespace ai_desktop::paths

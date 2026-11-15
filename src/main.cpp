@@ -369,15 +369,8 @@ int main(int argc, char** argv) {
     // The dashboard lies next to the program, not in the working directory, so the
     // server starts from any folder; AI_DESKTOP_DASHBOARD_DIR points it elsewhere
     // (the desktop app's sidecar, the tests).
-    const std::filesystem::path dashboard_path = ai_desktop::paths::dashboard_dir(
+    const std::string dashboard_dir = ai_desktop::paths::dashboard_dir(
         ai_desktop::legacy::env("AI_DESKTOP_DASHBOARD_DIR"), ai_desktop::paths::exe_dir());
-    std::string dashboard_dir;
-    try {
-        // cpp-httplib opens files by narrow name: the path in the system's code page.
-        dashboard_dir = dashboard_path.string();
-    } catch (const std::exception&) {
-        dashboard_dir.clear();
-    }
     if (dashboard_dir.empty()) {
         std::cerr << "ai-desktop: the folder of the program is unknown or cannot be named in the system's "
                      "code page, so the dashboard is not found; set AI_DESKTOP_DASHBOARD_DIR." << std::endl;
