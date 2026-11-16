@@ -7,7 +7,8 @@
 # release-kit pin is checked offline (the workflows against tools/release-kit.pin); whether the appkit tag still
 # names that commit is the push run's job, a pull request cannot move it.
 #
-# Windows only, like ci.yml: Linux is built from source with scripts/setup.sh and not checked by CI yet.
+# Windows like ci.yml, and Linux here only: the self-hosted runner is Windows, so scripts/setup.sh, ctest and the API
+# tests on Linux run on ubuntu-latest in a pull request.
 #
 # A fork can edit this file in its pull request (e.g. `runs-on: self-hosted`). The repository therefore requires
 # approval before a workflow of an outside contributor runs; never approve a pull request that touches `.github/`.
@@ -70,6 +71,31 @@ jobs:
           $tests = Get-ChildItem tests -Filter '*.test.mjs' | ForEach-Object { $_.FullName }
           node --test @tests
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  ubuntu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (node24)
+        with:
+          persist-credentials: false
+
+      # CMake, a C++17 compiler and curl are on the image; the OpenSSL headers are not always.
+      - name: OpenSSL headers
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends libssl-dev
+
+      - name: build, install and smoke-test with scripts/setup.sh
+        run: scripts/setup.sh --prefix "$RUNNER_TEMP/stage" --bin-dir "$RUNNER_TEMP/bin" --build-type Release
+
+      - name: unit tests (ctest)
+        run: ctest --test-dir build --output-on-failure
+
+      - name: API tests (Node, the real binary)
+        run: |
+          node --version
+          node --test tests/*.test.mjs
 
   hygiene:
     runs-on: windows-latest
