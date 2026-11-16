@@ -86,12 +86,25 @@ endif()
 # AI_DESKTOP_DASHBOARD_DIR goes first), whatever the working directory. The build
 # copies it next to the built binary, so `build/ai-desktop` serves the dashboard of
 # the last build (set AI_DESKTOP_DASHBOARD_DIR to the repo's folder to edit it live).
-add_custom_command(TARGET ai-desktop POST_BUILD
+# A target of its own that runs on every build: a POST_BUILD step of ai-desktop ran
+# only when the binary was linked again, so a build after a change of the dashboard
+# alone left the old one next to the binary.
+add_custom_target(ai-desktop-dashboard ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/dashboard $<TARGET_FILE_DIR:ai-desktop>/dashboard
     COMMENT "Copying the dashboard next to ai-desktop")
+add_dependencies(ai-desktop-dashboard ai-desktop)
 
 # Flat install layout: the binary and the dashboard folder side by side.
 # scripts/setup.ps1 and scripts/setup.sh install into <prefix>/app and write a
 # launcher that keeps <prefix>/app (on Windows with the runtime DLLs) off PATH.
 install(TARGETS ai-desktop RUNTIME DESTINATION .)
 install(DIRECTORY dashboard DESTINATION .)
+
+if(AI_DESKTOP_BUILD_TESTS)
+    # The copy next to the binary is the dashboard of the sources (also after a
+    # build that changed only the dashboard).
+    add_test(NAME dashboard_copy
+        COMMAND ${CMAKE_COMMAND} -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/dashboard
+                -DDST=$<TARGET_FILE_DIR:ai-desktop>/dashboard
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/check-dashboard-copy.cmake)
+endif()
