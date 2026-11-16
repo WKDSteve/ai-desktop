@@ -64,21 +64,14 @@
   <!-- System -->
   <div class="card">
     <h2>System</h2>
+    <!-- Only what the page checks; a badge turns green when its check passed (app.js). -->
     <div class="status-row">
-      <span class="badge badge-ok">SSE</span>
+      <span class="badge badge-idle" id="sse-badge">SSE</span>
       <span id="sse-status" class="muted" data-i18n="connecting"></span>
     </div>
     <div class="status-row">
-      <span class="badge badge-ok">Podman</span>
-      <span class="muted">rootless · WSL2</span>
-    </div>
-    <div class="status-row">
-      <span class="badge badge-ok">Backends</span>
+      <span class="badge badge-idle" id="backends-badge">Backends</span>
       <span id="backends-status" class="muted" data-i18n="loading"></span>
-    </div>
-    <div class="status-row">
-      <span class="badge badge-ok">GPU</span>
-      <span class="muted">RTX 4070 Super · CUDA 13</span>
     </div>
   </div>
 </div>

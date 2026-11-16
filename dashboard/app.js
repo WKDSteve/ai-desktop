@@ -81,12 +81,18 @@ function sendDecision(answer) {
   appendLog('human', t('decision_sent') + answer, 'var(--ok)');
 }
 
+// A badge of the card "System" shows the result of its check: idle (neutral) until then, ok or err after it.
+function setBadge(id, state) {
+  document.getElementById(id).className = `badge badge-${state}`;
+}
+
 // The state of the backends (it replaced a fixed "Model: simulation" line, misleading since /ask/stream is real).
 fetch('/health')
   .then((r) => r.json())
   .then((data) => {
     const names = { ollama: 'Ollama', openai: 'OpenAI', anthropic: 'Anthropic', gemini: 'Gemini' };
     const backends = data.backends || {};
+    setBadge('backends-badge', 'ok');
     const status = document.getElementById('backends-status');
     status.replaceChildren();
     Object.keys(names).forEach((id, i) => {
@@ -99,6 +105,7 @@ fetch('/health')
     });
   })
   .catch(() => {
+    setBadge('backends-badge', 'err');
     document.getElementById('backends-status').textContent = t('unreachable');
   });
 
@@ -385,6 +392,7 @@ sse.onopen = () => {
   sseLabel.style.color = 'var(--ok)';
   sseStatus.textContent = t('connected');
   sseStatus.style.color = 'var(--ok)';
+  setBadge('sse-badge', 'ok');
   appendLog('SYSTEM', t('dashboard_connected') + APP_NAME, 'var(--accent)');
 };
 
@@ -398,6 +406,7 @@ sse.onerror = () => {
   sseLabel.style.color = 'var(--bad)';
   sseStatus.textContent = t('disconnected');
   sseStatus.style.color = 'var(--bad)';
+  setBadge('sse-badge', 'err');
 };
 
 // The controls name their action in data-on-click / data-on-change (no inline handlers under the CSP).
