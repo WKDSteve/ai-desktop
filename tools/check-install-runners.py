@@ -6,7 +6,9 @@ setup or the install script installs over that copy (same AppId, same Start menu
 uninstall takes it away: the `published` job of rolling.yml did exactly that four times between 2026-11-14 and
 2026-11-16, until it moved to windows-latest. Whatever installs runs on a throw-away GitHub-hosted VM.
 
-A job counts as self-hosted when its `runs-on` names `self-hosted`. It may not hold any of INSTALLS (the installer
+A job counts as GitHub-hosted only when its `runs-on` is one plain label of a GitHub-hosted image on its own line
+(`windows-latest`, `ubuntu-24.04`, `macos-latest`, ...); every other job counts as self-hosted, also one whose
+`runs-on` is a list over several lines or an expression (`${{ matrix.os }}`), which may reach this runner. It may not hold any of INSTALLS (the installer
 check, the setup's own switches, the uninstaller). It may hold the install line (RUNS_THE_LINE) only when the job
 sets PROCESSOR_ARCHITECTURE to ARM64: install.ps1 then stops before it downloads anything ("no build for Windows on
 ARM64"), which is how the Defender check of ci.yml runs the line without installing.
@@ -41,7 +43,8 @@ INSTALLS = (
 RUNS_THE_LINE = ("install.ps1", "| iex", "invoke-expression")
 ARM64 = re.compile(r"^\s*PROCESSOR_ARCHITECTURE:\s*['\"]?ARM64['\"]?\s*(#.*)?$", re.MULTILINE)
 JOB = re.compile(r"^  ([A-Za-z0-9_-]+):\s*(#.*)?$")
-RUNS_ON = re.compile(r"^    runs-on:\s*(.+?)\s*(#.*)?$", re.MULTILINE)
+RUNS_ON = re.compile(r"^    runs-on:\s*(.*?)\s*(#.*)?$", re.MULTILINE)
+HOSTED = re.compile(r"^(windows|ubuntu|macos)-[0-9a-z.-]+$")
 
 
 def jobs(text: str) -> dict[str, str]:
@@ -71,7 +74,7 @@ def problems(path: Path) -> list[str]:
     out = []
     for name, body in jobs(path.read_text(encoding="utf-8")).items():
         runs_on = RUNS_ON.search(body)
-        if not runs_on or "self-hosted" not in runs_on.group(1):
+        if runs_on and HOSTED.match(runs_on.group(1).strip("'\"")):
             continue
         lower = body.lower()
         installs = [m for m in INSTALLS if m in lower]

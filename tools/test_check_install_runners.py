@@ -55,6 +55,17 @@ class CheckInstallRunnersTest(unittest.TestCase):
             "      - uses: ./.github/actions/installer-verify\n"
             "      - run: irm https://x/install.ps1 | iex\n"), [])
 
+    def test_a_runner_that_is_not_plainly_github_hosted_counts_as_self_hosted(self) -> None:
+        # A list over several lines and an expression may both reach the self-hosted runner.
+        for runs_on in ("\n      - self-hosted\n      - windows", " ${{ matrix.os }}", " [windows-latest, self-hosted]"):
+            with self.subTest(runs_on=runs_on):
+                found = self.problems(
+                    "  check:\n"
+                    f"    runs-on:{runs_on}\n"
+                    "    steps:\n"
+                    "      - uses: ./.github/actions/installer-verify\n")
+                self.assertEqual(len(found), 1, found)
+
     def test_the_line_needs_the_arm64_stop_on_the_self_hosted_runner(self) -> None:
         job = ("  defender:\n"
                "    runs-on: [self-hosted, windows]\n"
