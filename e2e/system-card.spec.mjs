@@ -33,20 +33,24 @@ test('the badges turn green once their check passed', async ({ page }) => {
   await expect(badge(page, 'Backends')).toHaveClass(/badge-ok/);
 });
 
-test('a badge is not green before or without its check', async ({ page }) => {
-  // /health and /events never answer: both checks are still running.
-  await page.route('**/health', () => {});
-  await page.route('**/events', () => {});
-  await page.goto(`http://127.0.0.1:${server.port}/`);
-  await expect(badge(page, 'SSE')).toHaveClass(/badge-idle/);
-  await expect(badge(page, 'Backends')).toHaveClass(/badge-idle/);
-  await expect(card(page).locator('.badge-ok')).toHaveCount(0);
-  const result = await new AxeBuilder({ page })
-    .include('.card')
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-    .analyze();
-  expect(result.violations.map((v) => v.id)).toEqual([]);
-});
+for (const colorScheme of ['light', 'dark']) {
+  test(`a badge is not green before or without its check (${colorScheme})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme });
+    // /health and /events never answer: both checks are still running.
+    await page.route('**/health', () => {});
+    await page.route('**/events', () => {});
+    await page.goto(`http://127.0.0.1:${server.port}/`);
+    await expect(badge(page, 'SSE')).toHaveClass(/badge-idle/);
+    await expect(badge(page, 'Backends')).toHaveClass(/badge-idle/);
+    await expect(card(page).locator('.badge-ok')).toHaveCount(0);
+    // The neutral badge keeps its contrast in both modes.
+    const result = await new AxeBuilder({ page })
+      .include('.card')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze();
+    expect(result.violations.map((v) => v.id)).toEqual([]);
+  });
+}
 
 test('a failed check turns its badge red', async ({ page }) => {
   await page.route('**/health', (route) => route.abort());
