@@ -83,12 +83,8 @@
   <div class="ask-row">
     <input id="ask-model" data-i18n-aria-label="model" list="ask-model-presets"
            data-i18n-placeholder="model_placeholder">
-    <datalist id="ask-model-presets">
-      <option value="gpt-4o-mini">
-      <option value="claude-3-5-haiku-20241022">
-      <option value="gemini-2.5-flash">
-      <option value="llama3.1:8b-q5_K_M">
-    </datalist>
+    <!-- Filled from GET /models on the first focus of the field (app.js). -->
+    <datalist id="ask-model-presets"></datalist>
     <button class="btn btn-teal" id="ask-send" data-on-click="sendAsk" data-i18n="send"></button>
     <button class="btn btn-muted" id="ask-stop" data-on-click="stopAsk" disabled data-i18n="stop"></button>
   </div>

@@ -109,6 +109,23 @@ fetch('/health')
     document.getElementById('backends-status').textContent = t('unreachable');
   });
 
+// The suggestions of the model field: the models the server knows (GET /models), asked for on the first focus of the
+// field, so that opening the dashboard does not make the server list the providers. Without an answer the field stays
+// free text.
+document.getElementById('ask-model').addEventListener('focus', () => {
+  fetch('/models')
+    .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+    .then((data) => {
+      const list = document.getElementById('ask-model-presets');
+      list.replaceChildren(...(data.models || []).map((m) => {
+        const option = document.createElement('option');
+        option.value = m.id;
+        return option;
+      }));
+    })
+    .catch(() => {});
+}, { once: true });
+
 // The Ask panel: POST /ask/stream, its SSE lines parsed by hand. EventSource cannot send a POST body, so fetch() and
 // response.body.getReader(): the same "data: <json>\n\n" form as ai.nvim's providers/sse.lua, here in JS.
 let askAbort = null;
