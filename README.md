@@ -198,6 +198,9 @@ English when it names neither, as the other apps of the family. Its texts live i
 
 ## Running
 
+ai-desktop starts no other program; how it is started and why its console stays visible:
+[docs/PROCESSES.md](docs/PROCESSES.md).
+
 ```bash
 ./build/ai-desktop      # build/ai-desktop.exe on Windows
 ```
