@@ -5,7 +5,9 @@
 #             tests (ctest) and the API tests (Node), which start the real binary on a free port.
 #   hygiene   no control or invisible character in a tracked text file (tools/check-control-chars.py), the
 #             release-kit actions of the other workflows are the pinned commit (tools/check-release-kit-pin.py),
-#             and PSScriptAnalyzer finds nothing of severity Error or Warning in scripts/ and installer/.
+#             and PSScriptAnalyzer finds nothing of severity Error or Warning in scripts/ and installer/; no job on
+#             this runner installs the app (tools/check-install-runners.py).
+#   defender  Microsoft Defender of this machine does not report the install line of the README (see the job).
 #
 # Every job runs on the self-hosted Windows runner of the author, by choice. That is why there is no Linux job;
 # scripts/setup.sh stays for people who build from source there. There is no pull_request trigger: a pull request
@@ -105,6 +107,9 @@ jobs:
       # The release-kit actions of rolling.yml and release.yml are the commit of tools/release-kit.pin, and
       # that tag still names it (git ls-remote of appkit).
       - run: python tools/check-release-kit-pin.py
+      # This runner is the author's machine, with ai-desktop installed for real: a job here that runs the setup or the
+      # install script installs over that copy, and its uninstall takes it away (rolling.yml did, until 2026-11-16).
+      - run: python tools/check-install-runners.py
       # The PowerShell scripts (setup, build-install, uninstall, the installer check) against PSScriptAnalyzer,
       # one pinned version so the rule set does not move under the scripts. Suppressions are local to a function
       # or a script and carry their reason; there is no settings file that hides a rule for everything.
@@ -129,3 +134,46 @@ jobs:
           }
           $found | Format-Table -AutoSize | Out-String | Write-Output
           if ($found) { exit 1 }
+
+  # Microsoft Defender reported the install line, wrapped in a new powershell.exe with the execution policy switched
+  # off, as Trojan:Win32/Commando.B!ml on 2026-11-14: a verdict of its cloud model, which changes with its signatures.
+  # The GitHub-hosted VMs run without real-time protection, so only this machine can tell whether the line as the README
+  # gives it is reported (again). The line is handed to Windows PowerShell 5.1 on its standard input, as a person types
+  # it into a session, and install.ps1 stops before it downloads anything: PROCESSOR_ARCHITECTURE=ARM64 makes it say
+  # "no build for Windows on ARM64". Nothing is installed here (tools/check-install-runners.py holds every job on this
+  # runner to that). Red when Defender reports the line; the protection history of this machine then has the entry.
+  defender:
+    runs-on: [self-hosted, windows]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (node24)
+        with:
+          persist-credentials: false
+      - name: Microsoft Defender does not report the install line of the README
+        shell: pwsh
+        env:
+          PROCESSOR_ARCHITECTURE: ARM64
+          LINE: irm https://github.com/${{ github.repository }}/releases/download/latest/install.ps1 | iex
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Select-String -LiteralPath README.md -SimpleMatch -Pattern $env:LINE -Quiet)) { throw "README.md does not name the line: $env:LINE" }
+          $status = Get-MpComputerStatus
+          if (-not $status.AMServiceEnabled -or -not $status.RealTimeProtectionEnabled) {
+            Write-Host "::warning title=Defender not checked::Microsoft Defender does not run on this machine (AMServiceEnabled=$($status.AMServiceEnabled) RealTimeProtectionEnabled=$($status.RealTimeProtectionEnabled))"
+            exit 0
+          }
+          $since = [DateTime]::UtcNow.Ticks
+          # Typed into a session: the line arrives on the standard input of Windows PowerShell 5.1, so no command line holds it.
+          $ps = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
+          $out = ($env:LINE | & $ps -NoProfile -NonInteractive -Command - 2>&1 | Out-String)
+          Write-Host $out.TrimEnd()
+          if ($out -notmatch 'no build for Windows on ARM64') { throw 'install.ps1 did not run as far as its architecture check (see above)' }
+          Start-Sleep -Seconds 20   # Defender writes its entry after the verdict of its cloud model
+          $found = @(Get-MpThreatDetection -ErrorAction SilentlyContinue | Where-Object {
+              $_.InitialDetectionTime.ToUniversalTime().Ticks -ge $since -and ($_.Resources -join ' ') -match 'install\.ps1|releases/download|powershell'
+            })
+          foreach ($d in $found) { Write-Host "::error title=Defender detection::$($d.InitialDetectionTime) threat $($d.ThreatID): $($d.Resources -join ' ')" }
+          if ($found.Count -gt 0) { throw "Microsoft Defender reported the install line ($($found.Count) detection(s)); see the protection history" }
+          Write-Host "Microsoft Defender (signatures $($status.AntivirusSignatureVersion)) reported nothing about the install line"
+          # The script's own failure ("no build for Windows on ARM64") left a non-zero exit code of powershell.exe.
+          exit 0
