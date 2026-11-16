@@ -7,6 +7,9 @@ import { startServer } from '../tests/helpers/server.mjs';
 // buttons, since a hover or a focus colour of the palette must keep its contrast too.
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'];
 
+// The texts below are the German ones: the browser asks for German.
+test.use({ locale: 'de-DE' });
+
 let server;
 test.beforeAll(async () => {
   server = await startServer();

@@ -3,6 +3,9 @@ import { startServer } from '../tests/helpers/server.mjs';
 
 // The x in the choice of the provider (the usage panel): it shows only while a provider is chosen, a click or Delete
 // takes the choice away, the focus goes back to the choice, and the usage is asked again without a provider.
+// The texts below are the German ones: the browser asks for German.
+test.use({ locale: 'de-DE' });
+
 let server;
 test.beforeAll(async () => {
   server = await startServer();

@@ -1,8 +1,9 @@
 // The dashboard's script, served as its own file: the page's Content-Security-Policy allows scripts of this origin
 // only, no inline script and no inline handler, and Trusted Types refuse any string turned into HTML.
-// The name the page shows for the program: "KI" in German, "ai" in every other language (the program itself is
-// ai-desktop; that name stays in the file names, the installer and the repository).
-const APP_NAME = (navigator.language || '').toLowerCase().startsWith('de') ? 'KI' : 'ai';
+// The texts and the language come from i18n.js (loaded first): t(key), LANG, LOCALE.
+// The name the page shows for the program: "KI" in German, "ai" in English (the program itself is ai-desktop;
+// that name stays in the file names, the installer and the repository).
+const APP_NAME = t('app_name');
 document.title = APP_NAME + ' Dashboard';
 document.getElementById('app-title').textContent = '▸ ' + APP_NAME + ' Dashboard';
 // The mark of the app (rule APP-11) is the favicon: the icon generator rewrites only that one inline copy.
@@ -18,7 +19,7 @@ const COLORS = {
 };
 
 function ts() {
-  return new Date().toLocaleTimeString('de-AT', { hour12: false });
+  return new Date().toLocaleTimeString(LOCALE, { hour12: false });
 }
 
 function appendLog(agent, message, color) {
@@ -59,7 +60,7 @@ function handleEvent(ev) {
     currentDecisionTs = ev.ts;
     document.getElementById('decision-text').textContent = ev.message;
     document.getElementById('decision-banner').classList.add('visible');
-    setAgent(ev.agent, '⏸ Warte auf Entscheidung...', 'waiting');
+    setAgent(ev.agent, t('waiting_decision'), 'waiting');
     appendLog('SYSTEM', '⚠ Decision Point: ' + ev.message, 'var(--bad)');
   }
 
@@ -77,11 +78,10 @@ function sendDecision(answer) {
     body: JSON.stringify({ id: currentDecisionTs, answer })
   }).catch(console.error);
   document.getElementById('decision-banner').classList.remove('visible');
-  appendLog('human', 'Entscheidung gesendet: ' + answer, 'var(--ok)');
+  appendLog('human', t('decision_sent') + answer, 'var(--ok)');
 }
 
-// Backend-Status (ersetzt die frühere fest eingetragene "Model:
-// simulation"-Zeile, die seit /ask/-stream echt sind irreführend war).
+// The state of the backends (it replaced a fixed "Model: simulation" line, misleading since /ask/stream is real).
 fetch('/health')
   .then((r) => r.json())
   .then((data) => {
@@ -99,13 +99,11 @@ fetch('/health')
     });
   })
   .catch(() => {
-    document.getElementById('backends-status').textContent = 'nicht erreichbar';
+    document.getElementById('backends-status').textContent = t('unreachable');
   });
 
-// Ask/Chat-Testpanel: POST /ask/stream + manuelles SSE-Line-Parsing.
-// EventSource kann keinen POST-Body schicken, daher fetch() +
-// response.body.getReader() -- gleiches "data: <json>\n\n"-Format wie
-// ai.nvim's providers/sse.lua, nur hier in JS statt Lua nachgebaut.
+// The Ask panel: POST /ask/stream, its SSE lines parsed by hand. EventSource cannot send a POST body, so fetch() and
+// response.body.getReader(): the same "data: <json>\n\n" form as ai.nvim's providers/sse.lua, here in JS.
 let askAbort = null;
 
 function setAskBusy(busy) {
@@ -122,7 +120,7 @@ async function sendAsk() {
   const status = document.getElementById('ask-status');
 
   output.textContent = '';
-  status.textContent = 'Sende Anfrage...';
+  status.textContent = t('sending');
   status.style.color = 'var(--muted)';
   setAskBusy(true);
 
@@ -158,13 +156,13 @@ async function sendAsk() {
     });
 
     if (!res.ok || !res.body) {
-      status.textContent = 'Fehler: HTTP ' + res.status;
+      status.textContent = t('error') + 'HTTP ' + res.status;
       status.style.color = 'var(--bad)';
       setAskBusy(false);
       return;
     }
 
-    status.textContent = 'Streaming...';
+    status.textContent = t('streaming');
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
@@ -194,7 +192,7 @@ async function sendAsk() {
         if (obj.error) {
           gotError = true;
           const msg = (obj.error && obj.error.message) || obj.error;
-          status.textContent = 'Fehler: ' + msg;
+          status.textContent = t('error') + msg;
           status.style.color = 'var(--bad)';
         } else if (typeof obj.delta === 'string') {
           pendingOutput += obj.delta;
@@ -204,14 +202,14 @@ async function sendAsk() {
     }
 
     if (!gotError) {
-      status.textContent = 'Fertig.';
+      status.textContent = t('done');
       status.style.color = 'var(--ok)';
     }
   } catch (err) {
     if (err.name === 'AbortError') {
-      status.textContent = 'Abgebrochen.';
+      status.textContent = t('aborted');
     } else {
-      status.textContent = 'Fehler: ' + err.message;
+      status.textContent = t('error') + err.message;
       status.style.color = 'var(--bad)';
     }
   } finally {
@@ -226,9 +224,8 @@ function stopAsk() {
   if (askAbort) askAbort.abort();
 }
 
-// Nutzung: GET /usage mit Provider- und Zeitraumfilter. Provider- und
-// Modellnamen kommen aus dem Store (also aus fremden Requests) und werden
-// deshalb ausschließlich per textContent eingesetzt, nie per innerHTML.
+// Usage: GET /usage by provider and period. Provider and model names come from the store (so from foreign
+// requests) and are only ever set through textContent, never innerHTML.
 const knownProviders = new Set();
 const RANGE_MS = { '24h': 24 * 3600e3, '7d': 7 * 24 * 3600e3, '30d': 30 * 24 * 3600e3 };
 
@@ -237,12 +234,12 @@ function isoSeconds(date) {
 }
 
 function fmtInt(n) {
-  return Number(n || 0).toLocaleString('de-AT');
+  return Number(n || 0).toLocaleString(LOCALE);
 }
 
 function fmtCost(group) {
   if (group.cost_usd === null || group.cost_usd === undefined) return '—';
-  return Number(group.cost_usd).toLocaleString('de-AT', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  return Number(group.cost_usd).toLocaleString(LOCALE, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 }
 
 function cell(row, text, numeric) {
@@ -268,7 +265,7 @@ function renderProviderSelect(byProvider) {
   syncProviderClear();
 }
 
-// Das x zeigt sich nur bei einer Wahl; das Feld bekommt dann Platz dafuer.
+// The x shows only while something is chosen; the field then makes room for it.
 function syncProviderClear() {
   const select = document.getElementById('usage-provider');
   const chosen = select.value !== '';
@@ -281,7 +278,7 @@ function providerChanged() {
   loadUsage();
 }
 
-// Ein Klick auf das x (oder Entf/Backspace im Feld) nimmt die Wahl zurueck; der Fokus geht ins Feld, das x ist weg.
+// A click on the x (or Delete/Backspace in the field) takes the choice back; the focus goes to the field.
 function clearProvider() {
   const select = document.getElementById('usage-provider');
   select.value = '';
@@ -311,7 +308,7 @@ async function loadUsage() {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     data = await res.json();
   } catch (err) {
-    status.textContent = 'Nutzung nicht ladbar: ' + err.message;
+    status.textContent = t('usage_failed') + err.message;
     status.style.color = 'var(--bad)';
     return;
   }
@@ -320,12 +317,12 @@ async function loadUsage() {
   const totals = data.totals || {};
   document.getElementById('usage-requests').textContent = fmtInt(totals.requests);
   document.getElementById('usage-requests-sub').textContent =
-    fmtInt(totals.ok) + ' ok · ' + fmtInt(totals.failed) + ' fehlgeschlagen';
+    fmtInt(totals.ok) + ' ok · ' + fmtInt(totals.failed) + ' ' + t('failed');
   document.getElementById('usage-prompt-tokens').textContent = fmtInt(totals.prompt_tokens);
   document.getElementById('usage-completion-tokens').textContent = fmtInt(totals.completion_tokens);
   document.getElementById('usage-cost').textContent = fmtCost(totals);
   document.getElementById('usage-cost-sub').textContent =
-    totals.unpriced ? fmtInt(totals.unpriced) + ' Ereignis(se) ohne Preis' : '';
+    totals.unpriced ? fmtInt(totals.unpriced) + ' ' + t('unpriced') : '';
 
   renderProviderSelect(data.by_provider);
 
@@ -334,7 +331,7 @@ async function loadUsage() {
   const providers = Object.keys(data.by_provider || {}).sort();
   if (providers.length === 0) {
     const row = document.createElement('tr');
-    cell(row, 'Keine Ereignisse im gewählten Zeitraum.', false).colSpan = 5;
+    cell(row, t('no_events'), false).colSpan = 5;
     tbody.appendChild(row);
   }
   providers.forEach((p) => {
@@ -355,27 +352,27 @@ async function loadUsage() {
     line.className = 'usage-event';
     const ts = document.createElement('span');
     ts.className = 'log-ts';
-    ts.textContent = new Date(ev.ts).toLocaleString('de-AT', { hour12: false });
+    ts.textContent = new Date(ev.ts).toLocaleString(LOCALE, { hour12: false });
     const state = document.createElement('span');
     state.className = ev.ok ? 'usage-ok' : 'usage-err';
-    state.textContent = ev.ok ? '✓' : '✗ ' + (ev.error_kind || 'fehler');
+    state.textContent = ev.ok ? '✓' : '✗ ' + (ev.error_kind || t('error_short'));
     const what = document.createElement('span');
     what.className = 'log-msg';
     what.textContent =
-      ev.provider + ' · ' + (ev.model || '(Standard)') + (ev.stream ? ' · stream' : '') +
-      ' · ' + fmtInt(ev.prompt_tokens) + '/' + fmtInt(ev.completion_tokens) + ' Tokens · ' +
+      ev.provider + ' · ' + (ev.model || t('default_model')) + (ev.stream ? ' · stream' : '') +
+      ' · ' + fmtInt(ev.prompt_tokens) + '/' + fmtInt(ev.completion_tokens) + ' ' + t('tokens') + ' · ' +
       fmtInt(ev.duration_ms) + ' ms · ' + ev.source;
     line.appendChild(ts);
     line.appendChild(state);
     line.appendChild(what);
     list.appendChild(line);
   });
-  status.textContent = 'Nur Metadaten (usage.jsonl im Konfigurationsordner), nie Prompt- oder Antworttext.';
+  status.textContent = t('usage_note');
 }
 
 loadUsage();
 
-// SSE-Verbindung
+// The SSE connection
 const sseDot   = document.getElementById('sse-dot');
 const sseLabel = document.getElementById('sse-label');
 const sseStatus = document.getElementById('sse-status');
@@ -384,11 +381,11 @@ const sse = new EventSource('/events');
 
 sse.onopen = () => {
   sseDot.className = 'dot active';
-  sseLabel.textContent = 'Verbunden';
+  sseLabel.textContent = t('connected');
   sseLabel.style.color = 'var(--ok)';
-  sseStatus.textContent = 'Verbunden';
+  sseStatus.textContent = t('connected');
   sseStatus.style.color = 'var(--ok)';
-  appendLog('SYSTEM', 'Dashboard verbunden mit ' + APP_NAME, 'var(--accent)');
+  appendLog('SYSTEM', t('dashboard_connected') + APP_NAME, 'var(--accent)');
 };
 
 sse.onmessage = (e) => {
@@ -397,9 +394,9 @@ sse.onmessage = (e) => {
 
 sse.onerror = () => {
   sseDot.className = 'dot';
-  sseLabel.textContent = 'Getrennt – reconnecting...';
+  sseLabel.textContent = t('disconnected_retry');
   sseLabel.style.color = 'var(--bad)';
-  sseStatus.textContent = 'Getrennt';
+  sseStatus.textContent = t('disconnected');
   sseStatus.style.color = 'var(--bad)';
 };
 

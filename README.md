@@ -190,6 +190,11 @@ anywhere else. `e2e/` checks the page with axe in light and dark against the bui
 cd e2e && pnpm install && pnpm test
 ```
 
+The page speaks English or German: the first language of the browser that is one of the two (`Accept-Language`),
+English when it names neither, as the other apps of the family. Its texts live in one place, `dashboard/i18n.js`;
+`index.html` carries keys only (`data-i18n`, `data-i18n-placeholder`, `data-i18n-aria-label`, `data-i18n-title`), and
+`e2e/i18n.spec.mjs` checks both languages and the fallback.
+
 ## Running
 
 ```bash

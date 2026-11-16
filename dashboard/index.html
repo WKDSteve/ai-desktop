@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -19,60 +19,54 @@
   </div>
   <div class="row">
     <span id="sse-dot" class="dot"></span>
-    <span id="sse-label" class="small muted">
-      Verbinde...
-    </span>
+    <span id="sse-label" class="small muted" data-i18n="connecting"></span>
   </div>
 </header>
 
 <main>
 <!-- Decision Banner (Hard Stop) -->
 <div id="decision-banner">
-  <h2>⚠ Entscheidung erforderlich — Agent wartet</h2>
+  <h2 data-i18n="decision_title"></h2>
   <div id="decision-text"></div>
   <div class="actions">
-    <button class="btn btn-green" data-on-click="sendDecision" data-arg="allow">
-      ✓ Erlauben
-    </button>
-    <button class="btn btn-red" data-on-click="sendDecision" data-arg="deny">
-      ✗ Ablehnen
-    </button>
+    <button class="btn btn-green" data-on-click="sendDecision" data-arg="allow" data-i18n="allow"></button>
+    <button class="btn btn-red" data-on-click="sendDecision" data-arg="deny" data-i18n="deny"></button>
   </div>
 </div>
 
 <div class="grid">
-  <!-- Agenten-Status -->
+  <!-- Agents -->
   <div class="card">
-    <h2>Agenten</h2>
+    <h2 data-i18n="agents"></h2>
     <div class="agent">
       <div class="dot" id="dot-Planer"></div>
       <div>
-        <div class="agent-name">Planer</div>
+        <div class="agent-name" data-i18n="agent_planner"></div>
         <div class="agent-msg" id="msg-Planer">—</div>
       </div>
     </div>
     <div class="agent">
       <div class="dot" id="dot-Executor"></div>
       <div>
-        <div class="agent-name">Executor</div>
+        <div class="agent-name" data-i18n="agent_executor"></div>
         <div class="agent-msg" id="msg-Executor">—</div>
       </div>
     </div>
     <div class="agent">
       <div class="dot" id="dot-human"></div>
       <div>
-        <div class="agent-name">Human</div>
-        <div class="agent-msg" id="msg-human">Bereit</div>
+        <div class="agent-name" data-i18n="agent_human"></div>
+        <div class="agent-msg" id="msg-human" data-i18n="ready"></div>
       </div>
     </div>
   </div>
 
-  <!-- System-Status -->
+  <!-- System -->
   <div class="card">
     <h2>System</h2>
     <div class="status-row">
       <span class="badge badge-ok">SSE</span>
-      <span id="sse-status" class="muted">Verbinde...</span>
+      <span id="sse-status" class="muted" data-i18n="connecting"></span>
     </div>
     <div class="status-row">
       <span class="badge badge-ok">Podman</span>
@@ -80,7 +74,7 @@
     </div>
     <div class="status-row">
       <span class="badge badge-ok">Backends</span>
-      <span id="backends-status" class="muted">lädt...</span>
+      <span id="backends-status" class="muted" data-i18n="loading"></span>
     </div>
     <div class="status-row">
       <span class="badge badge-ok">GPU</span>
@@ -89,71 +83,66 @@
   </div>
 </div>
 
-<!-- Ask/Chat-Testpanel: manuelles Testen von /ask/stream gegen jedes
-     ModelRouter-Backend, ohne curl oder ai.nvim zu brauchen. -->
+<!-- Ask panel: try /ask/stream against every ModelRouter backend by hand, without curl or ai.nvim. -->
 <div class="card">
   <h2>Ask</h2>
-  <textarea id="ask-prompt" aria-label="Prompt" placeholder="Prompt eingeben..."></textarea>
+  <textarea id="ask-prompt" aria-label="Prompt" data-i18n-placeholder="prompt_placeholder"></textarea>
   <div class="ask-row">
-    <input id="ask-model" aria-label="Modell" list="ask-model-presets"
-           placeholder="Modell (leer = Ollama-Standard)">
+    <input id="ask-model" data-i18n-aria-label="model" list="ask-model-presets"
+           data-i18n-placeholder="model_placeholder">
     <datalist id="ask-model-presets">
       <option value="gpt-4o-mini">
       <option value="claude-3-5-haiku-20241022">
       <option value="gemini-2.5-flash">
       <option value="llama3.1:8b-q5_K_M">
     </datalist>
-    <button class="btn btn-teal" id="ask-send" data-on-click="sendAsk">▸ Senden</button>
-    <button class="btn btn-muted" id="ask-stop" data-on-click="stopAsk" disabled>■ Stopp</button>
+    <button class="btn btn-teal" id="ask-send" data-on-click="sendAsk" data-i18n="send"></button>
+    <button class="btn btn-muted" id="ask-stop" data-on-click="stopAsk" disabled data-i18n="stop"></button>
   </div>
-  <div id="ask-hint">
-    Modellname-Präfix entscheidet das Backend: <code>gpt-</code>/<code>o1-</code>/<code>o3-</code>
-    → OpenAI, <code>claude-</code> → Anthropic, <code>gemini-</code> → Gemini,
-    sonst/leer → lokales Ollama.
-  </div>
+  <div id="ask-hint"><span data-i18n="ask_hint_before"></span><code>gpt-</code>/<code>o1-</code>/<code>o3-</code>
+    → OpenAI, <code>claude-</code> → Anthropic, <code>gemini-</code> → Gemini<span data-i18n="ask_hint_after"></span></div>
   <div id="ask-status"></div>
   <div id="ask-output"></div>
 </div>
 
-<!-- Nutzung: GET /usage (Metadaten aus usage.jsonl, nie Prompt- oder
-     Antworttext), gefiltert nach Provider und Zeitraum. -->
+<!-- Usage: GET /usage (metadata from usage.jsonl, never the text of a prompt or an answer), by provider and period. -->
 <div class="card">
-  <h2>Nutzung</h2>
+  <h2 data-i18n="usage"></h2>
   <div class="usage-filters">
-    <!-- Ein x im Feld nimmt die Wahl mit einem Klick zurueck (wie die Auswahllisten der anderen Desktop-Apps,
-         appkit-ui ClearSelect); ohne Wahl gibt es kein x. -->
+    <!-- An x in the field takes the choice back in one click (as the choices of the other desktop apps,
+         appkit-ui ClearSelect); without a choice there is no x. -->
     <span class="clear-select">
       <select id="usage-provider" aria-label="Provider" data-on-change="providerChanged">
-        <option value="">Alle Provider</option>
+        <option value="" data-i18n="all_providers"></option>
       </select>
-      <button type="button" id="usage-provider-clear" class="clear" aria-label="Auswahl Provider entfernen"
-              title="Auswahl Provider entfernen" hidden
+      <button type="button" id="usage-provider-clear" class="clear" data-i18n-aria-label="clear_provider"
+              data-i18n-title="clear_provider" hidden
               data-keep-focus data-on-click="clearProvider"><span aria-hidden="true">×</span></button>
     </span>
-    <select id="usage-range" aria-label="Zeitraum" data-on-change="loadUsage">
-      <option value="24h">Letzte 24 h</option>
-      <option value="7d" selected>Letzte 7 Tage</option>
-      <option value="30d">Letzte 30 Tage</option>
-      <option value="all">Alles</option>
+    <select id="usage-range" data-i18n-aria-label="range" data-on-change="loadUsage">
+      <option value="24h" data-i18n="range_24h"></option>
+      <option value="7d" selected data-i18n="range_7d"></option>
+      <option value="30d" data-i18n="range_30d"></option>
+      <option value="all" data-i18n="range_all"></option>
     </select>
-    <button class="btn btn-muted" data-on-click="loadUsage">↻ Aktualisieren</button>
+    <button class="btn btn-muted" data-on-click="loadUsage" data-i18n="refresh"></button>
   </div>
   <div class="usage-kpis">
     <div class="kpi">
-      <div class="kpi-label">Anfragen</div>
+      <div class="kpi-label" data-i18n="requests"></div>
       <div class="kpi-value" id="usage-requests">—</div>
       <div class="kpi-sub" id="usage-requests-sub"></div>
     </div>
     <div class="kpi">
-      <div class="kpi-label">Prompt-Tokens</div>
+      <div class="kpi-label" data-i18n="prompt_tokens"></div>
       <div class="kpi-value" id="usage-prompt-tokens">—</div>
     </div>
     <div class="kpi">
-      <div class="kpi-label">Antwort-Tokens</div>
+      <div class="kpi-label" data-i18n="completion_tokens"></div>
       <div class="kpi-value" id="usage-completion-tokens">—</div>
     </div>
     <div class="kpi">
-      <div class="kpi-label">Kosten (USD)</div>
+      <div class="kpi-label" data-i18n="cost_usd"></div>
       <div class="kpi-value" id="usage-cost">—</div>
       <div class="kpi-sub" id="usage-cost-sub"></div>
     </div>
@@ -162,26 +151,27 @@
     <thead>
       <tr>
         <th>Provider</th>
-        <th class="num">Anfragen</th>
-        <th class="num">Prompt-Tokens</th>
-        <th class="num">Antwort-Tokens</th>
-        <th class="num">Kosten (USD)</th>
+        <th class="num" data-i18n="requests"></th>
+        <th class="num" data-i18n="prompt_tokens"></th>
+        <th class="num" data-i18n="completion_tokens"></th>
+        <th class="num" data-i18n="cost_usd"></th>
       </tr>
     </thead>
     <tbody id="usage-by-provider"></tbody>
   </table>
-  <h2>Letzte Ereignisse</h2>
+  <h2 data-i18n="recent_events"></h2>
   <div id="usage-events"></div>
   <div id="usage-status"></div>
 </div>
 
 <!-- Live-Log -->
 <div class="card">
-  <h2>Live-Log</h2>
+  <h2 data-i18n="live_log"></h2>
   <div id="log"></div>
 </div>
 </main>
 
+<script src="i18n.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

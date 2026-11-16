@@ -174,6 +174,11 @@ Systems:
 cd e2e && pnpm install && pnpm test
 ```
 
+Die Seite spricht Englisch oder Deutsch: die erste Sprache des Browsers, die eine der beiden ist (`Accept-Language`),
+Englisch, wenn er keine davon nennt, wie die übrigen Apps der Familie. Ihre Texte liegen an einer Stelle,
+`dashboard/i18n.js`; `index.html` trägt nur Schlüssel (`data-i18n`, `data-i18n-placeholder`, `data-i18n-aria-label`,
+`data-i18n-title`), und `e2e/i18n.spec.mjs` prüft beide Sprachen und den Rückfall.
+
 ## Starten
 
 ```bash
