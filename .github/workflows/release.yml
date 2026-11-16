@@ -26,16 +26,19 @@
 # `gh workflow run release.yml`) is a dry run: it builds and verifies the installer from the chosen branch and
 # uploads it as a workflow artifact, and never creates a release.
 #
-# What "verifies" means: see .github/actions/installer-build (build, install silently through the install
-# script of the release-kit, start, check /health and the dashboard, uninstall, check the user PATH).
+# What "verifies" means: see .github/actions/installer-verify (install silently through the install script of
+# the release-kit, start, check /health and the dashboard, update over the running server, uninstall, check the
+# user PATH), on a throw-away GitHub-hosted VM.
 #
 # The draft, its files and the checksums are made by the action `publish` of appkit's release-kit, pinned by
 # the commit of tools/release-kit.pin (tools/check-release-kit-pin.py checks that they agree). The install
 # script it attaches is stamped for this tag: it installs exactly this release, without a browser download
 # in the way of SmartScreen. The installer is not code-signed; the release notes say so.
 #
-# Runs on the self-hosted Windows runner of the author by choice: the jobs need the MSYS2 toolchain and the
-# installer tooling set up there. The release-kit actions run there by Git Bash (appkit v0.23.1 and later);
+# Builds and publishes on the self-hosted Windows runner of the author by choice: the jobs need the MSYS2 toolchain
+# and the installer tooling set up there. `verify` installs the app, and so runs on a throw-away GitHub-hosted VM:
+# on the author's machine the silent setup would meet the ai-desktop installed there (same AppId, same port).
+# The release-kit actions run on the self-hosted runner by Git Bash (appkit v0.23.1 and later);
 # appkit is cloned over plain HTTPS without a token secret (anonymous once appkit is public; until then
 # Git's credential helper on the runner answers, and tools/check-release-kit-pin.py needs it the same way).
 #
@@ -139,20 +142,10 @@ jobs:
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           Write-Host "version: $version"
 
-      # The install script the installer is tried through is the one that will be stamped and attached: the
-      # release-kit at the commit of tools/release-kit.pin, cloned over plain HTTPS (no token secret; see the top).
-      - name: Fetch the pinned release-kit
-        run: |
-          commit="$(sed -n 's/^commit *= *//p' tools/release-kit.pin)"
-          rm -rf .kit
-          git clone --quiet https://github.com/WKDSteve/appkit .kit
-          git -C .kit checkout --quiet "$commit"
-
       - uses: ./.github/actions/installer-build
         id: installer
         with:
           version: ${{ steps.version.outputs.version }}
-          install-script: .kit/release-kit/scripts/install.ps1
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -161,10 +154,32 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # The installer is installed, started, updated and uninstalled through the install script of the pinned
+  # release-kit, on a throw-away VM (.github/actions/installer-verify says why not on the self-hosted runner).
+  # A dry run by hand is proven the same way.
+  verify:
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (node24)
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ai-desktop-setup
+          path: dist
+      - uses: ./.github/actions/installer-verify
+        with:
+          folder: dist
+
   # Only for a pushed tag, and the only job that may write to the repository.
   publish:
     if: github.ref_type == 'tag'
-    needs: [check, build]
+    needs: [check, build, verify]
     runs-on: [self-hosted, windows]
     timeout-minutes: 10
     permissions:

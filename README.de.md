@@ -26,7 +26,8 @@ GitHub-Adresse leitet auf dieses Repository um.
 
 Releases enthalten nur den Windows-Installer; Linux und macOS werden aus dem Quelltext gebaut. Die CI
 läuft bewusst auf dem selbst gehosteten Windows-Runner des Autors; Pull Requests werden auf von GitHub
-gehosteten Runnern geprüft ([`pr.yml`](.github/workflows/pr.yml)).
+gehosteten Runnern geprüft ([`pr.yml`](.github/workflows/pr.yml)), ebenso alles, was die App installiert
+(die Prüfung des Installers und die Install-Zeile des Rolling-Builds), auf Wegwerf-VMs.
 
 [**Neuestes Release herunterladen**](https://github.com/WKDSteve/ai-desktop/releases/latest)
 -- `ai-desktop-setup-<version>-x64.exe`, ein Windows-Installer, ohne Compiler oder

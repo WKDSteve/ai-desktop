@@ -5,7 +5,8 @@
 
 .DESCRIPTION
     Used by .github/workflows/release.yml and rolling.yml (through the action
-    .github/actions/installer-build) so that a release is only offered
+    .github/actions/installer-verify, on a throw-away VM: the setup has the
+    AppId of a real installation and must not meet one) so that a release is only offered
     after the installer itself has been proven: files in place, user PATH entry
     added (and its other entries untouched), the launcher starts the server,
     GET /health answers with a minimal PATH (so no MinGW on PATH can hide a

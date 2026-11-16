@@ -1,0 +1,46 @@
+# Prove a built Windows installer of ai-desktop, for release.yml and rolling.yml alike: installer/verify-installer.ps1
+# installs it silently through the install.ps1 of appkit's release-kit (the one a user runs, at the commit of
+# tools/release-kit.pin), starts it through the launcher with a minimal PATH, checks GET /health and the dashboard,
+# installs it again over the running server, uninstalls it and checks that the user PATH is back as it was. Only then
+# is anything offered.
+#
+# For a throw-away VM (`runs-on: windows-latest`), never the self-hosted runner that builds the installer: that is the
+# maintainer's machine. The setup has the AppId of a real installation, so there it would take over the entry in
+# Settings > Apps and the Start menu link of the ai-desktop installed on that machine, and its uninstall would remove
+# both; port 8080 may also be the running ai-desktop's own, and /health would then answer for the wrong server.
+#
+# Needs the repository checked out (verify-installer.ps1, tools/release-kit.pin).
+
+name: verify the installer
+description: Install the built ai-desktop setup through the release-kit's install.ps1, start it, check it, uninstall it.
+
+inputs:
+  folder:
+    description: The folder that holds the installer, exactly one ai-desktop-setup*.exe.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # Cloned over plain HTTPS, no token: appkit is public.
+    - name: fetch the pinned release-kit
+      shell: pwsh
+      run: |
+        $pin = Select-String -LiteralPath tools/release-kit.pin -Pattern '^commit *= *([0-9a-f]{40})\s*$' | Select-Object -First 1
+        if (-not $pin) { throw 'tools/release-kit.pin names no commit' }
+        $commit = $pin.Matches[0].Groups[1].Value
+        if (Test-Path .kit) { Remove-Item -Recurse -Force .kit }
+        git clone --quiet https://github.com/WKDSteve/appkit .kit
+        if ($LASTEXITCODE -ne 0) { throw "git clone of appkit failed ($LASTEXITCODE)" }
+        git -C .kit checkout --quiet $commit
+        if ($LASTEXITCODE -ne 0) { throw "appkit has no commit $commit ($LASTEXITCODE)" }
+
+    - name: verify the installer (install, run, update, uninstall)
+      shell: pwsh
+      env:
+        FOLDER: ${{ inputs.folder }}
+      run: |
+        $setups = @(Get-ChildItem -LiteralPath $env:FOLDER -Filter 'ai-desktop-setup*.exe' -File)
+        if ($setups.Count -ne 1) { throw "expected one ai-desktop-setup*.exe in $env:FOLDER, found $($setups.Count)" }
+        .\installer\verify-installer.ps1 -Setup $setups[0].FullName -InstallScript .kit/release-kit/scripts/install.ps1
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

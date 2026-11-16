@@ -1,5 +1,5 @@
 # The rolling build: after every green CI run on main, the Windows installer of exactly that commit is built,
-# proven (installed, started, uninstalled, see .github/actions/installer-build) and put on the pre-release
+# proven (installed, started, uninstalled, see .github/actions/installer-verify) and put on the pre-release
 # `latest`, whose files are replaced each time. It is for trying the newest state with a click, not a release:
 # no version tag, not signed. A release stays a deliberate act (release.yml, a pushed tag, a draft a person
 # opens).
@@ -11,8 +11,11 @@
 #
 # There is no install.sh and no Linux file: ai-desktop is built from source there (scripts/setup.sh).
 #
-# Runs on the self-hosted Windows runner of the author by choice: the jobs need the MSYS2 toolchain and the
-# installer tooling set up there. The release-kit actions run there by Git Bash (appkit v0.23.1 and later);
+# Builds and publishes on the self-hosted Windows runner of the author by choice: the jobs need the MSYS2 toolchain
+# and the installer tooling set up there. Whatever installs the app (`verify`, `published`) runs on a throw-away
+# GitHub-hosted VM instead: on the author's machine the silent setup would replace, and its uninstall remove, the
+# ai-desktop installed there (2026-11-14: `published` failed with exit code 5 because that one was running).
+# The release-kit actions run on the self-hosted runner by Git Bash (appkit v0.23.1 and later);
 # appkit is cloned over plain HTTPS without a token secret (anonymous once appkit is public; until then
 # Git's credential helper on the runner answers, and tools/check-release-kit-pin.py needs it the same way).
 #
@@ -76,20 +79,10 @@ jobs:
           ref: ${{ needs.prepare.outputs.sha }}
           persist-credentials: false
 
-      # The install script the installer is tried through is the one that will be stamped and attached: the
-      # release-kit at the commit of tools/release-kit.pin, cloned over plain HTTPS (no token secret; see the top).
-      - name: Fetch the pinned release-kit
-        run: |
-          commit="$(sed -n 's/^commit *= *//p' tools/release-kit.pin)"
-          rm -rf .kit
-          git clone --quiet https://github.com/WKDSteve/appkit .kit
-          git -C .kit checkout --quiet "$commit"
-
       - uses: ./.github/actions/installer-build
         id: installer
         with:
           version: 0.0.${{ github.run_number }}
-          install-script: .kit/release-kit/scripts/install.ps1
 
       - name: Name the installer
         env:
@@ -107,10 +100,32 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  # The installer is installed, started, updated and uninstalled through the install script of the pinned
+  # release-kit, on a throw-away VM (.github/actions/installer-verify says why not here). Nothing is offered before.
+  verify:
+    needs: [prepare, build]
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (node24)
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: rolling-windows
+          path: out
+      - uses: ./.github/actions/installer-verify
+        with:
+          folder: out
+
   # The file, the stamped install script and the checksums go up in one job; the words of the page move last,
   # so only then does it name this commit.
   publish:
-    needs: [prepare, build]
+    needs: [prepare, build, verify]
     runs-on: [self-hosted, windows]
     timeout-minutes: 15
     permissions:
@@ -140,37 +155,49 @@ jobs:
           windows-rolling-asset: ai-desktop-setup-x64.exe
           notes-file: .github/rolling-notes.md
 
-  # What a user does, on what was just published: the stamped install.ps1 of `latest` is fetched from GitHub
-  # the way `irm | iex` does it, with the one difference that the runner is elevated (hence -AllowElevated, which
-  # the one-liner cannot pass), and it installs for real: URL, channel, asset name, SHA256SUMS and the silent
-  # setup. The installed server must answer /health; then the setup is taken away again. The build job proved
-  # the installer with the unstamped script of the same kit; this proves the stamp and the published files.
+  # What a person does, on what was just published: the install line of the README and of the page, run as it is
+  # typed into Windows PowerShell 5.1 (`irm ... | iex`, no GitHub token, so the plain download), then the
+  # installed server must answer /health and the uninstaller must take it away. URL, channel, asset name,
+  # SHA256SUMS, the stamp and the silent setup are all the published ones. The build job's check used the
+  # unstamped script of the same kit; this proves the stamp, the published files and the line itself.
+  #
+  # On a throw-away VM: on the self-hosted runner the setup would install over the ai-desktop of the author's
+  # machine and then uninstall it. The VM is elevated, and the line takes no -AllowElevated:
+  # INSTALL_ALLOW_ELEVATED=1 says the same to install.ps1 (appkit release-kit, v0.61.0 and later).
   published:
     needs: [prepare, publish]
-    runs-on: [self-hosted, windows]
+    runs-on: windows-latest
     timeout-minutes: 15
-    steps:
-      # Windows PowerShell 5.1, the one a person has by default: the token route of install.ps1 (GH_TOKEN)
-      # went wrong there until release-kit v0.23.2 ("maximum number of redirections": `Invoke-WebRequest
-      # -MaximumRedirection 0` throws without a response in 5.1). This step is the test that it stays right.
-      - name: Install from latest, start, ask /health, uninstall
+    defaults:
+      run:
         shell: powershell
+    env:
+      LINE: irm https://github.com/${{ github.repository }}/releases/download/latest/install.ps1 | iex
+    steps:
+      - name: The page of latest names the line that is run here
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          # A 5.1 started from the runner finds no Get-FileHash without its own module path.
-          PSModulePath: C:\Program Files\WindowsPowerShell\Modules;C:\Windows\system32\WindowsPowerShell\v1.0\Modules
         run: |
           $ErrorActionPreference = 'Stop'
-          # The script comes through the API with the token of the run, and install.ps1 reads the same
-          # token from GH_TOKEN for its own downloads: this keeps the token route tested, which a private
-          # repository needs.
-          $dir0 = Join-Path $env:RUNNER_TEMP 'published'
-          New-Item -ItemType Directory -Force -Path $dir0 | Out-Null
-          gh release download latest --repo $env:REPO --pattern install.ps1 --dir $dir0 --clobber
-          if ($LASTEXITCODE -ne 0) { throw "gh release download failed ($LASTEXITCODE)" }
-          $text = Get-Content -Raw -Encoding UTF8 -Path (Join-Path $dir0 'install.ps1')
-          & ([scriptblock]::Create($text)) -AllowElevated
+          $body = gh release view latest --repo $env:REPO --json body --jq .body
+          if ($LASTEXITCODE -ne 0) { throw "gh release view failed ($LASTEXITCODE)" }
+          $lines = @(($body -join "`n") -split "`r?`n" | ForEach-Object { $_.Trim() })
+          if ($lines -cnotcontains $env:LINE) { throw "the page of latest does not name the line: $env:LINE" }
+          Write-Host "the page names: $env:LINE"
+
+      # Invoke-Expression of the line is the line typed into the session. No GH_TOKEN here: a person has none, and
+      # with one install.ps1 would take the API route. gh, without a token, cannot check the attestation;
+      # install.ps1 only notes that, and gh's exit code stays in $LASTEXITCODE, which the shell of the step would
+      # return as the step's own: the step therefore ends with its own `exit 0`.
+      - name: Install with the line as it is typed, start, ask /health, uninstall
+        id: install
+        env:
+          INSTALL_ALLOW_ELEVATED: '1'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          "STARTED_TICKS=$([DateTime]::UtcNow.Ticks)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Invoke-Expression $env:LINE
           $dir = Join-Path $env:LOCALAPPDATA 'Programs\ai-desktop'
           if (-not (Test-Path (Join-Path $dir 'app\ai-desktop.exe'))) { throw "no app\ai-desktop.exe in $dir" }
           $server = Start-Process -FilePath (Join-Path $dir 'app\ai-desktop.exe') -WorkingDirectory (Join-Path $dir 'app') -PassThru -WindowStyle Hidden
@@ -191,3 +218,27 @@ jobs:
           $deadline = [DateTime]::UtcNow.AddSeconds(60)
           while ((Test-Path (Join-Path $dir 'app')) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 500 }
           if (Test-Path (Join-Path $dir 'app')) { throw 'the uninstaller left the app directory behind' }
+          exit 0
+
+      # Microsoft Defender reported the line in its wrapped form as a trojan (2026-11-14), a verdict of its cloud
+      # model that can change. Where Defender runs on the VM, any detection since the install began turns the job
+      # red, also when the install itself failed (a detection may be why). Where it does not run, that is said.
+      - name: Microsoft Defender reported nothing
+        if: ${{ !cancelled() && steps.install.outcome != 'skipped' }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $status = $null
+          try { $status = Get-MpComputerStatus } catch { Write-Host "Get-MpComputerStatus: $_" }
+          if (-not $status -or -not $status.AMServiceEnabled -or -not $status.RealTimeProtectionEnabled) {
+            $state = if ($status) { "AMServiceEnabled=$($status.AMServiceEnabled) RealTimeProtectionEnabled=$($status.RealTimeProtectionEnabled)" } else { 'no status' }
+            Write-Host "::notice title=Defender not checked::Microsoft Defender does not run on this VM ($state): whether it reports the line is not known from this run."
+            exit 0
+          }
+          $since = [long]$env:STARTED_TICKS
+          $found = @(Get-MpThreatDetection -ErrorAction SilentlyContinue |
+            Where-Object { $_.InitialDetectionTime.ToUniversalTime().Ticks -ge $since })
+          foreach ($d in $found) {
+            Write-Host "::error title=Defender detection::$($d.InitialDetectionTime) threat $($d.ThreatID): $($d.Resources -join ' ')"
+          }
+          if ($found.Count -gt 0) { throw "Microsoft Defender reported $($found.Count) detection(s) during the install" }
+          Write-Host "Microsoft Defender runs (signatures $($status.AntivirusSignatureVersion)) and reported nothing since the install began"
