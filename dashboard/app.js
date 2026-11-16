@@ -12,7 +12,7 @@ let currentDecisionTs = null;
 
 const COLORS = {
   // Who wrote a line, not how it went: the colours of the app, never those of ok/warn/bad.
-  Planer:   'var(--secondary)',
+  Planner:  'var(--secondary)',
   Executor: 'var(--accent)',
   human:    'var(--tertiary)',
   SYSTEM:   'var(--muted)',

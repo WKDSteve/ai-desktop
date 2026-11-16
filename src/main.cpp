@@ -298,34 +298,36 @@ void use_utf8_console() {
 }
 
 // ---------------------------------------------------------------------------
-// Simulations-Agent (wird später durch echten LLM-Agent ersetzt)
+// Simulation agent (a placeholder until a real LLM agent runs). Its texts are
+// English, as the rest of the events are; the agent names are the ids of the
+// dashboard's cards (dot-<agent>, msg-<agent> in dashboard/index.html).
 // ---------------------------------------------------------------------------
 void run_simulation_agent() {
     using namespace std::chrono_literals;
 
     std::this_thread::sleep_for(1s);
-    push_event("agent_status", "Planer",
-               "ai-desktop gestartet — analysiere Projektstruktur...");
+    push_event("agent_status", "Planner",
+               "ai-desktop started — looking at the project structure...");
 
     std::this_thread::sleep_for(3s);
-    push_event("agent_status", "Planer",
-               "Projektstruktur erkannt: src/, agents/, containers/");
+    push_event("agent_status", "Planner",
+               "Project structure found: src/, agents/, containers/");
 
     std::this_thread::sleep_for(2s);
     push_event("agent_status", "Executor",
-               "Prüfe verfügbare Container-Runtime (Podman)...");
+               "Checking for a container runtime (Podman)...");
 
     std::this_thread::sleep_for(2s);
     push_event("agent_status", "Executor",
-               "Podman rootless verfügbar — bereit für Sandbox");
+               "Podman rootless available — ready for a sandbox");
 
     std::this_thread::sleep_for(2s);
-    push_event("decision_point", "Planer",
-               "Soll ich jetzt den ersten Agent-Container starten?");
+    push_event("decision_point", "Planner",
+               "Shall I start the first agent container now?");
 
     std::this_thread::sleep_for(6s);
     push_event("agent_status", "Executor",
-               "Warte auf Human-Entscheidung...");
+               "Waiting for the human's decision...");
 }
 
 // ---------------------------------------------------------------------------
