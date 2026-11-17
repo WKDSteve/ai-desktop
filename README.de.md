@@ -413,7 +413,11 @@ verschicken, baut Gemini den Pfad direkt aus dem Modellnamen
   weder fälschen noch weglassen). curl-basierte Clients (`ai.nvim`s
   `ai-desktop.lua`, reines `curl`) schicken gar keinen `Origin`-Header und sind
   davon nicht betroffen; die drei Cloud-*Backends* brauchen natürlich
-  weiterhin ihre eigenen Keys, s. o.
+  weiterhin ihre eigenen Keys, s. o. Außerdem muss jeder Request in seinem
+  `Host`-Header diesen Server nennen (`127.0.0.1`, `localhost` oder `[::1]`
+  mit seinem Port), sonst `403`: eine Seite unter eigenem Namen, der auf
+  127.0.0.1 auflöst (DNS-Rebinding), ist für den Browser same-origin und
+  schickt bei GET kein `Origin`, den angefragten Namen verbirgt sie aber nicht.
 - Aufträge der Familien-Apps (`POST /jobs`) sind die eine Route mit Anmeldung: das Kontroll-Geheimnis, bei jedem
   Start neu in `control.secret` im Konfigurationsordner, nur für die Person lesbar. Ein Auftrag steht im Dashboard
   (vorbefüllt oder laufend), ein privater Bereich (Einstellung `private_areas`) geht nur nach einem Ja an ein

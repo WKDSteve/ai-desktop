@@ -96,6 +96,20 @@ describe("server basics", () => {
     }
   });
 
+  it("rejects a foreign Host on every route (DNS rebinding), its own names pass", async () => {
+    for (const pathname of ["/", "/health", "/settings", "/usage", "/keys", "/models/custom", "/jobs"]) {
+      const res = await server.get(pathname, { Host: `rebind.example:${server.port}` });
+      assert.equal(res.status, 403, pathname);
+      assert.match(res.json.error.message, /unknown host/);
+    }
+    for (const host of ["127.0.0.1", "localhost", "[::1]"]) {
+      const res = await server.get("/settings", { Host: `${host}:${server.port}` });
+      assert.equal(res.status, 200, host);
+    }
+    const otherPort = await server.get("/settings", { Host: `127.0.0.1:${server.port + 1}` });
+    assert.equal(otherPort.status, 403);
+  });
+
   it("rejects a request body larger than 1 MiB", async () => {
     const res = await server.post("/ask", { prompt: "x".repeat(1024 * 1024 + 10) });
     assert.equal(res.status, 413);

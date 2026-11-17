@@ -150,7 +150,7 @@ well read the vault itself. The secret keeps out everything outside that boundar
 | Attacker | Attack | Defence |
 |---|---|---|
 | A web page in the person's browser | `fetch`/form `POST /jobs` to 127.0.0.1 (CSRF) | a browser always sends `Origin` on a POST (and `Sec-Fetch-*`): refused with 403 before anything else, the dashboard's own origin included. The page cannot read `control.secret`, so it has no secret; `application/json` makes a cross-origin request a preflight, which gets no CORS headers (no `Access-Control-Allow-*` anywhere). |
-| A web page through DNS rebinding | a name of its own resolved to 127.0.0.1, so the browser treats it as same-origin and sends no `Origin` on a GET | every route of the jobs checks `Host` to be `127.0.0.1`, `localhost` or `[::1]` with the port: a foreign name gets 403, so the page reads no job. |
+| A web page through DNS rebinding | a name of its own resolved to 127.0.0.1, so the browser treats it as same-origin and sends no `Origin` on a GET | every request of the server (the pre-routing handler) must name `127.0.0.1`, `localhost` or `[::1]` with the port in `Host`: a foreign name gets 403, so the page reads no job and no setting. The routes of the jobs also refuse a request without `Host`. |
 | Another machine | reach the port | the server binds `127.0.0.1` only. |
 | Another user on this machine | read the secret, send jobs | the file is readable by the person only (Windows: protected ACL with one entry; elsewhere 0600). |
 | A local program without the secret | send a job, confirm a private area, put jobs away | `401` for `POST /jobs`; run and delete want the dashboard's `Origin` or the secret. It can read jobs (`GET /jobs`), as it can read the vault. |

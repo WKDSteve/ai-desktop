@@ -555,6 +555,15 @@ int main(int argc, char** argv) {
     // A top-level navigation (loading the dashboard itself) and every
     // non-browser client send no Origin header at all, so those still pass.
     svr.set_pre_routing_handler([](const httplib::Request& req, httplib::Response& res) {
+        // DNS rebinding: a page under a name of its own that resolves to 127.0.0.1 is same-origin to the browser
+        // and sends no Origin on a GET, so it could read /settings, /usage or /keys. A browser always names the
+        // host it asked for; only this server's own names pass. A program that sends no Host at all (HTTP/1.0)
+        // is no browser and passes; the routes of the jobs want a Host even so (jobs_api.cpp).
+        const std::string host = req.get_header_value("Host");
+        if (!host.empty() && !ai_desktop::jobs_api::is_own_host(host, g_port)) {
+            send_json_error(res, 403, "unknown host");
+            return httplib::Server::HandlerResponse::Handled;
+        }
         std::string origin = req.get_header_value("Origin");
         if (!origin.empty() && !is_allowed_origin(origin)) {
             send_json_error(res, 403, "cross-origin request blocked");

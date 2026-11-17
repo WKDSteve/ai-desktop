@@ -431,7 +431,11 @@ body, Gemini builds the path directly from the model name
   cannot forge or omit that header for a genuinely cross-origin request).
   curl-based clients (`ai.nvim`'s `ai-desktop.lua`, plain `curl`) send no
   `Origin` header at all and are unaffected; the three cloud *backends*
-  obviously still need their own keys, see above.
+  obviously still need their own keys, see above. Every request must also
+  name this server in its `Host` header (`127.0.0.1`, `localhost` or
+  `[::1]` with its port), else `403`: a page under a name of its own that
+  resolves to 127.0.0.1 (DNS rebinding) is same-origin to the browser and
+  sends no `Origin` on a GET, but it cannot hide the name it asked for.
 - Jobs from the family apps (`POST /jobs`) are the one route with a credential: the control secret, a new one at
   every start in `control.secret` of the config folder, readable by the person only. A job stands in the dashboard
   (prefilled or running), a private area (setting `private_areas`) goes to a cloud model only after a yes, and the
