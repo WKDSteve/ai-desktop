@@ -266,6 +266,10 @@ The installer registers ai-desktop as installed in the family folder of appkit
 (`%LOCALAPPDATA%\appkit-family\installed\ai-desktop.json`, `APPKIT_FAMILY_DIR` moves it) and the uninstaller
 removes the entry. tasks-desktop reads both to offer handing a task to ai-desktop.
 
+Beside `hub.json` lies `control.secret` (also written after the bind, new with every start, readable by the person
+only, removed at the end): a family app sends it as `Authorization: Bearer <hex>` with `POST /jobs` to hand over a
+task, see [docs/JOBS.md](docs/JOBS.md).
+
 ## HTTP API
 
 | Endpoint | Method | Purpose |
@@ -278,6 +282,9 @@ removes the entry. tasks-desktop reads both to offer handing a task to ai-deskto
 | `/usage` | GET | Usage log: events, totals, by provider and by model (see "Usage log") |
 | `/usage/events` | POST | Records a usage event from another client (ai.nvim) |
 | `/settings` | GET/PUT | Settings and the price table `prices` for the usage view |
+| `/jobs` | POST | A family app hands over a task (control secret only, never from a web page; see [docs/JOBS.md](docs/JOBS.md)) |
+| `/jobs`, `/jobs/<id>` | GET | The jobs for the dashboard |
+| `/jobs/<id>/run`, `/jobs/<id>` | POST, DELETE | Run a job or put it away (the dashboard) |
 
 `/health`:
 
@@ -425,6 +432,10 @@ body, Gemini builds the path directly from the model name
   curl-based clients (`ai.nvim`'s `ai-desktop.lua`, plain `curl`) send no
   `Origin` header at all and are unaffected; the three cloud *backends*
   obviously still need their own keys, see above.
+- Jobs from the family apps (`POST /jobs`) are the one route with a credential: the control secret, a new one at
+  every start in `control.secret` of the config folder, readable by the person only. A job stands in the dashboard
+  (prefilled or running), a private area (setting `private_areas`) goes to a cloud model only after a yes, and the
+  setting `jobs` turns them off. Contract and threat model: [docs/JOBS.md](docs/JOBS.md).
 - `ollama_client.cpp` opens a new TCP connection to Ollama per request
   instead of reusing one -- known, deliberately deferred (would need a
   proper pooling design), see the `ai.nvim` handover.

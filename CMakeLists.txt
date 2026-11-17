@@ -21,7 +21,9 @@ target_include_directories(third_party_headers INTERFACE third_party)
 add_library(ai_desktop_core STATIC
     src/catalog_parse.cpp
     src/config.cpp
+    src/control_secret.cpp
     src/family.cpp
+    src/jobs.cpp
     src/models.cpp
     src/paths.cpp
     src/providers.cpp
@@ -31,13 +33,16 @@ add_library(ai_desktop_core STATIC
 target_include_directories(ai_desktop_core PUBLIC src)
 target_link_libraries(ai_desktop_core PUBLIC third_party_headers)
 if(WIN32)
-    target_link_libraries(ai_desktop_core PUBLIC advapi32) # Credential Manager (secrets.cpp)
+    # Credential Manager (secrets.cpp), the rights of control.secret (advapi32) and its random bytes (bcrypt)
+    target_link_libraries(ai_desktop_core PUBLIC advapi32 bcrypt)
 endif()
 
 add_executable(ai-desktop
     src/main.cpp
     src/api.cpp
     src/catalog.cpp
+    src/foreground.cpp
+    src/jobs_api.cpp
     src/ollama_client.cpp
     src/openai_client.cpp
     src/anthropic_client.cpp
@@ -62,7 +67,7 @@ target_compile_definitions(ai-desktop PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
 target_link_libraries(ai-desktop PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 
 if(WIN32)
-    target_link_libraries(ai-desktop PRIVATE ws2_32 crypt32)
+    target_link_libraries(ai-desktop PRIVATE ws2_32 crypt32 shell32 ole32) # shell32/ole32: foreground.cpp
 else()
     find_package(Threads REQUIRED)
     target_link_libraries(ai-desktop PRIVATE Threads::Threads)
@@ -77,7 +82,9 @@ if(AI_DESKTOP_BUILD_TESTS)
         tests/unit/test_main.cpp
         tests/unit/test_catalog_parse.cpp
         tests/unit/test_config.cpp
+        tests/unit/test_control_secret.cpp
         tests/unit/test_family.cpp
+        tests/unit/test_jobs.cpp
         tests/unit/test_models.cpp
         tests/unit/test_paths.cpp
         tests/unit/test_providers.cpp

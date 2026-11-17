@@ -69,6 +69,11 @@ function handleEvent(ev) {
     setAgent('human', ev.message, 'active');
     appendLog('human', ev.message);
   }
+
+  // A job came in or changed (its id is the message): a new one is selected, the shown one is read again.
+  if (ev.type === 'job') {
+    jobChanged(String(ev.message));
+  }
 }
 
 function sendDecision(answer) {
@@ -112,7 +117,11 @@ fetch('/health')
 // The suggestions of the model field: the models the server knows (GET /models), asked for on the first focus of the
 // field, so that opening the dashboard does not make the server list the providers. Without an answer the field stays
 // free text.
-document.getElementById('ask-model').addEventListener('focus', () => {
+// The model field of a job shares the list.
+let presetsAsked = false;
+function fillModelPresets() {
+  if (presetsAsked) return;
+  presetsAsked = true;
   fetch('/models')
     .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
     .then((data) => {
@@ -124,7 +133,9 @@ document.getElementById('ask-model').addEventListener('focus', () => {
       }));
     })
     .catch(() => {});
-}, { once: true });
+}
+document.getElementById('ask-model').addEventListener('focus', fillModelPresets);
+document.getElementById('job-model').addEventListener('focus', fillModelPresets);
 
 // The Ask panel: POST /ask/stream, its SSE lines parsed by hand. EventSource cannot send a POST body, so fetch() and
 // response.body.getReader(): the same "data: <json>\n\n" form as ai.nvim's providers/sse.lua, here in JS.
@@ -396,6 +407,251 @@ async function loadUsage() {
 
 loadUsage();
 
+// ---------------------------------------------------------------------------------------------------------------------
+// Jobs: tasks handed over by the apps of the family (POST /jobs). The list comes from GET /jobs, the shown job from
+// GET /jobs/<id>; its text and output are foreign text (a task file), so value and textContent only.
+// ---------------------------------------------------------------------------------------------------------------------
+const knownJobs = new Set();
+let selectedJob = null;
+let selectedJobData = null;
+let jobPoll = null;
+let defaultModel = '';
+const JOB_ID = /^[0-9a-f]{16}$/;
+
+function jobFromHash() {
+  const match = /^#job=([0-9a-f]{16})$/.exec(location.hash);
+  return match ? match[1] : null;
+}
+
+function renderJobList(jobs) {
+  const list = document.getElementById('jobs-list');
+  document.getElementById('jobs-empty').hidden = jobs.length > 0;
+  list.replaceChildren(...jobs.slice().reverse().map((job) => {
+    const item = document.createElement('li');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'job-item';
+    button.dataset.job = job.id;
+    if (job.id === selectedJob) button.setAttribute('aria-current', 'true');
+    const title = document.createElement('span');
+    title.className = 'job-title';
+    title.textContent = job.title;
+    const state = document.createElement('span');
+    state.className = 'job-state muted';
+    state.textContent = `${job.source} · ${job.kind} · ${t('status_' + job.status)}`;
+    button.append(title, state);
+    button.addEventListener('click', () => selectJob(job.id));
+    item.append(button);
+    return item;
+  }));
+}
+
+async function loadJobs() {
+  try {
+    const res = await fetch('/jobs');
+    if (!res.ok) return [];
+    const data = await res.json();
+    const jobs = data.jobs || [];
+    jobs.forEach((job) => knownJobs.add(job.id));
+    renderJobList(jobs);
+    return jobs;
+  } catch (_) {
+    return [];
+  }
+}
+
+function showJobStatus(job) {
+  const status = document.getElementById('job-status');
+  status.style.color = job.status === 'failed' ? 'var(--bad)' : job.status === 'done' ? 'var(--ok)' : 'var(--muted)';
+  status.textContent = t('job_status_' + job.status) + (job.status === 'failed' ? (job.error || '') : '');
+  const busy = job.status === 'running';
+  document.getElementById('job-run').disabled = busy;
+  document.getElementById('job-markdown').readOnly = busy;
+  const confirm = document.getElementById('job-confirm');
+  confirm.hidden = job.status !== 'needs_confirmation';
+  if (!confirm.hidden) {
+    document.getElementById('job-confirm-text').textContent =
+      t('job_private_question', { area: job.area, model: job.model || defaultModel });
+  }
+}
+
+function showJobOutput(job) {
+  const output = document.getElementById('job-output');
+  output.textContent = job.output + (job.output_truncated ? '\n' + t('job_output_truncated') : '');
+  output.scrollTop = output.scrollHeight;
+}
+
+// Reads the job again; while it runs, every 700 ms (the event queue carries no deltas).
+async function refreshJob(id, fillText) {
+  let res;
+  try {
+    res = await fetch(`/jobs/${id}`);
+  } catch (_) {
+    return;
+  }
+  if (id !== selectedJob) return;
+  if (!res.ok) {
+    selectedJob = null;
+    selectedJobData = null;
+    document.getElementById('job-detail').hidden = true;
+    return;
+  }
+  const job = await res.json();
+  selectedJobData = job;
+  document.getElementById('job-detail').hidden = false;
+  document.getElementById('job-meta').textContent =
+    t('job_meta', { task_id: job.task_id, area: job.area, source: job.source, kind: job.kind }) +
+    (job.private ? t('job_private') : '');
+  if (fillText) {
+    document.getElementById('job-markdown').value = job.markdown;
+    document.getElementById('job-model').value = job.model || '';
+  }
+  showJobStatus(job);
+  showJobOutput(job);
+  clearTimeout(jobPoll);
+  if (job.status === 'running') {
+    jobPoll = setTimeout(() => refreshJob(id, false), 700);
+  } else if (fillText === false) {
+    loadJobs();  // the run ended: its state in the list
+  }
+}
+
+function selectJob(id) {
+  if (!JOB_ID.test(id)) return;
+  selectedJob = id;
+  document.querySelectorAll('#jobs-list .job-item').forEach((el) => {
+    if (el.dataset.job === id) el.setAttribute('aria-current', 'true');
+    else el.removeAttribute('aria-current');
+  });
+  refreshJob(id, true);
+}
+
+async function jobChanged(id) {
+  if (!JOB_ID.test(id)) return;
+  const isNew = !knownJobs.has(id);
+  const jobs = await loadJobs();
+  const job = jobs.find((j) => j.id === id);
+  if (isNew && job) {
+    appendLog(job.source, t('job_received') + job.title, 'var(--accent)');
+    selectJob(id);
+  } else if (id === selectedJob) {
+    refreshJob(id, false);
+  }
+}
+
+async function postRun(confirmPrivate) {
+  const id = selectedJob;
+  if (!id) return;
+  const body = { markdown: document.getElementById('job-markdown').value };
+  const model = document.getElementById('job-model').value.trim();
+  if (model) body.model = model;
+  if (confirmPrivate) body.confirm_private = true;
+  const status = document.getElementById('job-status');
+  try {
+    const res = await fetch(`/jobs/${id}/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (data.status === 'needs_confirmation') {
+        showJobStatus({ ...selectedJobData, status: 'needs_confirmation', model: model || defaultModel });
+        document.getElementById('job-confirm-send').focus();
+        return;
+      }
+      status.textContent = t('error') + ((data.error && data.error.message) || 'HTTP ' + res.status);
+      status.style.color = 'var(--bad)';
+      return;
+    }
+  } catch (err) {
+    status.textContent = t('error') + err.message;
+    status.style.color = 'var(--bad)';
+    return;
+  }
+  refreshJob(id, false);
+}
+
+function runJob() {
+  postRun(false);
+}
+
+function confirmJob() {
+  postRun(true);
+}
+
+async function dismissJob() {
+  const id = selectedJob;
+  if (!id) return;
+  await fetch(`/jobs/${id}`, { method: 'DELETE' }).catch(() => {});
+  clearTimeout(jobPoll);
+  selectedJob = null;
+  selectedJobData = null;
+  document.getElementById('job-detail').hidden = true;
+  if (location.hash) history.replaceState(null, '', location.pathname);
+  loadJobs();
+}
+
+// The two settings of the jobs; a setting an environment variable locks cannot be changed here.
+async function loadJobSettings() {
+  try {
+    const res = await fetch('/settings');
+    const data = await res.json();
+    const s = data.settings || {};
+    defaultModel = (s.default_model && s.default_model.value) || '';
+    document.getElementById('job-model').placeholder = t('job_model_placeholder', { model: defaultModel });
+    const enabled = document.getElementById('jobs-enabled');
+    enabled.checked = s.jobs ? s.jobs.value === 'on' : true;
+    enabled.disabled = !!(s.jobs && s.jobs.locked);
+    const areas = document.getElementById('private-areas');
+    areas.value = s.private_areas ? s.private_areas.value : '';
+    areas.disabled = !!(s.private_areas && s.private_areas.locked);
+  } catch (_) {
+    // the fields keep their defaults
+  }
+}
+
+async function saveJobSettings() {
+  const status = document.getElementById('job-settings-status');
+  const patch = {};
+  const enabled = document.getElementById('jobs-enabled');
+  const areas = document.getElementById('private-areas');
+  if (!enabled.disabled) patch.jobs = enabled.checked ? 'on' : 'off';
+  if (!areas.disabled) patch.private_areas = areas.value;
+  try {
+    const res = await fetch('/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      status.textContent = t('error') + ((data.error && data.error.message) || 'HTTP ' + res.status);
+      status.style.color = 'var(--bad)';
+      return;
+    }
+    areas.value = data.settings.private_areas.value;
+    status.textContent = t('job_settings_saved');
+    status.style.color = 'var(--muted)';
+  } catch (err) {
+    status.textContent = t('error') + err.message;
+    status.style.color = 'var(--bad)';
+  }
+}
+
+loadJobSettings();
+loadJobs().then(() => {
+  const id = jobFromHash();
+  if (id) selectJob(id);
+});
+window.addEventListener('hashchange', () => {
+  const id = jobFromHash();
+  if (id) {
+    knownJobs.add(id);
+    loadJobs().then(() => selectJob(id));
+  }
+});
+
 // The SSE connection
 const sseDot   = document.getElementById('sse-dot');
 const sseLabel = document.getElementById('sse-label');
@@ -427,7 +683,10 @@ sse.onerror = () => {
 };
 
 // The controls name their action in data-on-click / data-on-change (no inline handlers under the CSP).
-const ACTIONS = { sendDecision, sendAsk, stopAsk, providerChanged, clearProvider, loadUsage };
+const ACTIONS = {
+  sendDecision, sendAsk, stopAsk, providerChanged, clearProvider, loadUsage,
+  runJob, confirmJob, dismissJob, saveJobSettings,
+};
 for (const kind of ['click', 'change']) {
   document.querySelectorAll(`[data-on-${kind}]`).forEach((el) => {
     const name = el.getAttribute(`data-on-${kind}`);

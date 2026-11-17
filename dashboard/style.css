@@ -107,6 +107,42 @@ h1 { color: var(--accent); font-size: 1.1rem;
   font-size: .82rem; line-height: 1.55;
 }
 
+/* Jobs panel: like Ask, no colour of its own (a job does not push itself forward). */
+#jobs-list { list-style: none; display: flex; flex-direction: column; gap: .3rem; margin-bottom: .6rem; }
+#jobs-list:empty { display: none; }
+.job-item {
+  width: 100%; text-align: left; display: flex; justify-content: space-between; gap: .75rem;
+  background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px;
+  padding: .45rem .6rem; font-family: inherit; font-size: .78rem; cursor: pointer;
+}
+.job-item:hover { background: var(--surface-2); }
+.job-item[aria-current="true"] { border-color: var(--accent); }
+.job-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.job-state { flex-shrink: 0; font-size: .7rem; }
+#job-meta { margin-bottom: .4rem; }
+#job-markdown {
+  width: 100%; min-height: 160px; resize: vertical;
+  background: var(--bg); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: .6rem; font-family: inherit; font-size: .8rem;
+}
+#job-model, #private-areas {
+  flex: 1; min-width: 200px;
+  background: var(--bg); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: .45rem .6rem; font-family: inherit; font-size: .78rem;
+}
+#job-confirm { margin-top: .6rem; padding: .6rem; border: 1px solid var(--warn); border-radius: 6px; }
+#job-status { font-size: .74rem; color: var(--muted); margin-top: .5rem; }
+#job-output {
+  margin-top: .5rem; background: var(--bg); border: 1px solid var(--line);
+  border-radius: 6px; padding: .75rem; max-height: 340px;
+  overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+  font-size: .82rem; line-height: 1.55;
+}
+#job-output:empty { display: none; }
+#job-settings { margin-top: .6rem; font-size: .75rem; }
+#job-settings summary { cursor: pointer; color: var(--muted); }
+#job-settings label { margin-top: .5rem; }
+
 /* Usage panel */
 .usage-filters { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap;
                  margin-bottom: .75rem; }

@@ -244,6 +244,10 @@ Der Installer meldet ai-desktop im Familienordner von appkit als installiert an
 (`%LOCALAPPDATA%\appkit-family\installed\ai-desktop.json`, `APPKIT_FAMILY_DIR` verschiebt ihn), der Uninstaller
 trägt es wieder aus. tasks-desktop liest beides, um anzubieten, eine Task an ai-desktop zu übergeben.
 
+Neben `hub.json` liegt `control.secret` (ebenfalls nach dem Binden geschrieben, bei jedem Start neu, nur für die
+Person lesbar, beim Beenden entfernt): eine App der Familie schickt es als `Authorization: Bearer <hex>` mit
+`POST /jobs`, um eine Task zu übergeben, siehe [docs/JOBS.md](docs/JOBS.md).
+
 ## HTTP-API
 
 | Endpoint | Methode | Zweck |
@@ -256,6 +260,9 @@ trägt es wieder aus. tasks-desktop liest beides, um anzubieten, eine Task an ai
 | `/usage` | GET | Nutzungsspeicher: Ereignisse, Summen, je Provider und je Modell (siehe „Nutzungsspeicher“) |
 | `/usage/events` | POST | Zeichnet ein Nutzungsereignis eines anderen Clients (ai.nvim) auf |
 | `/settings` | GET/PUT | Einstellungen und die Preistabelle `prices` für die Nutzungsansicht |
+| `/jobs` | POST | Eine App der Familie übergibt eine Task (nur mit dem Kontroll-Geheimnis, nie aus einer Webseite; siehe [docs/JOBS.md](docs/JOBS.md)) |
+| `/jobs`, `/jobs/<id>` | GET | Die Aufträge fürs Dashboard |
+| `/jobs/<id>/run`, `/jobs/<id>` | POST, DELETE | Einen Auftrag ausführen oder wegräumen (das Dashboard) |
 
 `/health`:
 
@@ -407,6 +414,10 @@ verschicken, baut Gemini den Pfad direkt aus dem Modellnamen
   `ai-desktop.lua`, reines `curl`) schicken gar keinen `Origin`-Header und sind
   davon nicht betroffen; die drei Cloud-*Backends* brauchen natürlich
   weiterhin ihre eigenen Keys, s. o.
+- Aufträge der Familien-Apps (`POST /jobs`) sind die eine Route mit Anmeldung: das Kontroll-Geheimnis, bei jedem
+  Start neu in `control.secret` im Konfigurationsordner, nur für die Person lesbar. Ein Auftrag steht im Dashboard
+  (vorbefüllt oder laufend), ein privater Bereich (Einstellung `private_areas`) geht nur nach einem Ja an ein
+  Cloud-Modell, und die Einstellung `jobs` schaltet sie ab. Vertrag und Threat-Model: [docs/JOBS.md](docs/JOBS.md).
 - `ollama_client.cpp` öffnet pro Request eine neue TCP-Verbindung zu Ollama
   statt sie wiederzuverwenden -- bekannt, bewusst zurückgestellt (bräuchte
   ein durchdachtes Pooling-Design), siehe `ai.nvim`-Handover.

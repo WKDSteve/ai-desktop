@@ -92,6 +92,10 @@ export async function startServer({ env = {}, args = [], port, configDir, bin = 
       OPENAI_API_KEY: "",
       ANTHROPIC_API_KEY: "",
       GEMINI_API_KEY: "",
+      // A job brings the dashboard to the front (opens the browser); never in a test.
+      AI_DESKTOP_JOBS_FOREGROUND: "0",
+      AI_DESKTOP_JOBS: "",
+      AI_DESKTOP_PRIVATE_AREAS: "",
       ...env,
     },
     stdio: ["ignore", "pipe", "pipe"],

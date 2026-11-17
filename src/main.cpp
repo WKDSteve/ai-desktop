@@ -23,8 +23,11 @@
 
 #include "anthropic_client.hpp"
 #include "api.hpp"
+#include "control_secret.hpp"
 #include "family.hpp"
+#include "foreground.hpp"
 #include "gemini_client.hpp"
+#include "jobs_api.hpp"
 #include "legacy.hpp"
 #include "models.hpp"
 #include "paths.hpp"
@@ -286,10 +289,17 @@ int g_port = kDefaultPort;
 std::string g_instance = ai_desktop::family::new_instance();
 std::filesystem::path g_family_dir;
 httplib::Server* g_server = nullptr;
+// The control secret of the jobs (docs/JOBS.md) and its folder; set before the server takes requests (empty: no
+// secret in force, POST /jobs answers 503), read-only afterwards.
+std::string g_control_secret;
+std::filesystem::path g_secret_dir;
 
 void leave_family() {
     if (!g_family_dir.empty()) {
         ai_desktop::family::remove_record(g_family_dir, g_instance);
+    }
+    if (!g_secret_dir.empty()) {
+        ai_desktop::control_secret::remove(g_secret_dir);
     }
 }
 
@@ -336,8 +346,32 @@ void exclusive_port(socket_t sock) {
 #endif
 }
 
+// A new control secret for this run, readable by the user only; after the bind, like hub.json, so that a second
+// start whose port is taken does not replace the secret of the server that holds it. Without it the server still
+// runs; POST /jobs then answers 503.
+void write_control_secret() {
+    // The folder of hub.json (never the old loomAI folder config.json may still use): a caller finds both together.
+    const std::filesystem::path dir = ai_desktop::family::config_dir();
+    if (dir.empty()) {
+        std::cerr << "ai-desktop: no config folder for the control secret; jobs from other apps are off\n";
+        return;
+    }
+    std::string secret = ai_desktop::control_secret::generate();
+    if (secret.empty()) {
+        std::cerr << "ai-desktop: no random source for the control secret; jobs from other apps are off\n";
+        return;
+    }
+    if (const auto error = ai_desktop::control_secret::write(dir, secret); !error.empty()) {
+        std::cerr << "ai-desktop: " << error << "; jobs from other apps are off\n";
+        return;
+    }
+    g_control_secret = std::move(secret);
+    g_secret_dir = dir;
+}
+
 void announce_to_family(httplib::Server& svr) {
     stop_on_signals(svr);
+    write_control_secret();
     ai_desktop::family::HubRecord record;
     record.port = g_port;
     record.pid = ai_desktop::family::current_pid();
@@ -471,6 +505,7 @@ int main(int argc, char** argv) {
     std::cout << "Health:    " << base << "/health\n";
     std::cout << "Ask:       POST " << base << "/ask\n";
     std::cout << "Stream:    POST " << base << "/ask/stream\n";
+    std::cout << "Jobs:      POST " << base << "/jobs (family apps, with the control secret; docs/JOBS.md)\n";
     std::cout << "Usage:     " << base << "/usage (metadata only, usage.jsonl in the config folder)\n";
     std::cout << "Ollama:    " << ai_desktop::ollama::host()
                << " (model default: " << ai_desktop::ollama::default_model() << ")\n";
@@ -531,6 +566,21 @@ int main(int argc, char** argv) {
     // Management API (models, settings, keys, custom models) for the dashboard
     // and the desktop app; the ai.nvim contract below stays as it is.
     ai_desktop::api::register_routes(svr);
+
+    // Jobs from the family apps (docs/JOBS.md); the control secret is written after the bind (announce_to_family).
+    ai_desktop::jobs_api::Hooks job_hooks;
+    job_hooks.port = g_port;
+    job_hooks.secret = &g_control_secret;
+    job_hooks.run = [](const std::string& prompt, const std::string& system, const std::string& model,
+                       const ai_desktop::jobs_api::OnDelta& on_delta) {
+        const auto started = Clock::now();
+        std::string error = route_ask_stream(prompt, system, model, default_timeout_for(model), on_delta);
+        record_usage(model, true, started, error.empty(), error_kind_for(error), 0, 0);
+        return error;
+    };
+    job_hooks.event = push_event;
+    job_hooks.show = [](const std::string& job_id) { ai_desktop::foreground::show_job(g_port, job_id); };
+    ai_desktop::jobs_api::register_routes(svr, std::move(job_hooks));
 
     // SSE-Endpoint: Browser verbindet sich hier und empfängt live Events
     svr.Get("/events", [](const httplib::Request&, httplib::Response& res) {

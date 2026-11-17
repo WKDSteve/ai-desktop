@@ -57,6 +57,34 @@ const STRINGS = {
     default_model: '(Standard)',
     tokens: 'Tokens',
     usage_note: 'Nur Metadaten (usage.jsonl im Konfigurationsordner), nie Prompt- oder Antworttext.',
+    jobs: 'Aufträge',
+    jobs_empty: 'Keine Aufträge. tasks-desktop und tasks.nvim können hier eine Task übergeben.',
+    job_text: 'Text des Auftrags',
+    job_model: 'Modell des Auftrags',
+    job_model_placeholder: 'Modell (leer = Standard: {model})',
+    run: '▸ Ausführen',
+    dismiss: 'Wegräumen',
+    job_send_anyway: 'Trotzdem an dieses Modell senden',
+    job_private_question: 'Der Bereich {area} ist privat. Das Modell {model} läuft nicht lokal: soll die Task trotzdem dorthin gehen?',
+    job_settings: 'Einstellungen der Aufträge',
+    jobs_accept: 'Aufträge von Apps der Familie annehmen',
+    private_areas: 'Private Bereiche:',
+    private_areas_placeholder: 'Bereiche, durch Komma getrennt',
+    job_settings_saved: 'Gespeichert.',
+    job_meta: '{task_id} · Bereich {area} · aus {source} · Art {kind}',
+    job_private: ' · privat',
+    job_received: 'Auftrag erhalten: ',
+    job_status_prefilled: 'Vorbefüllt: nichts läuft, bis du ausführst.',
+    job_status_needs_confirmation: 'Wartet auf deine Antwort (privater Bereich).',
+    job_status_running: 'Läuft...',
+    job_status_done: 'Fertig.',
+    job_status_failed: 'Fehlgeschlagen: ',
+    job_output_truncated: '(Ausgabe gekürzt)',
+    status_prefilled: 'vorbefüllt',
+    status_needs_confirmation: 'Rückfrage',
+    status_running: 'läuft',
+    status_done: 'fertig',
+    status_failed: 'fehlgeschlagen',
   },
   en: {
     app_name: 'ai',
@@ -112,6 +140,34 @@ const STRINGS = {
     default_model: '(default)',
     tokens: 'tokens',
     usage_note: 'Metadata only (usage.jsonl in the config folder), never the text of a prompt or an answer.',
+    jobs: 'Jobs',
+    jobs_empty: 'No jobs. tasks-desktop and tasks.nvim can hand over a task here.',
+    job_text: 'Text of the job',
+    job_model: 'Model of the job',
+    job_model_placeholder: 'Model (empty = default: {model})',
+    run: '▸ Run',
+    dismiss: 'Put away',
+    job_send_anyway: 'Send it to this model anyway',
+    job_private_question: 'The area {area} is private. The model {model} does not run locally: shall the task go there anyway?',
+    job_settings: 'Settings of the jobs',
+    jobs_accept: 'Take jobs from the apps of the family',
+    private_areas: 'Private areas:',
+    private_areas_placeholder: 'areas, separated by commas',
+    job_settings_saved: 'Saved.',
+    job_meta: '{task_id} · area {area} · from {source} · kind {kind}',
+    job_private: ' · private',
+    job_received: 'Job received: ',
+    job_status_prefilled: 'Prefilled: nothing runs until you run it.',
+    job_status_needs_confirmation: 'Waits for your answer (private area).',
+    job_status_running: 'Running...',
+    job_status_done: 'Done.',
+    job_status_failed: 'Failed: ',
+    job_output_truncated: '(output cut off)',
+    status_prefilled: 'prefilled',
+    status_needs_confirmation: 'question',
+    status_running: 'running',
+    status_done: 'done',
+    status_failed: 'failed',
   },
 };
 
@@ -128,10 +184,12 @@ const LANG = pickLanguage(navigator.languages && navigator.languages.length ? na
 // Numbers, dates and times in the form of that language.
 const LOCALE = LANG === 'de' ? 'de-AT' : 'en-GB';
 
-function t(key) {
+// t('key', { name: value }) fills {name} in the text; the values are plain text, never HTML.
+function t(key, values) {
   const text = STRINGS[LANG][key];
   if (text === undefined) throw new Error(`no text ${key}`);
-  return text;
+  if (!values) return text;
+  return text.replace(/\{(\w+)\}/g, (whole, name) => (name in values ? String(values[name]) : whole));
 }
 
 // Fill the keys of the page. Called once, before app.js reads or writes any of these elements.

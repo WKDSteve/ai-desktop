@@ -1,5 +1,6 @@
 #include "config.hpp"
 
+#include "jobs.hpp"
 #include "legacy.hpp"
 
 #include <cctype>
@@ -36,6 +37,10 @@ constexpr SettingDef kSettings[] = {
     // silently drops the beginning of a longer prompt. "0" sends none.
     {"ollama_num_ctx", "AI_DESKTOP_OLLAMA_NUM_CTX", "32768"},
     {"language", nullptr, "de"},
+    // Jobs from the other apps of the family (POST /jobs, docs/JOBS.md): "on" takes them, "off" refuses them.
+    {"jobs", "AI_DESKTOP_JOBS", "on"},
+    // Areas of the task vault whose jobs go to a local model only, or after the person said yes (comma-separated).
+    {"private_areas", "AI_DESKTOP_PRIVATE_AREAS", ""},
 };
 
 // Largest context window accepted; current models top out at about a million tokens.
@@ -290,6 +295,12 @@ Status validate(const std::string& key, std::string& value) {
                 return {400, "default_model: must not contain control characters"};
             }
         }
+    } else if (key == "jobs") {
+        if (value != "on" && value != "off") {
+            return {400, "jobs: must be one of on, off"};
+        }
+    } else if (key == "private_areas") {
+        return jobs::normalize_private_areas(value);
     } else if (key == "ollama_host") {
         if (!normalize_http_origin(value)) {
             return {400, "ollama_host: expected an http(s) address like http://127.0.0.1:11434"};
