@@ -197,3 +197,37 @@ test('a job of claude-code shows how it runs, and Stop ends it', async ({ page }
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// Answers that come after the person started typing do not overwrite what they typed (the windows job of the CI met
+// both races).
+test('the settings arriving late keep what was typed', async ({ page }) => {
+  await page.route('**/settings', async (route) => {
+    if (route.request().method() === 'GET') await new Promise((r) => setTimeout(r, 800));
+    await route.continue();
+  });
+  await page.goto(`http://127.0.0.1:${server.port}/`);
+  await page.getByText('Settings of the jobs').click();
+  const areas = page.getByRole('textbox', { name: 'Private areas:' });
+  await areas.fill('tricentis-vault,typed-early');
+  await areas.press('Tab');
+  await page.waitForTimeout(1200);
+  await expect(areas).toHaveValue('tricentis-vault,typed-early');
+  // Only the field that changed is saved: the switch of the jobs, not arrived yet, stays on.
+  expect((await server.get('/settings')).json.settings.jobs.value).toBe('on');
+  await page.unroute('**/settings');
+  await server.put('/settings', { private_areas: 'tricentis-vault' });
+});
+
+test('the shown job selected again keeps the model that was typed', async ({ page }) => {
+  const { json } = await sendJob({ ...TASK, title: 'Keep my model' });
+  await page.goto(`http://127.0.0.1:${server.port}/#job=${json.job_id}`);
+  await expect(page.locator('#job-meta')).toContainText('ai-desktop/auftrag-von-aussen');
+  const model = page.getByRole('combobox', { name: 'Model of the job' });
+  await model.fill('gpt-4o');
+  await jobText(page).fill('typed text');
+  // What the event of the job or a second look at the address does: select it again.
+  await page.evaluate(() => window.dispatchEvent(new HashChangeEvent('hashchange')));
+  await page.waitForTimeout(500);
+  await expect(model).toHaveValue('gpt-4o');
+  await expect(jobText(page)).toHaveValue('typed text');
+});

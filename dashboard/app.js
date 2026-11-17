@@ -530,6 +530,11 @@ async function refreshJob(id, fillText) {
 
 function selectJob(id) {
   if (!JOB_ID.test(id)) return;
+  // The shown job selected again (its event and the address name it both): its fields keep what the person typed.
+  if (id === selectedJob) {
+    refreshJob(id, false);
+    return;
+  }
   selectedJob = id;
   document.querySelectorAll('#jobs-list .job-item').forEach((el) => {
     if (el.dataset.job === id) el.setAttribute('aria-current', 'true');
@@ -620,24 +625,28 @@ async function loadJobSettings() {
     // The model of a job that names none: jobs_model (claude-code: Claude Code with the brief), else default_model.
     defaultModel = (s.jobs_model && s.jobs_model.value) || (s.default_model && s.default_model.value) || '';
     document.getElementById('job-model').placeholder = t('job_model_placeholder', { model: defaultModel });
+    // A field the person touched before this answer came keeps what they did.
     const enabled = document.getElementById('jobs-enabled');
-    enabled.checked = s.jobs ? s.jobs.value === 'on' : true;
+    if (!enabled.dataset.touched) enabled.checked = s.jobs ? s.jobs.value === 'on' : true;
     enabled.disabled = !!(s.jobs && s.jobs.locked);
     const areas = document.getElementById('private-areas');
-    areas.value = s.private_areas ? s.private_areas.value : '';
+    if (!areas.dataset.touched) areas.value = s.private_areas ? s.private_areas.value : '';
     areas.disabled = !!(s.private_areas && s.private_areas.locked);
   } catch (_) {
     // the fields keep their defaults
   }
 }
 
-async function saveJobSettings() {
+// Saves the one setting that changed (`which`, the data-arg of the field): the other may not have arrived yet, and its
+// field would still show the page's default.
+async function saveJobSettings(which) {
   const status = document.getElementById('job-settings-status');
   const patch = {};
   const enabled = document.getElementById('jobs-enabled');
   const areas = document.getElementById('private-areas');
-  if (!enabled.disabled) patch.jobs = enabled.checked ? 'on' : 'off';
-  if (!areas.disabled) patch.private_areas = areas.value;
+  if (which === 'jobs' && !enabled.disabled) patch.jobs = enabled.checked ? 'on' : 'off';
+  if (which === 'private_areas' && !areas.disabled) patch.private_areas = areas.value;
+  if (Object.keys(patch).length === 0) return;
   try {
     const res = await fetch('/settings', {
       method: 'PUT',
@@ -650,7 +659,7 @@ async function saveJobSettings() {
       status.style.color = 'var(--bad)';
       return;
     }
-    areas.value = data.settings.private_areas.value;
+    if (which === 'private_areas') areas.value = data.settings.private_areas.value;
     status.textContent = t('job_settings_saved');
     status.style.color = 'var(--muted)';
   } catch (err) {
@@ -659,6 +668,15 @@ async function saveJobSettings() {
   }
 }
 
+// What the person changes before the settings arrive is not overwritten by them (loadJobSettings).
+for (const fieldId of ['jobs-enabled', 'private-areas']) {
+  const field = document.getElementById(fieldId);
+  for (const kind of ['input', 'change']) {
+    field.addEventListener(kind, () => {
+      field.dataset.touched = '1';
+    });
+  }
+}
 loadJobSettings();
 loadJobs().then(() => {
   const id = jobFromHash();

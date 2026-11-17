@@ -104,10 +104,10 @@
   </div>
   <details id="job-settings">
     <summary data-i18n="job_settings"></summary>
-    <label class="row small"><input type="checkbox" id="jobs-enabled" data-on-change="saveJobSettings">
+    <label class="row small"><input type="checkbox" id="jobs-enabled" data-on-change="saveJobSettings" data-arg="jobs">
       <span data-i18n="jobs_accept"></span></label>
     <label class="row small"><span data-i18n="private_areas"></span>
-      <input id="private-areas" data-on-change="saveJobSettings" data-i18n-placeholder="private_areas_placeholder"></label>
+      <input id="private-areas" data-on-change="saveJobSettings" data-arg="private_areas" data-i18n-placeholder="private_areas_placeholder"></label>
     <p id="job-settings-status" class="small muted"></p>
   </details>
 </div>
