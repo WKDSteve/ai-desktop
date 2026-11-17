@@ -87,6 +87,7 @@ TEST(review_diffs_of_a_real_repository) {
     CHECK(review::diffs(vault.u8string(), {{"absent", "1234567"}}).find("No repository absent") != std::string::npos);
     if (git.empty()) {
         std::cout << "    (git not on PATH: the diff part is skipped)\n";
+        minitest::remove_tree(root);
         return;
     }
     const fs::path repo = root / "demo";
@@ -119,6 +120,7 @@ TEST(review_diffs_of_a_real_repository) {
     CHECK(text.find("git show failed") != std::string::npos);  // the unknown commit
     const auto dirs = review::read_dirs(vault.u8string(), {{"demo", sha}, {"demo", "1234567"}, {"absent", "1234567"}});
     CHECK_EQ(dirs.size(), static_cast<size_t>(2));  // the vault and the repository, once each
-    std::error_code ignored;
-    fs::remove_all(root, ignored);
+    // git writes its objects read-only on Windows: a plain remove_all leaves them behind.
+    minitest::remove_tree(root);
+    CHECK(!fs::exists(root));
 }

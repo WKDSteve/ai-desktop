@@ -4,6 +4,7 @@
 // macros that report and keep going. Enough for the pure-logic units; the HTTP
 // layer is tested from Node (tests/*.test.mjs).
 
+#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -60,12 +61,27 @@ inline void set_env(const char* name, const std::string& value) {
 #endif
 }
 
-// Fresh, empty directory under the system temp dir; removed by the caller.
+// Removes a directory tree, also files that are read-only (git writes its objects so on Windows); never throws.
+inline void remove_tree(const std::filesystem::path& dir) {
+    std::error_code ec;
+    for (auto it = std::filesystem::recursive_directory_iterator(dir, ec);
+         !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+        std::error_code ignored;
+        std::filesystem::permissions(it->path(), std::filesystem::perms::owner_write,
+                                     std::filesystem::perm_options::add, ignored);
+    }
+    std::filesystem::remove_all(dir, ec);
+}
+
+// Fresh, empty directory under the system temp dir; removed by the caller (remove_tree). The name holds the time of
+// this run, so a directory a run before could not remove (the tests share one machine with the CI runner) is never
+// the one of this run.
 inline std::filesystem::path make_temp_dir(const std::string& tag) {
     static int counter = 0;
+    static const auto run = std::chrono::system_clock::now().time_since_epoch().count();
     auto dir = std::filesystem::temp_directory_path() /
-               ("ai-desktop-unit-" + tag + "-" + std::to_string(::std::rand()) + "-" + std::to_string(++counter));
-    std::filesystem::remove_all(dir);
+               ("ai-desktop-unit-" + tag + "-" + std::to_string(run) + "-" + std::to_string(++counter));
+    remove_tree(dir);
     std::filesystem::create_directories(dir);
     return dir;
 }
