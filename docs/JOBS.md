@@ -38,7 +38,7 @@ Content-Type: application/json
 | `area` | yes | `[A-Za-z0-9._-]`, up to 100 bytes |
 | `mode` | yes | `prefill` (stands in the dashboard, nothing runs) or `run` (runs at once) |
 | `kind` | no | `handoff` (default), `review-done`, `draft-task`, `prepare-decision`, `split-plan`; see below |
-| `model` | no | the model of a run; empty: the setting `default_model` |
+| `model` | no | the model of a run: `claude-code` (or `claude-code:<model>`) runs Claude Code with the brief of the tasks family, any other model answers once (see "Runs"); empty: the setting `jobs_model` (`claude-code` unless set) |
 | `private` | no | `true` when the caller knows the area is private (see "Private areas") |
 
 Every text is valid UTF-8 and holds no control or invisible character, the same rule as
@@ -77,11 +77,48 @@ that is not local; the job waits in the dashboard, `note` says why). A `run` whi
 | `GET /jobs` | any local caller | the jobs, newest last, without their text; `enabled` = the setting `jobs` |
 | `GET /jobs/<id>` | any local caller | one job with `markdown` and `output` |
 | `POST /jobs/<id>/run` | the dashboard (its `Origin`) or the control secret | `{ "model"?, "markdown"?, "confirm_private"? }`: run it with the text the person left; `409` with `"status": "needs_confirmation"` for a private area on a model that is not local without `confirm_private: true` |
-| `DELETE /jobs/<id>` | likewise | put it away (`204`) |
+| `POST /jobs/<id>/cancel` | likewise | stop a running job: the process tree of an agent ends, a single answer is no longer shown; `409` when it does not run |
+| `DELETE /jobs/<id>` | likewise | put it away (`204`; a running job is cancelled first) |
 
 All of them refuse a foreign `Host` (`403`). The jobs live in memory only: a task can be private, so nothing of it is
 written to disk, and the jobs are gone when the server ends (at most 100; the oldest that does not run goes first).
-A run is metadata in the usage log like every `/ask/stream` (never its text).
+A run is metadata in the usage log like every `/ask/stream` (never its text); a run of Claude Code is logged with
+the provider `claude-code` and the tokens of its result.
+
+A job shows how it ran: `runner` (`claude-code` or `model`), `brief` (`brief_version`, `contract_schema`,
+`engine_version` of the brief an agent got), `note` (why it fell back to one answer, or that the brief is newer than
+this ai-desktop) and the statuses `running`, `done`, `failed`, `cancelled`.
+
+## Runs
+
+**Claude Code (`claude-code`).** A job of the tasks family is worked on by Claude Code headless, started by
+ai-desktop (`src/agent.cpp`, `src/process.cpp`):
+
+1. The brief: `tasks agent-brief --format=json --by=ai-desktop:<job id>` (tasks.nvim, `docs/COMMANDS.md` there). Its
+   `schema` must be `tasks-agent-brief/1`, `brief_version` and `contract_schema` at least 1: an older engine is
+   recognised and refused (the job then answers once and says so); a newer one is used and named in `note`.
+2. The tasks command: the setting `tasks_cli` (an absolute path), else `tasks` on `PATH`. The `bin/tasks` or
+   `bin/tasks.cmd` of a tasks.nvim checkout runs as `nvim -n -i NONE --headless -u NONE -l <checkout>/scripts/tasks.lua`
+   (no `cmd.exe` or `sh` in between); any other file must be a program (`.exe` on Windows).
+3. Claude Code: the setting `claude_cli`, else `claude` on `PATH` (`claude.exe` on Windows; a `.cmd` would need a
+   shell and is refused).
+4. The folder: the repository of the area beside the vault (`<vault>/../<area>` with a `.git`, the layout of
+   `$REPOS_DIR`), else the vault; the vault is always added (`--add-dir`) and named in `TASKS_VAULT`.
+5. The call: `claude -p --output-format stream-json --verbose --append-system-prompt-file <brief>
+   --permission-mode default --add-dir <vault> [--model <m>] --allowedTools "Bash(tasks:*)" "Bash(git:*)" Read Edit
+   Write Glob Grep`, the prompt (the task, its id, the claim name `ai-desktop:<job id>`, what to do: claim, work,
+   done or unclaim) on stdin. The folder of the tasks command comes first on the agent's `PATH`. No
+   `--dangerously-skip-permissions`, no `bypassPermissions`: in print mode a tool outside the list is refused, and the
+   person's own settings of Claude Code (`~/.claude`) apply as in any session of theirs.
+6. The output: every line of stream-json becomes text in the job (the agent's words, `▸ Bash: tasks claim ...` for a
+   tool, `✗ ...` for a refused one), cleaned by the character rule above; the `result` line ends it.
+
+Without Claude Code, the tasks command, its brief or the vault folder, the job answers once with `default_model` and
+`note` says why; a private job whose fallback model is not local sends nothing and fails. When ai-desktop itself runs
+inside a Claude Code session (`CLAUDECODE` is set), that session's variables (`CLAUDE_CODE_*`, `CLAUDE_AGENT_SDK_*`,
+`ANTHROPIC_BASE_URL`, ...) are not passed on, so the agent signs in as the person's own `claude` does.
+
+**One answer (any other model).** The task goes to the model through the ModelRouter, as `/ask/stream`; no tools.
 
 ## The control secret
 
@@ -134,8 +171,11 @@ wants the dashboard's `Origin` or the secret.
 |---|---|---|---|
 | `jobs` | `AI_DESKTOP_JOBS` | `on` | `off` refuses every `POST /jobs` (403); the jobs already there can still be run |
 | `private_areas` | `AI_DESKTOP_PRIVATE_AREAS` | (none) | see above |
+| `jobs_model` | `AI_DESKTOP_JOBS_MODEL` | `claude-code` | the model of a job that names none |
+| `claude_cli` | `AI_DESKTOP_CLAUDE_CLI` | (PATH) | absolute path of Claude Code |
+| `tasks_cli` | `AI_DESKTOP_TASKS_CLI` | (PATH) | absolute path of the tasks command (`bin/tasks` of tasks.nvim) |
 
-Both are in the dashboard under "Settings of the jobs" and in `GET/PUT /settings`.
+The first two are in the dashboard under "Settings of the jobs"; all are in `GET/PUT /settings`.
 
 ## Threat model
 
@@ -158,7 +198,10 @@ well read the vault itself. The secret keeps out everything outside that boundar
 | A stolen old secret | replay it | a new secret at every start; the file is removed at the end. |
 | A cloud provider | gets a private task | only after the person said yes in the dashboard; a local model needs no question. |
 | Focus theft | a job steals the focus at a bad moment | ai-desktop never takes the focus on its own: only with the right the sending app granted at the person's click. |
+| The agent (Claude Code) | it writes in the vault and the repository of the area, runs `tasks` and `git` (commit and push as the person) | it runs as the person, in the folders of the task only, with the tools of its list (no shell beyond `tasks` and `git`, no web access, no other program; print mode refuses the rest) and the person's own Claude Code settings; it claims under its own name (`ai-desktop:<job>`), so a task it holds shows who; a claim of somebody else stops it (the brief says so). A run is started by a family app with the secret or by the person in the dashboard, never by a page. Stop ends it with its whole process tree (a job object on Windows, a process group elsewhere), and so does the end of ai-desktop. |
+| A task steering the agent (prompt injection) | text in a task file tells the agent to do something else | the tool list bounds what it can do at all (no network, no other program); what it did is in the job's output and in git. A task from a vault the person does not trust should not be handed over. |
+| The settings `claude_cli` / `tasks_cli` | a program sets them to another executable | only an absolute path, set through `PUT /settings`, which a page cannot reach (Origin, Host); a program that can do that runs as the person anyway. |
 
-**Not covered:** a program running as the person (it has the secret and the vault anyway); the content of a task
-steering the model (prompt injection): a run of this version has no tools, it only answers; the agents with tools
-that come later need their own rules.
+**Not covered:** a program running as the person (it has the secret, the vault and the person's Claude Code
+anyway); an agent doing harm within its tools (it can change and push the repository of the area): what it did is in
+git and can be reverted, and its tool list is the boundary.

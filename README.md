@@ -439,7 +439,11 @@ body, Gemini builds the path directly from the model name
 - Jobs from the family apps (`POST /jobs`) are the one route with a credential: the control secret, a new one at
   every start in `control.secret` of the config folder, readable by the person only. A job stands in the dashboard
   (prefilled or running), a private area (setting `private_areas`) goes to a cloud model only after a yes, and the
-  setting `jobs` turns them off. Contract and threat model: [docs/JOBS.md](docs/JOBS.md).
+  setting `jobs` turns them off. A job runs on `claude-code` unless it names another model: Claude Code headless
+  (`claude -p`, the settings `claude_cli` / `tasks_cli` or `PATH`) with the brief of the tasks family from
+  `tasks agent-brief`, so the agent claims and finishes the task itself; Stop ends its whole process tree. Without
+  Claude Code or the tasks command the job answers once and says why. Contract and threat model:
+  [docs/JOBS.md](docs/JOBS.md); the programs ai-desktop starts: [docs/PROCESSES.md](docs/PROCESSES.md).
 - `ollama_client.cpp` opens a new TCP connection to Ollama per request
   instead of reusing one -- known, deliberately deferred (would need a
   proper pooling design), see the `ai.nvim` handover.

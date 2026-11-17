@@ -85,6 +85,10 @@ const STRINGS = {
     status_running: 'läuft',
     status_done: 'fertig',
     status_failed: 'fehlgeschlagen',
+    status_cancelled: 'abgebrochen',
+    job_status_cancelled: 'Abgebrochen.',
+    job_runner_agent: 'Claude Code mit dem Baustein der tasks-Familie (Brief {brief}, Vertrag {contract}, tasks.nvim {engine})',
+    job_runner_model: 'Eine Antwort von {model}',
   },
   en: {
     app_name: 'ai',
@@ -168,6 +172,10 @@ const STRINGS = {
     status_running: 'running',
     status_done: 'done',
     status_failed: 'failed',
+    status_cancelled: 'cancelled',
+    job_status_cancelled: 'Cancelled.',
+    job_runner_agent: 'Claude Code with the brief of the tasks family (brief {brief}, contract {contract}, tasks.nvim {engine})',
+    job_runner_model: 'One answer of {model}',
   },
 };
 

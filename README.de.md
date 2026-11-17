@@ -421,7 +421,12 @@ verschicken, baut Gemini den Pfad direkt aus dem Modellnamen
 - Aufträge der Familien-Apps (`POST /jobs`) sind die eine Route mit Anmeldung: das Kontroll-Geheimnis, bei jedem
   Start neu in `control.secret` im Konfigurationsordner, nur für die Person lesbar. Ein Auftrag steht im Dashboard
   (vorbefüllt oder laufend), ein privater Bereich (Einstellung `private_areas`) geht nur nach einem Ja an ein
-  Cloud-Modell, und die Einstellung `jobs` schaltet sie ab. Vertrag und Threat-Model: [docs/JOBS.md](docs/JOBS.md).
+  Cloud-Modell, und die Einstellung `jobs` schaltet sie ab. Ein Auftrag läuft auf `claude-code`, wenn er kein anderes
+  Modell nennt: Claude Code headless (`claude -p`, Einstellungen `claude_cli` / `tasks_cli` oder `PATH`) mit dem
+  Baustein der tasks-Familie aus `tasks agent-brief`, sodass der Agent die Task selbst belegt und abschließt; Stopp
+  beendet seinen ganzen Prozessbaum. Ohne Claude Code oder tasks-Befehl antwortet der Auftrag einmal und sagt warum.
+  Vertrag und Threat-Model: [docs/JOBS.md](docs/JOBS.md); welche Programme ai-desktop startet:
+  [docs/PROCESSES.md](docs/PROCESSES.md).
 - `ollama_client.cpp` öffnet pro Request eine neue TCP-Verbindung zu Ollama
   statt sie wiederzuverwenden -- bekannt, bewusst zurückgestellt (bräuchte
   ein durchdachtes Pooling-Design), siehe `ai.nvim`-Handover.

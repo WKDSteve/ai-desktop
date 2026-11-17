@@ -10,7 +10,8 @@
 //   GET    /jobs           the jobs, without their text (the dashboard)
 //   GET    /jobs/<id>      one job with its text and output
 //   POST   /jobs/<id>/run  run it, from the dashboard (or with the control secret)
-//   DELETE /jobs/<id>      put it away, likewise
+//   POST   /jobs/<id>/cancel  stop a running job (an agent's process tree ends), likewise
+//   DELETE /jobs/<id>      put it away (cancelled first when it runs), likewise
 namespace ai_desktop::jobs_api {
 
 using OnDelta = std::function<void(const std::string&)>;
@@ -28,6 +29,10 @@ struct Hooks {
     std::function<void(const std::string& type, const std::string& agent, const std::string& message)> event;
     // Brings the dashboard to the front for a new job.
     std::function<void(const std::string& job_id)> show;
+    // Records an agent run in the usage log (metadata only): provider, model, ok, tokens, duration.
+    std::function<void(const std::string& provider, const std::string& model, bool ok, long input_tokens,
+                       long output_tokens, long duration_ms)>
+        usage;
 };
 
 // Is `host` (the Host header) this server's: 127.0.0.1, localhost or [::1] with the port it listens on? A name

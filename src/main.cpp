@@ -588,6 +588,24 @@ int main(int argc, char** argv) {
         return error;
     };
     job_hooks.event = push_event;
+    job_hooks.usage = [](const std::string& provider, const std::string& model, bool ok, long input_tokens,
+                         long output_tokens, long duration_ms) {
+        ai_desktop::usage::Event event;
+        event.ts = ai_desktop::usage::now_iso8601();
+        event.source = "ai-desktop";
+        event.provider = provider;
+        event.model = ai_desktop::usage::normalize_name(model, ai_desktop::usage::kMaxNameLength);
+        event.stream = true;
+        event.ok = ok;
+        event.error_kind = ok ? "" : "backend_error";
+        event.prompt_tokens = input_tokens < 0 ? 0 : input_tokens;
+        event.completion_tokens = output_tokens < 0 ? 0 : output_tokens;
+        event.duration_ms = duration_ms;
+        std::string error;
+        if (!ai_desktop::usage::Store::for_config_dir().append(event, &error)) {
+            std::cerr << "ai-desktop: usage event not recorded: " << error << "\n";
+        }
+    };
     job_hooks.show = [](const std::string& job_id) { ai_desktop::foreground::show_job(g_port, job_id); };
     ai_desktop::jobs_api::register_routes(svr, std::move(job_hooks));
 

@@ -1,16 +1,23 @@
 #include "jobs_api.hpp"
 
+#include <chrono>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <map>
 #include <memory>
+#include <mutex>
 #include <thread>
 
+#include "agent.hpp"
 #include "api.hpp"
 #include "config.hpp"
 #include "control_secret.hpp"
 #include "jobs.hpp"
 #include "legacy.hpp"
 #include "models.hpp"
+#include "process.hpp"
 
 using json = nlohmann::json;
 
@@ -72,30 +79,205 @@ bool dashboard_or_secret(const httplib::Request& req, httplib::Response& res, co
     return false;
 }
 
+// The model of a job that names none: jobs_model (claude-code unless set), else default_model.
 std::string model_or_default(const std::string& model) {
-    return model.empty() ? config::effective("default_model") : model;
+    if (!model.empty()) {
+        return model;
+    }
+    const std::string jobs_model = config::effective("jobs_model");
+    return jobs_model.empty() ? config::effective("default_model") : jobs_model;
 }
 
-// Starts the run of a job that Store::start() moved to Running, on a thread of its own.
-void spawn_run(const HooksPtr& hooks, const std::string& id) {
+// The way to stop a running agent (its process tree), by job id; registered while the child lives.
+std::mutex g_cancel_mutex;
+std::map<std::string, std::function<void()>> g_cancels;
+
+void cancel_run(const std::string& id) {
+    // Under the lock: the run thread takes the entry away (under it) before it lets go of the child.
+    std::lock_guard<std::mutex> lock(g_cancel_mutex);
+    const auto it = g_cancels.find(id);
+    if (it != g_cancels.end()) {
+        it->second();
+    }
+}
+
+bool still_running(const std::string& id) {
+    const auto job = jobs::store().get(id);
+    return job && job->status == jobs::Status::Running;
+}
+
+// The claim name of the agent of a job (the brief's examples and the prompt use it).
+std::string by_of(const std::string& id) {
+    return "ai-desktop:" + id;
+}
+
+std::string one_line(const std::string& text) {
+    std::string line = text.substr(0, text.find_first_of("\r\n"));
+    return line.size() > 300 ? line.substr(0, 300) : line;
+}
+
+// Runs a job on Claude Code headless; returns "" or the error. The output streams into the job.
+std::string run_agent(const HooksPtr& hooks, const std::string& id, const jobs::Request& request,
+                      const std::filesystem::path& claude, const agent::TasksCommand& tasks,
+                      const agent::Brief& brief, const std::filesystem::path& cwd, const std::string& model) {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    const fs::path dir = fs::temp_directory_path(ec) / "ai-desktop-jobs";
+    fs::create_directories(dir, ec);
+    const fs::path brief_file = dir / (id + ".brief.md");
+    {
+        std::ofstream out(brief_file, std::ios::binary | std::ios::trunc);
+        out << brief.markdown;
+        if (!out) {
+            return "cannot write the brief to " + brief_file.u8string();
+        }
+    }
+#ifdef _WIN32
+    const char separator = ';';
+#else
+    const char separator = ':';
+#endif
+    const char* path = std::getenv("PATH");
+    process::Spec spec;
+    spec.program = claude;
+    spec.args = agent::claude_args(brief_file, fs::u8path(request.vault), agent::submodel(model));
+    spec.cwd = cwd;
+    spec.env = {{"PATH", tasks.bin_dir.u8string() + separator + (path ? path : "")},
+                {"TASKS_VAULT", request.vault}};
+    for (auto& removal : agent::session_env_removals(process::env_names())) {
+        spec.env.push_back(std::move(removal));
+    }
+    spec.stdin_text = agent::prompt(request, by_of(id));
+
+    const auto started = std::chrono::steady_clock::now();
+    std::string error;
+    auto child = process::start(spec, &error);
+    if (!child) {
+        fs::remove(brief_file, ec);
+        return "Claude Code did not start: " + error;
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_cancel_mutex);
+        process::Child* raw = child.get();
+        g_cancels[id] = [raw] { raw->kill(); };
+    }
+    // Cancelled while the brief was fetched or the child started: it ends at once.
+    if (!still_running(id)) {
+        child->kill();
+    }
+    bool got_result = false;
+    std::string result_error;
+    long input_tokens = 0;
+    long output_tokens = 0;
+    child->read_lines(
+        [&](const std::string& line) {
+            const agent::Event event = agent::render(line);
+            if (!event.text.empty() && !jobs::store().append(id, event.text)) {
+                // Cancelled or put away: nothing more is shown; the process tree is ended by the cancel.
+            }
+            if (event.final) {
+                got_result = true;
+                input_tokens = event.input_tokens;
+                output_tokens = event.output_tokens;
+                if (event.is_error) {
+                    result_error = event.error.empty() ? "Claude Code reported an error" : "Claude Code: " + event.error;
+                }
+            }
+        },
+        1024 * 1024);
+    const int code = child->wait();
+    const std::string stderr_text = child->stderr_tail();
+    {
+        std::lock_guard<std::mutex> lock(g_cancel_mutex);
+        g_cancels.erase(id);
+    }
+    child.reset();
+    fs::remove(brief_file, ec);
+
+    const bool ok = got_result && result_error.empty() && code == 0;
+    if (hooks->usage) {
+        hooks->usage(agent::kModel, model, ok, input_tokens, output_tokens,
+                     std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started)
+                         .count());
+    }
+    if (!result_error.empty()) {
+        return result_error;
+    }
+    if (!got_result) {
+        return "Claude Code ended without a result (exit code " + std::to_string(code) + ")" +
+               (stderr_text.empty() ? "" : ": " + one_line(jobs::sanitize(stderr_text)));
+    }
+    if (code != 0) {
+        return "Claude Code ended with exit code " + std::to_string(code);
+    }
+    return "";
+}
+
+// One answer of a model, streamed into the job.
+std::string run_once(const HooksPtr& hooks, const std::string& id, const jobs::Request& request,
+                     const std::string& model) {
+    return hooks->run(jobs::run_prompt(request), jobs::run_system(), model,
+                      [&id](const std::string& delta) { jobs::store().append(id, delta); });
+}
+
+// The run of a job that Store::start() moved to Running, on a thread of its own: Claude Code for the agent model
+// (when it, the tasks command and its brief are there), else one answer of the model.
+void run_job(const HooksPtr& hooks, const std::string& id) {
     const auto job = jobs::store().get(id);
     if (!job) {
         return;
     }
-    const std::string prompt = jobs::run_prompt(job->request);
+    const jobs::Request& request = job->request;
     const std::string model = job->model;
-    hooks->event("job", "jobs", id);
-    std::thread([hooks, id, prompt, model] {
-        std::string error;
-        try {
-            error = hooks->run(prompt, jobs::run_system(), model,
-                               [&id](const std::string& delta) { jobs::store().append(id, delta); });
-        } catch (const std::exception& e) {
-            error = std::string("ai-desktop: ") + e.what();
-        } catch (...) {
-            error = "ai-desktop: unknown internal error";
+    if (!agent::is_agent_model(model)) {
+        jobs::store().describe(id, "model", "", nullptr);
+        jobs::store().finish(id, run_once(hooks, id, request, model));
+        return;
+    }
+    std::string why;
+    const auto claude = agent::find_claude(&why);
+    agent::TasksCommand tasks;
+    agent::Brief brief;
+    std::filesystem::path cwd;
+    if (!claude.empty()) {
+        tasks = agent::find_tasks();
+        if (const auto st = agent::fetch_brief(tasks, by_of(id), brief); !st.ok()) {
+            why = st.message;
+        } else {
+            cwd = agent::work_dir(request.vault, request.area, &why);
         }
-        jobs::store().finish(id, error);
+    }
+    if (!still_running(id)) {
+        return;  // cancelled while the brief was fetched
+    }
+    if (why.empty()) {
+        const nlohmann::json info = {{"brief_version", brief.brief_version},
+                                     {"contract_schema", brief.contract_schema},
+                                     {"engine_version", brief.engine_version}};
+        jobs::store().describe(id, agent::kModel, brief.note, info);
+        jobs::store().finish(id, run_agent(hooks, id, request, claude, tasks, brief, cwd, model));
+        return;
+    }
+    // Without Claude Code, the tasks command or its brief the job is answered once, as before, and says why.
+    const std::string fallback = config::effective("default_model");
+    jobs::store().describe(id, "model", why + "; one answer of " + fallback + " instead", nullptr);
+    if (job->is_private && !models::resolve(fallback).local) {
+        jobs::store().finish(id, "the area is private and " + fallback + " is not local: nothing was sent");
+        return;
+    }
+    jobs::store().finish(id, run_once(hooks, id, request, fallback));
+}
+
+void spawn_run(const HooksPtr& hooks, const std::string& id) {
+    hooks->event("job", "jobs", id);
+    std::thread([hooks, id] {
+        try {
+            run_job(hooks, id);
+        } catch (const std::exception& e) {
+            jobs::store().finish(id, std::string("ai-desktop: ") + e.what());
+        } catch (...) {
+            jobs::store().finish(id, "ai-desktop: unknown internal error");
+        }
         hooks->event("job", "jobs", id);
     }).detach();
 }
@@ -294,11 +476,37 @@ void register_routes(httplib::Server& server, Hooks plain_hooks) {
         if (!own_host(req, res, hooks->port) || !dashboard_or_secret(req, res, *hooks)) {
             return;
         }
-        if (!jobs::store().remove(req.matches[1].str())) {
+        const std::string id = req.matches[1].str();
+        // A running job is cancelled first, so its agent does not run on unseen.
+        if (jobs::store().cancel(id).ok()) {
+            cancel_run(id);
+        }
+        if (!jobs::store().remove(id)) {
             api::send_error(res, 404, "no such job");
             return;
         }
         res.status = 204;
+    });
+
+    // Stops a running job: an agent's process tree ends, one answer is no longer shown.
+    server.Post(std::string("/jobs/") + kIdPattern + "/cancel", [hooks](const httplib::Request& req,
+                                                                        httplib::Response& res) {
+        if (!own_host(req, res, hooks->port) || !dashboard_or_secret(req, res, *hooks)) {
+            return;
+        }
+        const std::string id = req.matches[1].str();
+        if (const auto st = jobs::store().cancel(id); !st.ok()) {
+            api::send_error(res, st.http, st.message);
+            return;
+        }
+        cancel_run(id);
+        hooks->event("job", "jobs", id);
+        const auto job = jobs::store().get(id);
+        if (!job) {
+            api::send_error(res, 404, "no such job");
+            return;
+        }
+        api::send_json(res, 200, jobs::to_json(*job, true));
     });
 }
 

@@ -1,9 +1,16 @@
 # Programs ai-desktop starts
 
-**None.** ai-desktop does its work in its own process: the HTTP server, the dashboard it serves,
-and the calls to the model providers (Anthropic, OpenAI, Gemini, Ollama) over HTTP. The code
-(`src/`) has no `CreateProcess`, `ShellExecute`, `system` or `popen`. **A process started by
-ai-desktop is a bug.** Checked against a measurement with `app-proc-watch`.
+Only for a job of the family apps (`docs/JOBS.md`), and never a shell or a window. Everything else (the HTTP
+server, the dashboard it serves, the calls to the model providers over HTTP) runs in ai-desktop's own process.
+
+| What | When | How |
+| --- | --- | --- |
+| `claude` (Claude Code headless) and what it starts (its tools: `tasks`, `git`) | a job runs on `claude-code` | `src/process.cpp`: `CreateProcessW` with `CREATE_NO_WINDOW`, pipes for stdin/stdout/stderr and only those three handles inherited, in a job object with `KILL_ON_JOB_CLOSE`: Stop, the end of the run and the end of ai-desktop take the whole tree. Elsewhere `fork`/`execve` in a process group of its own. |
+| `nvim --headless ... scripts/tasks.lua agent-brief` (or the `tasks` program named in `tasks_cli`) | before such a run, for the brief | the same, ended after 30 s at most |
+| the default browser with the dashboard | a new job and no dashboard window shown | `ShellExecuteW` of the `http://127.0.0.1:<port>/#job=<id>` address (`src/foreground.cpp`): the browser is the person's, not a child that ai-desktop ends |
+
+There is no `system`, `popen` or `cmd.exe`/`sh` anywhere in `src/`: a `.cmd` for Claude Code or the tasks command is
+refused instead of run through a shell. Any other process started by ai-desktop is a bug.
 
 How it is started, and what stays visible on purpose:
 

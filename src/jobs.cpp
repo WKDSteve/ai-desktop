@@ -163,6 +163,27 @@ std::string text_error(const std::string& text, bool multiline) {
     return "";
 }
 
+std::string sanitize(const std::string& text) {
+    std::string out;
+    out.reserve(text.size());
+    std::size_t i = 0;
+    while (i < text.size()) {
+        const std::size_t at = i;
+        std::uint32_t cp = 0;
+        if (!decode(text, i, cp)) {
+            out += "\xEF\xBF\xBD";
+            i = at + 1;
+            continue;
+        }
+        if ((cp == '\n' || cp == '\r' || cp == '\t') || !refused(cp)) {
+            out.append(text, at, i - at);
+        } else {
+            out += "\xEF\xBF\xBD";
+        }
+    }
+    return out;
+}
+
 config::Status parse_request(const json& body, Request& out) {
     if (!body.is_object()) {
         return {400, "the request body must be a JSON object"};
@@ -284,6 +305,7 @@ const char* status_name(Status status) {
         case Status::Running: return "running";
         case Status::Done: return "done";
         case Status::Failed: return "failed";
+        case Status::Cancelled: return "cancelled";
     }
     return "unknown";
 }
@@ -306,6 +328,15 @@ json to_json(const Job& job, bool with_text) {
     };
     if (!job.error.empty()) {
         out["error"] = job.error;
+    }
+    if (!job.runner.empty()) {
+        out["runner"] = job.runner;
+    }
+    if (!job.note.empty()) {
+        out["note"] = job.note;
+    }
+    if (!job.brief.is_null()) {
+        out["brief"] = job.brief;
     }
     if (with_text) {
         out["markdown"] = job.request.markdown;
@@ -406,6 +437,9 @@ config::Status Store::start(const std::string& id, const std::string& model,
     job->output.clear();
     job->output_truncated = false;
     job->error.clear();
+    job->runner.clear();
+    job->note.clear();
+    job->brief = nullptr;
     job->updated = usage::now_iso8601();
     return {};
 }
@@ -429,7 +463,7 @@ config::Status Store::hold(const std::string& id, const std::string& model) {
 bool Store::append(const std::string& id, const std::string& delta) {
     std::lock_guard<std::mutex> lock(mutex_);
     Job* job = find_locked(id);
-    if (!job) {
+    if (!job || job->status != Status::Running) {
         return false;
     }
     if (job->output_truncated) {
@@ -452,12 +486,39 @@ bool Store::append(const std::string& id, const std::string& delta) {
 void Store::finish(const std::string& id, const std::string& error) {
     std::lock_guard<std::mutex> lock(mutex_);
     Job* job = find_locked(id);
-    if (!job) {
+    if (!job || job->status != Status::Running) {
         return;
     }
     job->status = error.empty() ? Status::Done : Status::Failed;
     job->error = error;
     job->updated = usage::now_iso8601();
+}
+
+void Store::describe(const std::string& id, const std::string& runner, const std::string& note,
+                     const json& brief) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    Job* job = find_locked(id);
+    if (!job || job->status != Status::Running) {
+        return;
+    }
+    job->runner = runner;
+    job->note = note;
+    job->brief = brief;
+    job->updated = usage::now_iso8601();
+}
+
+config::Status Store::cancel(const std::string& id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    Job* job = find_locked(id);
+    if (!job) {
+        return {404, "no such job"};
+    }
+    if (job->status != Status::Running) {
+        return {409, "the job does not run"};
+    }
+    job->status = Status::Cancelled;
+    job->updated = usage::now_iso8601();
+    return {};
 }
 
 void Store::clear() {

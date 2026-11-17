@@ -41,6 +41,12 @@ constexpr SettingDef kSettings[] = {
     {"jobs", "AI_DESKTOP_JOBS", "on"},
     // Areas of the task vault whose jobs go to a local model only, or after the person said yes (comma-separated).
     {"private_areas", "AI_DESKTOP_PRIVATE_AREAS", ""},
+    // The model of a job that names none: "claude-code" runs Claude Code headless with the brief of the tasks family
+    // (src/agent.hpp); any other model answers once (default_model is one: name it here to answer once by default).
+    {"jobs_model", "AI_DESKTOP_JOBS_MODEL", "claude-code"},
+    // Where Claude Code and the tasks command are (absolute paths); empty: looked up on PATH.
+    {"claude_cli", "AI_DESKTOP_CLAUDE_CLI", ""},
+    {"tasks_cli", "AI_DESKTOP_TASKS_CLI", ""},
 };
 
 // Largest context window accepted; current models top out at about a million tokens.
@@ -285,14 +291,28 @@ Status validate(const std::string& key, std::string& value) {
         if (value != "de" && value != "en") {
             return {400, "language: must be one of de, en"};
         }
-    } else if (key == "default_model") {
+    } else if (key == "claude_cli" || key == "tasks_cli") {
+        // A program ai-desktop starts for a job: an absolute path of one line, checked again when a job runs.
         value = trimmed(value);
-        if (value.size() > kMaxModelNameLength) {
-            return {400, "default_model: longer than 200 characters"};
+        if (value.size() > 1024) {
+            return {400, key + ": longer than 1024 characters"};
         }
         for (unsigned char c : value) {
             if (c < 0x20 || c == 0x7f) {
-                return {400, "default_model: must not contain control characters"};
+                return {400, key + ": must not contain control characters"};
+            }
+        }
+        if (!value.empty() && !fs::u8path(value).is_absolute()) {
+            return {400, key + ": expected an absolute path"};
+        }
+    } else if (key == "default_model" || key == "jobs_model") {
+        value = trimmed(value);
+        if (value.size() > kMaxModelNameLength) {
+            return {400, key + ": longer than 200 characters"};
+        }
+        for (unsigned char c : value) {
+            if (c < 0x20 || c == 0x7f) {
+                return {400, key + ": must not contain control characters"};
             }
         }
     } else if (key == "jobs") {

@@ -466,7 +466,19 @@ function showJobStatus(job) {
   status.textContent = t('job_status_' + job.status) + (job.status === 'failed' ? (job.error || '') : '');
   const busy = job.status === 'running';
   document.getElementById('job-run').disabled = busy;
+  document.getElementById('job-stop').disabled = !busy;
   document.getElementById('job-markdown').readOnly = busy;
+  // How it runs: Claude Code with the brief (its versions), or one answer of a model; and why, when it fell back.
+  let runner = '';
+  if (job.runner === 'claude-code' && job.brief) {
+    runner = t('job_runner_agent', {
+      brief: job.brief.brief_version, contract: job.brief.contract_schema, engine: job.brief.engine_version || '?',
+    });
+  } else if (job.runner === 'model') {
+    runner = t('job_runner_model', { model: job.model });
+  }
+  if (job.note) runner += (runner ? ' · ' : '') + job.note;
+  document.getElementById('job-runner').textContent = runner;
   const confirm = document.getElementById('job-confirm');
   confirm.hidden = job.status !== 'needs_confirmation';
   if (!confirm.hidden) {
@@ -572,6 +584,13 @@ async function postRun(confirmPrivate) {
   refreshJob(id, false);
 }
 
+async function stopJob() {
+  const id = selectedJob;
+  if (!id) return;
+  await fetch(`/jobs/${id}/cancel`, { method: 'POST' }).catch(() => {});
+  refreshJob(id, false);
+}
+
 function runJob() {
   postRun(false);
 }
@@ -598,7 +617,8 @@ async function loadJobSettings() {
     const res = await fetch('/settings');
     const data = await res.json();
     const s = data.settings || {};
-    defaultModel = (s.default_model && s.default_model.value) || '';
+    // The model of a job that names none: jobs_model (claude-code: Claude Code with the brief), else default_model.
+    defaultModel = (s.jobs_model && s.jobs_model.value) || (s.default_model && s.default_model.value) || '';
     document.getElementById('job-model').placeholder = t('job_model_placeholder', { model: defaultModel });
     const enabled = document.getElementById('jobs-enabled');
     enabled.checked = s.jobs ? s.jobs.value === 'on' : true;
@@ -685,7 +705,7 @@ sse.onerror = () => {
 // The controls name their action in data-on-click / data-on-change (no inline handlers under the CSP).
 const ACTIONS = {
   sendDecision, sendAsk, stopAsk, providerChanged, clearProvider, loadUsage,
-  runJob, confirmJob, dismissJob, saveJobSettings,
+  runJob, stopJob, confirmJob, dismissJob, saveJobSettings,
 };
 for (const kind of ['click', 'change']) {
   document.querySelectorAll(`[data-on-${kind}]`).forEach((el) => {

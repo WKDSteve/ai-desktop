@@ -88,8 +88,11 @@
     <div class="ask-row">
       <input id="job-model" data-i18n-aria-label="job_model" list="ask-model-presets">
       <button class="btn btn-teal" id="job-run" data-on-click="runJob" data-i18n="run"></button>
+      <button class="btn btn-muted" id="job-stop" data-on-click="stopJob" disabled data-i18n="stop"></button>
       <button class="btn btn-muted" id="job-dismiss" data-on-click="dismissJob" data-i18n="dismiss"></button>
     </div>
+    <!-- How the run runs: Claude Code with the brief of the tasks family (and its versions), or one answer. -->
+    <p id="job-runner" class="small muted"></p>
     <div id="job-confirm" hidden>
       <p id="job-confirm-text" class="small"></p>
       <div class="actions">

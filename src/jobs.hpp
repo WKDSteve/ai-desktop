@@ -62,6 +62,10 @@ struct Request {
 // separator, bidirectional control or byte order mark. Returns "" or what is wrong.
 std::string text_error(const std::string& text, bool multiline);
 
+// The text with every byte sequence text_error() would refuse (multi-line rules) replaced by U+FFFD: for foreign
+// text the job shows (the output of an agent).
+std::string sanitize(const std::string& text);
+
 // Parses and validates a request body. 400 with a message naming the field, or ok.
 config::Status parse_request(const nlohmann::json& body, Request& out);
 
@@ -77,7 +81,7 @@ bool is_private(const std::string& area, bool private_hint);
 // May a job of this area go to this model without asking? A private area only to a local model.
 bool may_send(bool is_private_job, bool model_is_local);
 
-enum class Status { Prefilled, NeedsConfirmation, Running, Done, Failed };
+enum class Status { Prefilled, NeedsConfirmation, Running, Done, Failed, Cancelled };
 const char* status_name(Status status);
 
 struct Job {
@@ -89,6 +93,9 @@ struct Job {
     std::string output;      // the answer of the run
     bool output_truncated = false;
     std::string error;       // why a run failed
+    std::string runner;      // "claude-code" (an agent run) or "model" (one answer); empty before a run
+    std::string note;        // what the person should know about the run (a fallback, a newer brief)
+    nlohmann::json brief;    // the brief of an agent run: {brief_version, contract_schema, engine_version}
     std::string created;     // UTC, YYYY-MM-DDTHH:MM:SSZ
     std::string updated;
 };
@@ -114,9 +121,16 @@ public:
     // Marks a job that waits for the person (a private area and a model that is not local). 404 unknown, 409 when
     // it runs (a running job is never put back to waiting: a second start would run it twice).
     config::Status hold(const std::string& id, const std::string& model);
-    // Appends to the output of a running job (cut at kMaxOutputBytes). False when the job is gone.
+    // Appends to the output of a running job (cut at kMaxOutputBytes). False when the job is gone or no longer runs
+    // (cancelled): the run may stop.
     bool append(const std::string& id, const std::string& delta);
+    // Ends a running job (Done, or Failed with `error`); a cancelled or removed one stays as it is.
     void finish(const std::string& id, const std::string& error);
+    // Says how a running job runs: the runner, a note, the brief of an agent run.
+    void describe(const std::string& id, const std::string& runner, const std::string& note,
+                  const nlohmann::json& brief);
+    // Cancels a running job: 404 unknown, 409 when it does not run.
+    config::Status cancel(const std::string& id);
 
     void clear();
 

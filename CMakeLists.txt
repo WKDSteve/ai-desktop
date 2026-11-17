@@ -19,6 +19,7 @@ target_include_directories(third_party_headers INTERFACE third_party)
 # kept in its own library so the unit tests can link it without OpenSSL or
 # cpp-httplib.
 add_library(ai_desktop_core STATIC
+    src/agent.cpp
     src/catalog_parse.cpp
     src/config.cpp
     src/control_secret.cpp
@@ -26,6 +27,7 @@ add_library(ai_desktop_core STATIC
     src/jobs.cpp
     src/models.cpp
     src/paths.cpp
+    src/process.cpp
     src/providers.cpp
     src/secrets.cpp
     src/usage.cpp
@@ -35,6 +37,10 @@ target_link_libraries(ai_desktop_core PUBLIC third_party_headers)
 if(WIN32)
     # Credential Manager (secrets.cpp), the rights of control.secret (advapi32) and its random bytes (bcrypt)
     target_link_libraries(ai_desktop_core PUBLIC advapi32 bcrypt)
+else()
+    # process.cpp: the threads that feed and read a child
+    find_package(Threads REQUIRED)
+    target_link_libraries(ai_desktop_core PUBLIC Threads::Threads)
 endif()
 
 add_executable(ai-desktop
@@ -80,6 +86,7 @@ if(AI_DESKTOP_BUILD_TESTS)
     enable_testing()
     add_executable(ai_desktop_tests
         tests/unit/test_main.cpp
+        tests/unit/test_agent.cpp
         tests/unit/test_catalog_parse.cpp
         tests/unit/test_config.cpp
         tests/unit/test_control_secret.cpp
@@ -87,12 +94,23 @@ if(AI_DESKTOP_BUILD_TESTS)
         tests/unit/test_jobs.cpp
         tests/unit/test_models.cpp
         tests/unit/test_paths.cpp
+        tests/unit/test_process.cpp
         tests/unit/test_providers.cpp
         tests/unit/test_secrets.cpp
         tests/unit/test_usage.cpp
     )
     target_link_libraries(ai_desktop_tests PRIVATE ai_desktop_core)
     add_test(NAME ai_desktop_unit COMMAND ai_desktop_tests)
+
+    # Stand-ins for Claude Code and the tasks command (tests/doubles/): the API and browser tests run a job of the
+    # agent model against them. Built next to ai-desktop; never installed.
+    add_executable(fake_claude tests/doubles/fake_claude.cpp)
+    target_link_libraries(fake_claude PRIVATE third_party_headers)
+    add_executable(fake_tasks tests/doubles/fake_tasks.cpp)
+    target_link_libraries(fake_tasks PRIVATE third_party_headers)
+    # The unit tests start fake_tasks as a child (tests/unit/test_process.cpp).
+    add_dependencies(ai_desktop_tests fake_tasks)
+    target_compile_definitions(ai_desktop_tests PRIVATE AI_DESKTOP_FAKE_TASKS="$<TARGET_FILE:fake_tasks>")
 endif()
 
 # The server serves the "dashboard" folder next to its own binary (src/paths.cpp;

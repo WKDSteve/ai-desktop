@@ -1,10 +1,10 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { startServer } from '../tests/helpers/server.mjs';
+import { binaryPath, startServer } from '../tests/helpers/server.mjs';
 
 // The jobs of the family apps in the dashboard (docs/JOBS.md), against the real binary: a prefilled job waits with its
 // text and nothing runs; a job sent while the page is open is selected; Run sends the edited text; a private area asks
@@ -55,7 +55,7 @@ test.beforeAll(async () => {
     path.join(configDir, 'config.json'),
     JSON.stringify({
       version: 1,
-      settings: { private_areas: 'tricentis-vault', default_model: 'mock-local' },
+      settings: { private_areas: 'tricentis-vault', default_model: 'mock-local', jobs_model: 'mock-local' },
       custom_models: [
         { id: 'mock-local', provider: 'openai-compatible', base_url: `http://127.0.0.1:${mock.address().port}/v1` },
       ],
@@ -158,4 +158,42 @@ test('the settings turn the jobs off and name the private areas', async ({ page 
   await areas.press('Tab');
   await expect(areas).toHaveValue('tricentis-vault,WKDBook-Tricentis');
   expect((await server.get('/settings')).json.settings.private_areas.value).toBe('tricentis-vault,WKDBook-Tricentis');
+});
+
+test('a job of claude-code shows how it runs, and Stop ends it', async ({ page }) => {
+  // The stand-ins of tests/doubles: fake_claude claims, then waits (a child of it waits too) until it is stopped.
+  const exe = process.platform === 'win32' ? '.exe' : '';
+  const build = path.dirname(binaryPath());
+  test.skip(!existsSync(path.join(build, `fake_claude${exe}`)), 'build the test doubles first');
+  const root = mkdtempSync(path.join(os.tmpdir(), 'ai-desktop-e2e-agent-'));
+  const bin = path.join(root, 'bin');
+  mkdirSync(bin);
+  copyFileSync(path.join(build, `fake_tasks${exe}`), path.join(bin, `tasks${exe}`));
+  mkdirSync(path.join(root, 'vault'));
+  const agentServer = await startServer({
+    env: {
+      AI_DESKTOP_CLAUDE_CLI: path.join(build, `fake_claude${exe}`),
+      AI_DESKTOP_TASKS_CLI: path.join(bin, `tasks${exe}`),
+      FAKE_CLAUDE_SLEEP_MS: '30000',
+      FAKE_TASKS_LOG: path.join(root, 'tasks.log'),
+    },
+  });
+  try {
+    const secret = readFileSync(path.join(agentServer.configDir, 'control.secret'), 'utf8').trim();
+    const { json } = await agentServer.post('/jobs', { ...TASK, vault: path.join(root, 'vault'), mode: 'run' },
+      { Authorization: `Bearer ${secret}` });
+    await page.goto(`http://127.0.0.1:${agentServer.port}/#job=${json.job_id}`);
+    await expect(page.locator('#job-runner')).toHaveText(
+      'Claude Code with the brief of the tasks family (brief 1, contract 1, tasks.nvim fake-0)');
+    await expect(page.locator('#job-output')).toContainText('Bash: tasks claim ai-desktop/auftrag-von-aussen');
+    await expect(page.locator('#job-status')).toHaveText('Running...');
+    await expect(page.locator('#job-stop')).toBeEnabled();
+    await page.locator('#job-stop').click();
+    await expect(page.locator('#job-status')).toHaveText('Cancelled.');
+    await expect(page.locator('#job-stop')).toBeDisabled();
+    await expect(page.getByRole('button', { name: /Run/ })).toBeEnabled();
+  } finally {
+    await agentServer.stop();
+    rmSync(root, { recursive: true, force: true });
+  }
 });
