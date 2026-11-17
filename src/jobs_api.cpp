@@ -110,8 +110,8 @@ config::Status run_or_hold(const HooksPtr& hooks, const std::string& id, const s
     }
     const bool local = models::resolve(model).local;
     if (!confirmed && !jobs::may_send(job->is_private, local)) {
-        if (job->status != jobs::Status::Running) {
-            jobs::store().hold(id, model);
+        // hold() refuses a job that runs (also one started since the get() above); only a held job is announced.
+        if (jobs::store().hold(id, model).ok()) {
             hooks->event("job", "jobs", id);
         }
         return {409, "the area '" + job->request.area +

@@ -212,6 +212,9 @@ TEST(jobs_the_store_runs_holds_and_finishes) {
     CHECK(job->status == jobs::Status::Running);
     CHECK_EQ(job->request.markdown, std::string("edited"));
     CHECK_EQ(jobs::store().start(id, "llama3", std::nullopt).http, 409);
+    // A running job is never put back to waiting (a second start would run it twice).
+    CHECK_EQ(jobs::store().hold(id, "gpt-4o").http, 409);
+    CHECK(jobs::store().get(id)->status == jobs::Status::Running);
 
     CHECK(jobs::store().append(id, "Hello "));
     CHECK(jobs::store().append(id, "world"));

@@ -416,6 +416,10 @@ config::Status Store::hold(const std::string& id, const std::string& model) {
     if (!job) {
         return {404, "no such job"};
     }
+    if (job->status == Status::Running) {
+        // Started by another request since the caller looked: its run goes on, nothing waits for an answer.
+        return {409, "the job is running already"};
+    }
     job->status = Status::NeedsConfirmation;
     job->model = model;
     job->updated = usage::now_iso8601();

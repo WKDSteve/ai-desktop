@@ -111,7 +111,8 @@ public:
     // Moves a job to Running with `model` (and, from the dashboard, an edited text). 404 unknown, 409 when it
     // runs already or kMaxRunning jobs run.
     config::Status start(const std::string& id, const std::string& model, const std::optional<std::string>& markdown);
-    // Marks a job that waits for the person (a private area and a model that is not local).
+    // Marks a job that waits for the person (a private area and a model that is not local). 404 unknown, 409 when
+    // it runs (a running job is never put back to waiting: a second start would run it twice).
     config::Status hold(const std::string& id, const std::string& model);
     // Appends to the output of a running job (cut at kMaxOutputBytes). False when the job is gone.
     bool append(const std::string& id, const std::string& delta);
