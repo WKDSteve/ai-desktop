@@ -1,6 +1,7 @@
 #include "jobs_api.hpp"
 
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -90,20 +91,25 @@ std::string model_or_default(const std::string& model) {
 
 // The way to stop a running agent (its process tree), by job id; registered while the child lives.
 std::mutex g_cancel_mutex;
-std::map<std::string, std::function<void()>> g_cancels;
+struct Cancel {
+    std::uint64_t run;
+    std::function<void()> stop;
+};
+std::map<std::string, Cancel> g_cancels;
 
 void cancel_run(const std::string& id) {
     // Under the lock: the run thread takes the entry away (under it) before it lets go of the child.
     std::lock_guard<std::mutex> lock(g_cancel_mutex);
     const auto it = g_cancels.find(id);
     if (it != g_cancels.end()) {
-        it->second();
+        it->second.stop();
     }
 }
 
-bool still_running(const std::string& id) {
+// Is this run still the job's current one, and running?
+bool still_running(const std::string& id, std::uint64_t run) {
     const auto job = jobs::store().get(id);
-    return job && job->status == jobs::Status::Running;
+    return job && job->status == jobs::Status::Running && job->run == run;
 }
 
 // The claim name of the agent of a job (the brief's examples and the prompt use it).
@@ -117,12 +123,13 @@ std::string one_line(const std::string& text) {
 }
 
 // Runs a job on Claude Code headless; returns "" or the error. The output streams into the job.
-std::string run_agent(const HooksPtr& hooks, const std::string& id, const jobs::Request& request,
+std::string run_agent(const HooksPtr& hooks, const std::string& id, std::uint64_t run, const jobs::Request& request,
                       const std::filesystem::path& claude, const agent::TasksCommand& tasks,
                       const agent::Brief& brief, const std::filesystem::path& cwd, const std::string& model) {
     namespace fs = std::filesystem;
     std::error_code ec;
-    const fs::path dir = fs::temp_directory_path(ec) / "ai-desktop-jobs";
+    // In the person's config folder, not a shared temp folder (where another user could plant a link).
+    const fs::path dir = fs::u8path(config::directory()) / "job-briefs";
     fs::create_directories(dir, ec);
     const fs::path brief_file = dir / (id + ".brief.md");
     {
@@ -159,10 +166,10 @@ std::string run_agent(const HooksPtr& hooks, const std::string& id, const jobs::
     {
         std::lock_guard<std::mutex> lock(g_cancel_mutex);
         process::Child* raw = child.get();
-        g_cancels[id] = [raw] { raw->kill(); };
+        g_cancels[id] = Cancel{run, [raw] { raw->kill(); }};
     }
     // Cancelled while the brief was fetched or the child started: it ends at once.
-    if (!still_running(id)) {
+    if (!still_running(id, run)) {
         child->kill();
     }
     bool got_result = false;
@@ -172,7 +179,7 @@ std::string run_agent(const HooksPtr& hooks, const std::string& id, const jobs::
     child->read_lines(
         [&](const std::string& line) {
             const agent::Event event = agent::render(line);
-            if (!event.text.empty() && !jobs::store().append(id, event.text)) {
+            if (!event.text.empty() && !jobs::store().append(id, run, event.text)) {
                 // Cancelled or put away: nothing more is shown; the process tree is ended by the cancel.
             }
             if (event.final) {
@@ -189,7 +196,10 @@ std::string run_agent(const HooksPtr& hooks, const std::string& id, const jobs::
     const std::string stderr_text = child->stderr_tail();
     {
         std::lock_guard<std::mutex> lock(g_cancel_mutex);
-        g_cancels.erase(id);
+        // Only this run's entry: a run started since (after a cancel) has its own.
+        if (const auto it = g_cancels.find(id); it != g_cancels.end() && it->second.run == run) {
+            g_cancels.erase(it);
+        }
     }
     child.reset();
     fs::remove(brief_file, ec);
@@ -214,15 +224,15 @@ std::string run_agent(const HooksPtr& hooks, const std::string& id, const jobs::
 }
 
 // One answer of a model, streamed into the job.
-std::string run_once(const HooksPtr& hooks, const std::string& id, const jobs::Request& request,
+std::string run_once(const HooksPtr& hooks, const std::string& id, std::uint64_t run, const jobs::Request& request,
                      const std::string& model) {
     return hooks->run(jobs::run_prompt(request), jobs::run_system(), model,
-                      [&id](const std::string& delta) { jobs::store().append(id, delta); });
+                      [&id, run](const std::string& delta) { jobs::store().append(id, run, delta); });
 }
 
 // The run of a job that Store::start() moved to Running, on a thread of its own: Claude Code for the agent model
 // (when it, the tasks command and its brief are there), else one answer of the model.
-void run_job(const HooksPtr& hooks, const std::string& id) {
+void run_job(const HooksPtr& hooks, const std::string& id, std::uint64_t run) {
     const auto job = jobs::store().get(id);
     if (!job) {
         return;
@@ -230,8 +240,8 @@ void run_job(const HooksPtr& hooks, const std::string& id) {
     const jobs::Request& request = job->request;
     const std::string model = job->model;
     if (!agent::is_agent_model(model)) {
-        jobs::store().describe(id, "model", "", nullptr);
-        jobs::store().finish(id, run_once(hooks, id, request, model));
+        jobs::store().describe(id, run, "model", "", nullptr);
+        jobs::store().finish(id, run, run_once(hooks, id, run, request, model));
         return;
     }
     std::string why;
@@ -247,36 +257,36 @@ void run_job(const HooksPtr& hooks, const std::string& id) {
             cwd = agent::work_dir(request.vault, request.area, &why);
         }
     }
-    if (!still_running(id)) {
+    if (!still_running(id, run)) {
         return;  // cancelled while the brief was fetched
     }
     if (why.empty()) {
         const nlohmann::json info = {{"brief_version", brief.brief_version},
                                      {"contract_schema", brief.contract_schema},
                                      {"engine_version", brief.engine_version}};
-        jobs::store().describe(id, agent::kModel, brief.note, info);
-        jobs::store().finish(id, run_agent(hooks, id, request, claude, tasks, brief, cwd, model));
+        jobs::store().describe(id, run, agent::kModel, brief.note, info);
+        jobs::store().finish(id, run, run_agent(hooks, id, run, request, claude, tasks, brief, cwd, model));
         return;
     }
     // Without Claude Code, the tasks command or its brief the job is answered once, as before, and says why.
     const std::string fallback = config::effective("default_model");
-    jobs::store().describe(id, "model", why + "; one answer of " + fallback + " instead", nullptr);
+    jobs::store().describe(id, run, "model", why + "; one answer of " + fallback + " instead", nullptr);
     if (job->is_private && !models::resolve(fallback).local) {
-        jobs::store().finish(id, "the area is private and " + fallback + " is not local: nothing was sent");
+        jobs::store().finish(id, run, "the area is private and " + fallback + " is not local: nothing was sent");
         return;
     }
-    jobs::store().finish(id, run_once(hooks, id, request, fallback));
+    jobs::store().finish(id, run, run_once(hooks, id, run, request, fallback));
 }
 
-void spawn_run(const HooksPtr& hooks, const std::string& id) {
+void spawn_run(const HooksPtr& hooks, const std::string& id, std::uint64_t run) {
     hooks->event("job", "jobs", id);
-    std::thread([hooks, id] {
+    std::thread([hooks, id, run] {
         try {
-            run_job(hooks, id);
+            run_job(hooks, id, run);
         } catch (const std::exception& e) {
-            jobs::store().finish(id, std::string("ai-desktop: ") + e.what());
+            jobs::store().finish(id, run, std::string("ai-desktop: ") + e.what());
         } catch (...) {
-            jobs::store().finish(id, "ai-desktop: unknown internal error");
+            jobs::store().finish(id, run, "ai-desktop: unknown internal error");
         }
         hooks->event("job", "jobs", id);
     }).detach();
@@ -299,11 +309,12 @@ config::Status run_or_hold(const HooksPtr& hooks, const std::string& id, const s
         return {409, "the area '" + job->request.area +
                          "' is private: it goes to a local model only, or after you confirmed it"};
     }
-    config::Status st = jobs::store().start(id, model, markdown);
+    std::uint64_t run = 0;
+    config::Status st = jobs::store().start(id, model, markdown, &run);
     if (!st.ok()) {
         return st;
     }
-    spawn_run(hooks, id);
+    spawn_run(hooks, id, run);
     return {};
 }
 

@@ -415,7 +415,7 @@ bool Store::remove(const std::string& id) {
 }
 
 config::Status Store::start(const std::string& id, const std::string& model,
-                            const std::optional<std::string>& markdown) {
+                            const std::optional<std::string>& markdown, std::uint64_t* run) {
     std::lock_guard<std::mutex> lock(mutex_);
     Job* job = find_locked(id);
     if (!job) {
@@ -433,6 +433,10 @@ config::Status Store::start(const std::string& id, const std::string& model,
         job->request.markdown = *markdown;
     }
     job->status = Status::Running;
+    job->run += 1;
+    if (run) {
+        *run = job->run;
+    }
     job->model = model;
     job->output.clear();
     job->output_truncated = false;
@@ -460,10 +464,10 @@ config::Status Store::hold(const std::string& id, const std::string& model) {
     return {};
 }
 
-bool Store::append(const std::string& id, const std::string& delta) {
+bool Store::append(const std::string& id, std::uint64_t run, const std::string& delta) {
     std::lock_guard<std::mutex> lock(mutex_);
     Job* job = find_locked(id);
-    if (!job || job->status != Status::Running) {
+    if (!job || job->status != Status::Running || job->run != run) {
         return false;
     }
     if (job->output_truncated) {
@@ -483,10 +487,10 @@ bool Store::append(const std::string& id, const std::string& delta) {
     return true;
 }
 
-void Store::finish(const std::string& id, const std::string& error) {
+void Store::finish(const std::string& id, std::uint64_t run, const std::string& error) {
     std::lock_guard<std::mutex> lock(mutex_);
     Job* job = find_locked(id);
-    if (!job || job->status != Status::Running) {
+    if (!job || job->status != Status::Running || job->run != run) {
         return;
     }
     job->status = error.empty() ? Status::Done : Status::Failed;
@@ -494,11 +498,11 @@ void Store::finish(const std::string& id, const std::string& error) {
     job->updated = usage::now_iso8601();
 }
 
-void Store::describe(const std::string& id, const std::string& runner, const std::string& note,
+void Store::describe(const std::string& id, std::uint64_t run, const std::string& runner, const std::string& note,
                      const json& brief) {
     std::lock_guard<std::mutex> lock(mutex_);
     Job* job = find_locked(id);
-    if (!job || job->status != Status::Running) {
+    if (!job || job->status != Status::Running || job->run != run) {
         return;
     }
     job->runner = runner;

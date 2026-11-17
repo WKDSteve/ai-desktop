@@ -39,6 +39,12 @@ json valid_body() {
             {"mode", "prefill"}};
 }
 
+// The number of the job's current run (0 when it is gone).
+std::uint64_t run_of(const std::string& id) {
+    const auto job = jobs::store().get(id);
+    return job ? job->run : 0;
+}
+
 int status_of(const json& body) {
     jobs::Request request;
     return jobs::parse_request(body, request).http;
@@ -216,9 +222,9 @@ TEST(jobs_the_store_runs_holds_and_finishes) {
     CHECK_EQ(jobs::store().hold(id, "gpt-4o").http, 409);
     CHECK(jobs::store().get(id)->status == jobs::Status::Running);
 
-    CHECK(jobs::store().append(id, "Hello "));
-    CHECK(jobs::store().append(id, "world"));
-    jobs::store().finish(id, "");
+    CHECK(jobs::store().append(id, run_of(id), "Hello "));
+    CHECK(jobs::store().append(id, run_of(id), "world"));
+    jobs::store().finish(id, run_of(id), "");
     job = jobs::store().get(id);
     CHECK(job->status == jobs::Status::Done);
     CHECK_EQ(job->output, std::string("Hello world"));
@@ -230,13 +236,13 @@ TEST(jobs_the_store_runs_holds_and_finishes) {
     CHECK(jobs::to_json(*job, true).contains("markdown"));
 
     CHECK(jobs::store().start(id, "llama3", std::nullopt).ok());
-    jobs::store().finish(id, "backend down");
+    jobs::store().finish(id, run_of(id), "backend down");
     CHECK(jobs::store().get(id)->status == jobs::Status::Failed);
 
     CHECK(jobs::store().remove(id));
     CHECK(!jobs::store().remove(id));
     CHECK(!jobs::store().get(id).has_value());
-    CHECK(!jobs::store().append(id, "late"));
+    CHECK(!jobs::store().append(id, run_of(id), "late"));
     CHECK_EQ(jobs::store().start(id, "x", std::nullopt).http, 404);
 }
 
@@ -265,8 +271,8 @@ TEST(jobs_the_output_is_cut_at_a_character_boundary) {
     CHECK(jobs::parse_request(valid_body(), request).ok());
     const std::string id = jobs::store().add(request, false);
     CHECK(jobs::store().start(id, "m", std::nullopt).ok());
-    CHECK(jobs::store().append(id, std::string(jobs::kMaxOutputBytes - 1, 'x')));
-    CHECK(jobs::store().append(id, "\xc3\xa4\xc3\xa4"));  // "ää": the first does not fit whole
+    CHECK(jobs::store().append(id, run_of(id), std::string(jobs::kMaxOutputBytes - 1, 'x')));
+    CHECK(jobs::store().append(id, run_of(id), "\xc3\xa4\xc3\xa4"));  // "ää": the first does not fit whole
     const auto job = jobs::store().get(id);
     CHECK(job->output_truncated);
     CHECK_EQ(job->output.size(), jobs::kMaxOutputBytes - 1);
@@ -291,4 +297,32 @@ TEST(jobs_ids_are_hex_and_differ) {
     const std::string b = jobs::new_id();
     CHECK(a != b);
     CHECK_EQ(a.find_first_not_of("0123456789abcdef"), std::string::npos);
+}
+
+TEST(jobs_a_cancelled_run_does_not_write_into_the_next) {
+    Sandbox box("jobs-runs");
+    jobs::Request request;
+    CHECK(jobs::parse_request(valid_body(), request).ok());
+    const std::string id = jobs::store().add(request, false);
+    std::uint64_t first = 0;
+    std::uint64_t second = 0;
+    CHECK(jobs::store().start(id, "m", std::nullopt, &first).ok());
+    CHECK(jobs::store().cancel(id).ok());
+    CHECK(jobs::store().get(id)->status == jobs::Status::Cancelled);
+    CHECK_EQ(jobs::store().cancel(id).http, 409);
+    CHECK(jobs::store().start(id, "m", std::nullopt, &second).ok());
+    CHECK(second == first + 1);
+    // The first run's thread, still ending, writes and finishes: nothing of it reaches the second.
+    CHECK(!jobs::store().append(id, first, "old"));
+    jobs::store().describe(id, first, "model", "old note", nullptr);
+    jobs::store().finish(id, first, "old error");
+    auto job = jobs::store().get(id);
+    CHECK(job->status == jobs::Status::Running);
+    CHECK(job->output.empty());
+    CHECK(job->note.empty());
+    CHECK(jobs::store().append(id, second, "new"));
+    jobs::store().finish(id, second, "");
+    job = jobs::store().get(id);
+    CHECK(job->status == jobs::Status::Done);
+    CHECK_EQ(job->output, std::string("new"));
 }
