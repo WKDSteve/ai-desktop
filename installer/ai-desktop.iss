@@ -153,14 +153,67 @@ begin
     RegWriteExpandStringValue(HKCU, EnvKey, 'Path', NewPath);
 end;
 
+{ The family folder of appkit (docs/FAMILY.md of appkit): APPKIT_FAMILY_DIR, else
+  %LOCALAPPDATA%\appkit-family. The other apps of the family (tasks-desktop) read
+  installed\ai-desktop.json there to know that ai-desktop is installed. }
+function FamilyManifest: string;
+var
+  Dir: string;
+begin
+  Dir := GetEnv('APPKIT_FAMILY_DIR');
+  if Dir = '' then
+    Dir := ExpandConstant('{localappdata}') + '\appkit-family';
+  Result := AddBackslash(Dir) + 'installed\ai-desktop.json';
+end;
+
+function JsonString(const S: string): string;
+begin
+  Result := S;
+  StringChangeEx(Result, '\', '\\', True);
+  StringChangeEx(Result, '"', '\"', True);
+  Result := '"' + Result + '"';
+end;
+
+{ Written through a temporary file; a failure only means the other apps do not
+  offer ai-desktop, so it never stops the setup. UTF-8 with a byte order mark,
+  which the reader of appkit allows. }
+procedure RegisterInFamily;
+var
+  Path, Tmp: string;
+  Lines: TArrayOfString;
+begin
+  Path := FamilyManifest;
+  Tmp := Path + '.tmp';
+  SetArrayLength(Lines, 7);
+  Lines[0] := '{';
+  Lines[1] := '  "schema": "appkit-installed/1",';
+  Lines[2] := '  "app": "ai-desktop",';
+  Lines[3] := '  "version": ' + JsonString('{#AppVersion}') + ',';
+  Lines[4] := '  "program": ' + JsonString(ExpandConstant('{app}\app\ai-desktop.exe')) + ',';
+  Lines[5] := '  "env_prefix": "AI_DESKTOP"';
+  Lines[6] := '}';
+  if not ForceDirectories(ExtractFileDir(Path)) then
+    Exit;
+  if not SaveStringsToUTF8File(Tmp, Lines, False) then
+    Exit;
+  DeleteFile(Path);
+  if not RenameFile(Tmp, Path) then
+    DeleteFile(Tmp);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if (CurStep = ssPostInstall) and WizardIsTaskSelected('addtopath') then
     AddToUserPath(ExpandConstant('{app}'));
+  if CurStep = ssPostInstall then
+    RegisterInFamily;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usPostUninstall then
+  begin
     RemoveFromUserPath(ExpandConstant('{app}'));
+    DeleteFile(FamilyManifest);
+  end;
 end;

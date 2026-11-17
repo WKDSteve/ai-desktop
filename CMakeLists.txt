@@ -21,6 +21,7 @@ target_include_directories(third_party_headers INTERFACE third_party)
 add_library(ai_desktop_core STATIC
     src/catalog_parse.cpp
     src/config.cpp
+    src/family.cpp
     src/models.cpp
     src/paths.cpp
     src/providers.cpp
@@ -43,6 +44,10 @@ add_executable(ai-desktop
     src/gemini_client.cpp
 )
 target_include_directories(ai-desktop PRIVATE src)
+# The version the server reports in hub.json: the release and the rolling build pass the number of the
+# installer (scripts/setup.ps1 -Version), a build by hand says 0.0.0.
+set(AI_DESKTOP_VERSION "0.0.0" CACHE STRING "The version of ai-desktop (X.Y.Z)")
+target_compile_definitions(ai-desktop PRIVATE AI_DESKTOP_VERSION="${AI_DESKTOP_VERSION}")
 target_link_libraries(ai-desktop PRIVATE ai_desktop_core third_party_headers)
 
 # The cloud ModelRouter backends (openai/anthropic/gemini) talk to real
@@ -72,6 +77,7 @@ if(AI_DESKTOP_BUILD_TESTS)
         tests/unit/test_main.cpp
         tests/unit/test_catalog_parse.cpp
         tests/unit/test_config.cpp
+        tests/unit/test_family.cpp
         tests/unit/test_models.cpp
         tests/unit/test_paths.cpp
         tests/unit/test_providers.cpp

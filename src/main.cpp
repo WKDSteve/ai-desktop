@@ -16,10 +16,14 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#else
+#include <pthread.h>
+#include <signal.h>
 #endif
 
 #include "anthropic_client.hpp"
 #include "api.hpp"
+#include "family.hpp"
 #include "gemini_client.hpp"
 #include "legacy.hpp"
 #include "models.hpp"
@@ -268,6 +272,88 @@ void send_json_error(httplib::Response& res, int status, const std::string& mess
 constexpr int kDefaultPort = 8080;
 int g_port = kDefaultPort;
 
+// ---------------------------------------------------------------------------
+// The family: hub.json in the config folder says that ai-desktop runs, on which
+// port and as which instance (src/family.hpp). Written once the port is bound,
+// removed when the server ends -- also on Ctrl+C, closing the console window or
+// SIGTERM, which stop the server instead of killing the process.
+// ---------------------------------------------------------------------------
+#ifndef AI_DESKTOP_VERSION
+#define AI_DESKTOP_VERSION "0.0.0"
+#endif
+
+// New with every start; set before the server takes requests, read-only afterwards.
+std::string g_instance = ai_desktop::family::new_instance();
+std::filesystem::path g_family_dir;
+httplib::Server* g_server = nullptr;
+
+void leave_family() {
+    if (!g_family_dir.empty()) {
+        ai_desktop::family::remove_record(g_family_dir, g_instance);
+    }
+}
+
+#ifdef _WIN32
+// Runs on a thread of its own. For a closed window or a logoff Windows ends the process when this returns, so
+// the record goes here, not only after listen() returned.
+BOOL WINAPI on_console_event(DWORD) {
+    leave_family();
+    if (g_server) g_server->stop();
+    return TRUE;
+}
+#endif
+
+void stop_on_signals(httplib::Server& svr) {
+    g_server = &svr;
+#ifdef _WIN32
+    SetConsoleCtrlHandler(on_console_event, TRUE);
+#else
+    // Blocked here, before the threads of the server start (they inherit the mask), and taken by one thread.
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGINT);
+    sigaddset(&set, SIGTERM);
+    pthread_sigmask(SIG_BLOCK, &set, nullptr);
+    std::thread([set]() {
+        int signal = 0;
+        sigwait(&set, &signal);
+        leave_family();
+        if (g_server) g_server->stop();
+    }).detach();
+#endif
+}
+
+// The port is this server's alone. cpp-httplib's default lets a second server bind it as well (SO_REUSEADDR on
+// Windows, where the SO_EXCLUSIVEADDRUSE set after it then fails; SO_REUSEPORT elsewhere): two servers took turns
+// at the requests, and the second wrote over the hub.json of the first. SO_EXCLUSIVEADDRUSE alone on Windows;
+// SO_REUSEADDR alone elsewhere, which only allows a restart while old connections wait in TIME_WAIT.
+void exclusive_port(socket_t sock) {
+    int yes = 1;
+#ifdef _WIN32
+    setsockopt(sock, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, reinterpret_cast<const char*>(&yes), sizeof(yes));
+#else
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const void*>(&yes), sizeof(yes));
+#endif
+}
+
+void announce_to_family(httplib::Server& svr) {
+    stop_on_signals(svr);
+    ai_desktop::family::HubRecord record;
+    record.port = g_port;
+    record.pid = ai_desktop::family::current_pid();
+    record.version = AI_DESKTOP_VERSION;
+    record.instance = g_instance;
+    const std::filesystem::path dir = ai_desktop::family::config_dir();
+    std::string error = "no config folder (APPDATA / HOME unset; set AI_DESKTOP_CONFIG_DIR)";
+    if (!dir.empty() && ai_desktop::family::write_record(dir, record, &error)) {
+        g_family_dir = dir;
+        std::cout << "Family:    " << ai_desktop::family::record_path(dir).u8string() << " (port, instance)\n";
+    } else {
+        // The server works without it; the other apps of the family just do not find it.
+        std::cerr << "ai-desktop: the other apps of the family will not find this server: " << error << "\n";
+    }
+}
+
 bool is_allowed_origin(const std::string& origin) {
     const std::string port = std::to_string(g_port);
     return origin == "http://127.0.0.1:" + port || origin == "http://localhost:" + port;
@@ -506,6 +592,11 @@ int main(int argc, char** argv) {
         for (const auto& cloud : ai_desktop::providers::cloud()) {
             body["backends"][cloud.name] = !ai_desktop::secrets::get(cloud.key_name).empty();
         }
+        // Who answers: the same app, version and instance as hub.json, so a client of the family can tell
+        // that the server on this port is the one the file names.
+        body["app"] = ai_desktop::family::kApp;
+        body["version"] = AI_DESKTOP_VERSION;
+        body["instance"] = g_instance;
         res.set_content(body.dump(), "application/json");
     });
 
@@ -613,21 +704,29 @@ int main(int argc, char** argv) {
         );
     });
 
+    // Bind first, then tell the family: a second start whose port is taken must not write over the hub.json of
+    // the server that holds it. bind_to_port() returns false on a bind failure (e.g. port already in use)
+    // instead of throwing -- an unchecked return made the process exit silently with no indication why, which
+    // is exactly what happened during ModelRouter testing when a stray leftover instance still held the port.
+    svr.set_socket_options(exclusive_port);
+    if (!svr.bind_to_port("127.0.0.1", g_port)) {
+        std::cerr << "ai-desktop: failed to bind 127.0.0.1:" << g_port << " (port already in use?)\n";
+        return 1;
+    }
+    announce_to_family(svr);
+
     // Simulations-Agent in eigenem Thread starten
     std::thread sim(run_simulation_agent);
 
-    // HTTP-Server blockiert hier (Ctrl+C beendet). listen() returns false on
-    // a bind failure (e.g. port already in use) instead of throwing -- an
-    // unchecked return here made the process exit silently with no
-    // indication why, which is exactly what happened during ModelRouter
-    // testing when a stray leftover instance still held the port.
-    bool listen_ok = svr.listen("127.0.0.1", g_port);
+    // HTTP-Server blockiert hier (Ctrl+C beendet, und nimmt hub.json mit).
+    bool listen_ok = svr.listen_after_bind();
 
+    leave_family();
     running = false;
     sim.join();
 
     if (!listen_ok) {
-        std::cerr << "ai-desktop: failed to bind 127.0.0.1:" << g_port << " (port already in use?)\n";
+        std::cerr << "ai-desktop: the server on 127.0.0.1:" << g_port << " stopped with an error\n";
         return 1;
     }
     return 0;

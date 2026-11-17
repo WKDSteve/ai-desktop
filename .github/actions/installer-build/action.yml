@@ -37,8 +37,9 @@ runs:
       shell: pwsh
       env:
         MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        VERSION: ${{ inputs.version }}
       run: |
-        .\scripts\setup.ps1 -Msys2Root $env:MSYS2_ROOT -Prefix "$env:RUNNER_TEMP\stage" -BuildType Release
+        .\scripts\setup.ps1 -Msys2Root $env:MSYS2_ROOT -Prefix "$env:RUNNER_TEMP\stage" -BuildType Release -Version $env:VERSION
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: make sure Inno Setup is installed

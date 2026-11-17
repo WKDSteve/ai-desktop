@@ -251,6 +251,21 @@ model family without a rebuild. Read once at startup.
 `GET /health` shows which backends are currently configured (presence
 check only, never the key value itself).
 
+## Found by the other apps (the family)
+
+While it runs, ai-desktop says so in `hub.json` in its config folder (`AI_DESKTOP_CONFIG_DIR`, else
+`%APPDATA%\ai-desktop` or `~/.config/ai-desktop`; never the old loomAI folder), in the format of the hubs of
+[appkit](https://github.com/WKDSteve/appkit) (`docs/FAMILY.md` there): `app`, `port`, `pid`, `version` and an
+`instance` that is new with every start. It holds no secret. The file is written once the port is bound (a second
+start whose port is taken leaves the file of the running server alone) and removed when the server ends, also on
+Ctrl+C, a closed console window or SIGTERM; a file left by a killed server does not count, since the reader checks
+that the process lives. `GET /health` says the same `app`, `version` and `instance`, so a client can tell that
+the server on the port is the one the file names.
+
+The installer registers ai-desktop as installed in the family folder of appkit
+(`%LOCALAPPDATA%\appkit-family\installed\ai-desktop.json`, `APPKIT_FAMILY_DIR` moves it) and the uninstaller
+removes the entry. tasks-desktop reads both to offer handing a task to ai-desktop.
+
 ## HTTP API
 
 | Endpoint | Method | Purpose |
@@ -270,7 +285,10 @@ check only, never the key value itself).
 {
   "status": "ready",
   "model_router_ready": true,
-  "backends": { "ollama": true, "openai": true, "anthropic": false, "gemini": false }
+  "backends": { "ollama": true, "openai": true, "anthropic": false, "gemini": false },
+  "app": "ai-desktop",
+  "version": "0.1.0",
+  "instance": "0123456789abcdef0123456789abcdef"
 }
 ```
 

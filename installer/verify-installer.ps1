@@ -138,6 +138,19 @@ function Install-Setup {
     }
 }
 
+# The family of appkit (its docs/FAMILY.md): the setup says that ai-desktop is installed, the running server
+# says that it runs.
+$FamilyManifest = Join-Path $(if ($env:APPKIT_FAMILY_DIR) { $env:APPKIT_FAMILY_DIR } else { Join-Path $env:LOCALAPPDATA 'appkit-family' }) 'installed\ai-desktop.json'
+$HubRecord = Join-Path $(if ($env:AI_DESKTOP_CONFIG_DIR) { $env:AI_DESKTOP_CONFIG_DIR } else { Join-Path $env:APPDATA 'ai-desktop' }) 'hub.json'
+
+function Assert-FamilyManifest {
+    Assert-That (Test-Path -LiteralPath $FamilyManifest) "the setup did not register ai-desktop in the family ($FamilyManifest)"
+    $manifest = Get-Content -LiteralPath $FamilyManifest -Raw -Encoding UTF8 | ConvertFrom-Json
+    Assert-That ($manifest.schema -eq 'appkit-installed/1' -and $manifest.app -eq 'ai-desktop' -and $manifest.env_prefix -eq 'AI_DESKTOP') 'the family manifest is not one of appkit'
+    Assert-That ($manifest.program -ieq (Join-Path $InstallDir 'app\ai-desktop.exe')) "the family manifest names $($manifest.program)"
+    Write-Ok "registered in the family ($FamilyManifest, version $($manifest.version))"
+}
+
 function Assert-InstalledLayout {
     foreach ($rel in @('app\ai-desktop.exe', 'app\dashboard\index.html', 'ai-desktop.cmd', 'unins000.exe')) {
         Assert-That (Test-Path (Join-Path $InstallDir $rel)) "missing $rel"
@@ -163,6 +176,9 @@ function Start-InstalledServer {
     $health = Wait-ForHealth
     Assert-That ($null -ne $health) 'the installed server did not answer /health within 60 s'
     Write-Ok "/health: status=$($health.status)"
+    $record = Get-Content -LiteralPath $HubRecord -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json
+    Assert-That ($record -and $record.app -eq 'ai-desktop' -and $record.instance -eq $health.instance -and $record.port -eq $Port) "the server did not write $HubRecord for this start"
+    Write-Ok "hub.json names this start (instance $($record.instance))"
     $dashboard = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$Port/" -TimeoutSec 5
     Assert-That ($dashboard.StatusCode -eq 200) "dashboard answered $($dashboard.StatusCode)"
     Write-Ok 'dashboard served (the launcher started the server from the right directory)'
@@ -199,6 +215,7 @@ try {
 
     Write-Host "`n==> Checking the installed files"
     Assert-InstalledLayout
+    Assert-FamilyManifest
 
     Write-Host "`n==> Checking the user PATH (task addtopath)"
     $pathInstalled = Get-RawUserPath
@@ -266,6 +283,8 @@ if ($installed) {
     Assert-That (-not (Test-Path (Join-Path $InstallDir 'app'))) 'the uninstaller left the app directory behind'
     Assert-That (-not (Test-Path (Join-Path $InstallDir 'ai-desktop.cmd'))) 'the uninstaller left the launcher behind'
     Write-Ok 'files removed'
+    Assert-That (-not (Test-Path -LiteralPath $FamilyManifest)) 'the uninstaller left the family manifest behind'
+    Write-Ok 'taken out of the family'
     # Compare entry lists, not raw text: removing our entry may drop an empty
     # trailing ';' that was there before, which changes nothing for Windows.
     $deadline = [DateTime]::UtcNow.AddSeconds(10)
