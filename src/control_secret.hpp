@@ -24,6 +24,10 @@ std::string write(const std::filesystem::path& dir, const std::string& hex);
 // Removes the file (and ignores that it is gone).
 void remove(const std::filesystem::path& dir);
 
+// Removes the file only while it still holds `hex` (trimmed, at most 4 KiB read, as appkit's read_secret): a server
+// that started since with the same folder keeps its secret. Returns true when the file was ours and is gone.
+bool remove_if_ours(const std::filesystem::path& dir, const std::string& hex);
+
 // Compares the bearer token of `authorization` ("Bearer <hex>") with `secret` in constant time (for the length of
 // the secret). False when either is empty or the header is of another form.
 bool matches(const std::string& authorization, const std::string& secret);

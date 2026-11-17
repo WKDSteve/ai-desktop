@@ -144,6 +144,33 @@ void remove(const fs::path& dir) {
     fs::remove(path_in(dir), ignored);
 }
 
+bool remove_if_ours(const fs::path& dir, const std::string& hex) {
+    if (hex.empty()) {
+        return false;
+    }
+    std::string text;
+    {
+        std::ifstream in(path_in(dir), std::ios::binary);
+        if (!in) {
+            return false;
+        }
+        char buffer[4097];
+        in.read(buffer, sizeof buffer);
+        if (in.gcount() > 4096) {
+            return false;  // not a file this program wrote
+        }
+        text.assign(buffer, static_cast<std::size_t>(in.gcount()));
+    }
+    const std::size_t begin = text.find_first_not_of(" \t\r\n");
+    const std::size_t end = text.find_last_not_of(" \t\r\n");
+    const std::string trimmed = begin == std::string::npos ? "" : text.substr(begin, end - begin + 1);
+    if (trimmed != hex) {
+        return false;
+    }
+    std::error_code ec;
+    return fs::remove(path_in(dir), ec) && !ec;
+}
+
 bool matches(const std::string& authorization, const std::string& secret) {
     static const std::string kPrefix = "Bearer ";
     if (secret.empty() || authorization.size() != kPrefix.size() + secret.size() ||

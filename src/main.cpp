@@ -299,7 +299,7 @@ void leave_family() {
         ai_desktop::family::remove_record(g_family_dir, g_instance);
     }
     if (!g_secret_dir.empty()) {
-        ai_desktop::control_secret::remove(g_secret_dir);
+        ai_desktop::control_secret::remove_if_ours(g_secret_dir, g_control_secret);
     }
 }
 

@@ -38,6 +38,23 @@ TEST(control_secret_round_trips_through_the_file) {
     fs::remove_all(dir.parent_path(), ignored);
 }
 
+TEST(control_secret_is_removed_only_while_it_is_ours) {
+    const fs::path dir = minitest::make_temp_dir("secret-ours");
+    const std::string mine = secret::generate();
+    const std::string theirs = secret::generate();
+    CHECK(!secret::remove_if_ours(dir, mine));  // no file
+    CHECK_EQ(secret::write(dir, theirs), std::string(""));  // a server started since with the same folder
+    CHECK(!secret::remove_if_ours(dir, mine));
+    CHECK(fs::exists(secret::path_in(dir)));
+    CHECK(!secret::remove_if_ours(dir, ""));
+    CHECK(secret::remove_if_ours(dir, theirs));
+    CHECK(!fs::exists(secret::path_in(dir)));
+    minitest::write_file(secret::path_in(dir), std::string(5000, 'a'));  // larger than any secret: left alone
+    CHECK(!secret::remove_if_ours(dir, std::string(5000, 'a')));
+    std::error_code ignored;
+    fs::remove_all(dir, ignored);
+}
+
 TEST(control_secret_file_is_for_the_user_only) {
     const fs::path dir = minitest::make_temp_dir("secret-rights");
     CHECK_EQ(secret::write(dir, secret::generate()), std::string(""));
