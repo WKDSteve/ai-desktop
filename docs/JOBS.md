@@ -205,3 +205,9 @@ well read the vault itself. The secret keeps out everything outside that boundar
 **Not covered:** a program running as the person (it has the secret, the vault and the person's Claude Code
 anyway); an agent doing harm within its tools (it can change and push the repository of the area): what it did is in
 git and can be reverted, and its tool list is the boundary.
+
+**The agent may push (decision of 2026-11-18).** `Bash(git:*)` includes `git push`, on purpose: a task is finished
+when its commits are pushed, and a commit that stays local goes unnoticed. The barriers are the repository's own:
+its pre-push hooks (a repository that is pushed only by hand refuses an unconfirmed push, and the agent never passes
+`--no-verify`, as the person's Claude Code rules say) and its CI, which judges every push. Forbidding it would be one
+entry in the tool list (`--disallowedTools "Bash(git push:*)"`), should a repository ever need that.
