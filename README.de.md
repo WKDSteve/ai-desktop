@@ -425,6 +425,9 @@ verschicken, baut Gemini den Pfad direkt aus dem Modellnamen
   Modell nennt: Claude Code headless (`claude -p`, Einstellungen `claude_cli` / `tasks_cli` oder `PATH`) mit dem
   Baustein der tasks-Familie aus `tasks agent-brief`, sodass der Agent die Task selbst belegt und abschließt; Stopp
   beendet seinen ganzen Prozessbaum. Ohne Claude Code oder tasks-Befehl antwortet der Auftrag einmal und sagt warum.
+  Ein Auftrag der Art `review-done` prüft eine erledigte Task nur lesend gegen ihre Akzeptanz (die Diffs ihrer Commits
+  im Prompt, keine schreibenden Werkzeuge) und antwortet mit einem Abschnitt „Prüfung“, den der Aufrufer erst nach
+  einem Ja übernimmt.
   Vertrag und Threat-Model: [docs/JOBS.md](docs/JOBS.md); welche Programme ai-desktop startet:
   [docs/PROCESSES.md](docs/PROCESSES.md).
 - `ollama_client.cpp` öffnet pro Request eine neue TCP-Verbindung zu Ollama

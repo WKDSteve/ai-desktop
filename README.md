@@ -442,7 +442,9 @@ body, Gemini builds the path directly from the model name
   setting `jobs` turns them off. A job runs on `claude-code` unless it names another model: Claude Code headless
   (`claude -p`, the settings `claude_cli` / `tasks_cli` or `PATH`) with the brief of the tasks family from
   `tasks agent-brief`, so the agent claims and finishes the task itself; Stop ends its whole process tree. Without
-  Claude Code or the tasks command the job answers once and says why. Contract and threat model:
+  Claude Code or the tasks command the job answers once and says why. A job of the kind `review-done` checks a
+  finished task against its acceptance read-only (the diffs of its commits in the prompt, no writing tools) and
+  answers with a "Prüfung" section that the caller adds only after a yes. Contract and threat model:
   [docs/JOBS.md](docs/JOBS.md); the programs ai-desktop starts: [docs/PROCESSES.md](docs/PROCESSES.md).
 - `ollama_client.cpp` opens a new TCP connection to Ollama per request
   instead of reusing one -- known, deliberately deferred (would need a

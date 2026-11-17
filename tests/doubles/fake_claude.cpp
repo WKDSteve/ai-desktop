@@ -74,6 +74,22 @@ int main(int argc, char** argv) {
     }
     emit({{"type", "system"}, {"subtype", "init"}, {"model", "fake-model"}, {"cwd", std::filesystem::current_path().u8string()}});
 
+    // A review (kind review-done): read only, answer with the block between the markers; no tasks command.
+    if (prompt.find("<!-- review:begin -->") != std::string::npos) {
+        const std::string block = "<!-- review:begin -->\n## Prüfung\n\n2026-11-18, review by the stand-in: one open\n\n"
+                                  "- [x] it is done — erfüllt: feature.txt:1\n"
+                                  "- [ ] it is documented — offen: no README change\n\n"
+                                  "### Folgetask (Vorschlag)\n\n- title: Document it\n- summary: The README names it.\n"
+                                  "<!-- review:end -->";
+        emit({{"type", "assistant"},
+              {"message", {{"content", json::array({{{"type", "tool_use"}, {"name", "Read"}, {"input", {{"file_path", "feature.txt"}}}}})}}}});
+        emit({{"type", "assistant"},
+              {"message", {{"content", json::array({{{"type", "text"}, {"text", "Checked it.\n\n" + block}}})}}}});
+        emit({{"type", "result"}, {"subtype", "success"}, {"is_error", false}, {"result", block},
+              {"usage", {{"input_tokens", 5}, {"output_tokens", 6}}}});
+        return 0;
+    }
+
     std::smatch match;
     const std::regex claim_re("`tasks claim ([A-Za-z0-9._/-]+) --by=([^`\\s]+)`");
     if (!std::regex_search(prompt, match, claim_re)) {

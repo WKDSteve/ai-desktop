@@ -29,6 +29,7 @@ add_library(ai_desktop_core STATIC
     src/paths.cpp
     src/process.cpp
     src/providers.cpp
+    src/review.cpp
     src/secrets.cpp
     src/usage.cpp
 )
@@ -95,6 +96,7 @@ if(AI_DESKTOP_BUILD_TESTS)
         tests/unit/test_models.cpp
         tests/unit/test_paths.cpp
         tests/unit/test_process.cpp
+        tests/unit/test_review.cpp
         tests/unit/test_providers.cpp
         tests/unit/test_secrets.cpp
         tests/unit/test_usage.cpp
