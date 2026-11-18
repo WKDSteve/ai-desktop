@@ -281,7 +281,8 @@ turns all of it off (the tests do).
 
 ## Private areas
 
-The setting `private_areas` (comma-separated area names, `AI_DESKTOP_PRIVATE_AREAS` locks it) names the areas whose
+The setting `private_areas` (comma-separated area names, `AI_DESKTOP_PRIVATE_AREAS` locks it; matched without regard
+to case, since an area is a folder and `Kunde` and `kunde` are the same one on Windows) names the areas whose
 tasks go to a local model only (Ollama, or a custom model on a loopback address). A request may also say `"private":
 true`. A private job that is to run on any other model is held (`needs_confirmation`); the dashboard asks
 "The area ... is private. The model ... does not run locally: shall the task go there anyway?", and only the answer

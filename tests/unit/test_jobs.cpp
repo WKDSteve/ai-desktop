@@ -179,7 +179,11 @@ TEST(jobs_private_areas_come_from_the_settings_or_the_caller) {
     CHECK_EQ(config::effective("private_areas"), std::string("WKDBook-Tricentis,tricentis-vault"));
     CHECK(jobs::is_private("tricentis-vault", false));
     CHECK(jobs::is_private("WKDBook-Tricentis", false));
-    CHECK(!jobs::is_private("wkdbook-tricentis", false));  // area names are exact
+    // An area is a folder, and on Windows (and macOS) "wkdbook-tricentis" is the same folder: a private area must not
+    // go to a cloud model unasked because its name was written in another case.
+    CHECK(jobs::is_private("wkdbook-tricentis", false));
+    CHECK(jobs::is_private("TRICENTIS-VAULT", false));
+    CHECK(!jobs::is_private("tricentis-vault2", false));
     CHECK(!jobs::is_private("ai-desktop", false));
     CHECK_EQ(config::update_settings({{"private_areas", "a b"}}).http, 400);
     CHECK_EQ(config::update_settings({{"private_areas", "../x"}}).http, 400);

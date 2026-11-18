@@ -302,8 +302,17 @@ bool is_private(const std::string& area, bool private_hint) {
     if (private_hint) {
         return true;
     }
+    // Without regard to case: an area is a folder of the vault, and on Windows and macOS "Kunde" and "kunde" are the
+    // same one. A name in another case counts as private rather than going to a cloud model unasked. Area names are
+    // ASCII ([A-Za-z0-9._-], valid_area), so folding ASCII letters is enough.
+    const auto fold = [](unsigned char c) { return (c >= 'A' && c <= 'Z') ? static_cast<unsigned char>(c + 32) : c; };
     const auto areas = private_areas();
-    return std::find(areas.begin(), areas.end(), area) != areas.end();
+    return std::any_of(areas.begin(), areas.end(), [&](const std::string& name) {
+        return name.size() == area.size() &&
+               std::equal(name.begin(), name.end(), area.begin(), [&](char a, char b) {
+                   return fold(static_cast<unsigned char>(a)) == fold(static_cast<unsigned char>(b));
+               });
+    });
 }
 
 bool may_send(bool is_private_job, bool model_is_local) {
