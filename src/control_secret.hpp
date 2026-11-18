@@ -5,8 +5,9 @@
 
 // The control secret of the family (the `control.secret` of appkit, crates/appkit-core/src/registry.rs): 32 random
 // bytes as 64 lower-case hex digits and a line feed, in <config dir>/control.secret, readable by the user only (mode
-// 0600; on Windows the file is made empty, its rights cut down to the current user with no inherited entry, and only
-// then the secret written). A program of the family that may hand over a job reads it and sends
+// 0600; on Windows the current user alone with no inherited entry). An old file is removed first and the secret goes
+// into a new one that has these rights from its first moment (O_EXCL; on Windows CREATE_NEW with its security
+// descriptor), so a handle somebody opened on the old file never sees it. A program of the family that may hand over a job reads it and sends
 // `Authorization: Bearer <hex>`. A web page cannot read the file, so it cannot send a job. A new secret is made at
 // every start of the server and the file removed when it ends.
 namespace ai_desktop::control_secret {

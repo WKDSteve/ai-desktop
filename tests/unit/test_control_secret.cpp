@@ -88,6 +88,40 @@ TEST(control_secret_file_is_for_the_user_only) {
     fs::remove_all(dir, ignored);
 }
 
+// A program that may open files in the config folder (the folder's inherited rights can name another group) opens
+// an old control.secret, or plants one, before the server starts and keeps the handle. Rights set on that file
+// afterwards do not take back a handle already open: the secret must go into a new file, never into that one.
+TEST(control_secret_never_goes_into_a_file_someone_holds_open) {
+    const fs::path dir = minitest::make_temp_dir("secret-held");
+    const fs::path path = secret::path_in(dir);
+    const std::string hex = secret::generate();
+#ifdef _WIN32
+    minitest::write_file(path, "");
+    HANDLE held = CreateFileW(path.wstring().c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                              nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    CHECK(held != INVALID_HANDLE_VALUE);
+    const std::string error = secret::write(dir, hex);
+    char buffer[256];
+    DWORD got = 0;
+    SetFilePointer(held, 0, nullptr, FILE_BEGIN);
+    CHECK(ReadFile(held, buffer, sizeof buffer, &got, nullptr));
+    CHECK_EQ(std::string(buffer, got).find(hex), std::string::npos);
+    CloseHandle(held);
+#else
+    // Elsewhere the same idea through a link: the secret must not follow it into the file it names.
+    const fs::path victim = dir / "victim";
+    minitest::write_file(victim, "keep me");
+    fs::create_symlink(victim, path);
+    const std::string error = secret::write(dir, hex);
+    CHECK_EQ(minitest::read_file(victim), std::string("keep me"));
+#endif
+    if (error.empty()) {
+        CHECK_EQ(minitest::read_file(path), hex + "\n");
+    }
+    std::error_code ignored;
+    fs::remove_all(dir, ignored);
+}
+
 TEST(control_secret_matches_only_the_exact_bearer) {
     const std::string hex = secret::generate();
     CHECK(secret::matches("Bearer " + hex, hex));

@@ -249,10 +249,12 @@ and writes them as 64 lower-case hex digits and a line feed to `control.secret` 
 `~/Library/Application Support/ai-desktop`; never the old loomAI folder that `config.json` may still be read from),
 the file and the form of `control.secret` of the appkit hubs (`appkit-core/src/registry.rs`):
 
-- Windows: the file is created empty, its rights are set to the current user alone (one entry, full control,
-  nothing inherited: the folder's inherited list can name other groups), and only then the secret is written. If the
-  rights cannot be set, no secret is written and `POST /jobs` answers `503`; the server runs on.
-- Elsewhere: mode `0600`, also for an old file.
+- An old file is removed first, and the secret goes into a new file that has its rights from its first moment: a
+  program that opened the old one (or planted it) keeps a handle on that file only, never on the secret.
+- Windows: the rights are the current user alone (one entry, full control, nothing inherited: the folder's inherited
+  list can name other groups), given when the file is created. If they cannot be given or the old file cannot be
+  removed, no secret is written and `POST /jobs` answers `503`; the server runs on.
+- Elsewhere: mode `0600`, the file made with `O_EXCL` (never through a link).
 - It is written once the port is bound, like `hub.json`: a second start whose port is taken leaves the secret of the
   running server alone.
 - The file is removed when the server ends (also on Ctrl+C, closing its console, SIGINT, SIGTERM), together with

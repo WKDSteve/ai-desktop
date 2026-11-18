@@ -33,8 +33,9 @@ bool random_bytes(unsigned char* out, std::size_t count) {
 
 #ifdef _WIN32
 // The rights of the file: the current user alone, full control, nothing inherited (the folder's inherited list can
-// name other groups; appkit measured a sandbox group with the right to change the file).
-std::string restrict_to_user(const fs::path& path) {
+// name other groups; appkit measured a sandbox group with the right to change the file). The caller frees `*acl`
+// with LocalFree.
+std::string user_only_acl(PACL* acl) {
     HANDLE token = nullptr;
     if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) {
         return "OpenProcessToken failed (" + std::to_string(GetLastError()) + ")";
@@ -56,17 +57,47 @@ std::string restrict_to_user(const fs::path& path) {
     access.Trustee.TrusteeForm = TRUSTEE_IS_SID;
     access.Trustee.TrusteeType = TRUSTEE_IS_USER;
     access.Trustee.ptstrName = reinterpret_cast<LPWSTR>(sid);
-    PACL acl = nullptr;
-    if (const DWORD rc = SetEntriesInAclW(1, &access, nullptr, &acl); rc != ERROR_SUCCESS) {
+    if (const DWORD rc = SetEntriesInAclW(1, &access, nullptr, acl); rc != ERROR_SUCCESS) {
         return "SetEntriesInAcl failed (" + std::to_string(rc) + ")";
     }
-    std::wstring name = path.wstring();
-    const DWORD rc = SetNamedSecurityInfoW(name.data(), SE_FILE_OBJECT,
-                                           DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION, nullptr,
-                                           nullptr, acl, nullptr);
+    return "";
+}
+
+// Creates `path` as a new file that has those rights from its first moment, and writes `content` into it. Never an
+// old file: a program that opened it before (the inherited rights of the folder may let it) keeps its handle when the
+// rights change afterwards, and would read the secret through it.
+std::string create_user_only(const fs::path& path, const std::string& content) {
+    PACL acl = nullptr;
+    if (std::string error = user_only_acl(&acl); !error.empty()) {
+        return "the control secret could not be restricted to you (" + error +
+               "); set AI_DESKTOP_CONFIG_DIR to a folder that only you own";
+    }
+    SECURITY_DESCRIPTOR descriptor;
+    const bool described = InitializeSecurityDescriptor(&descriptor, SECURITY_DESCRIPTOR_REVISION) &&
+                           SetSecurityDescriptorDacl(&descriptor, TRUE, acl, FALSE) &&
+                           SetSecurityDescriptorControl(&descriptor, SE_DACL_PROTECTED, SE_DACL_PROTECTED);
+    if (!described) {
+        const DWORD rc = GetLastError();
+        LocalFree(acl);
+        return "the control secret could not be restricted to you (security descriptor: " + std::to_string(rc) +
+               "); set AI_DESKTOP_CONFIG_DIR to a folder that only you own";
+    }
+    SECURITY_ATTRIBUTES attributes{sizeof attributes, &descriptor, FALSE};
+    // No sharing while it is written; CREATE_NEW fails when a file of that name is (still) there.
+    const HANDLE file = CreateFileW(path.wstring().c_str(), GENERIC_WRITE, 0, &attributes, CREATE_NEW,
+                                    FILE_ATTRIBUTE_NORMAL, nullptr);
+    const DWORD create_error = GetLastError();
     LocalFree(acl);
-    if (rc != ERROR_SUCCESS) {
-        return "SetNamedSecurityInfo failed (" + std::to_string(rc) + ")";
+    if (file == INVALID_HANDLE_VALUE) {
+        return "cannot create " + path.u8string() + " (" + std::to_string(create_error) + ")";
+    }
+    DWORD written = 0;
+    const bool wrote = WriteFile(file, content.data(), static_cast<DWORD>(content.size()), &written, nullptr) &&
+                       written == content.size();
+    CloseHandle(file);
+    if (!wrote) {
+        DeleteFileW(path.wstring().c_str());
+        return "cannot write " + path.u8string();
     }
     return "";
 }
@@ -104,35 +135,27 @@ std::string write(const fs::path& dir, const std::string& hex) {
     }
     const fs::path path = path_in(dir);
     const std::string content = hex + "\n";
+    // An old file goes first (one a crash left, or one somebody planted or holds open): the secret is only ever
+    // written into a file made new for it, with its rights from the start.
+    if (!fs::remove(path, ec) && ec) {
+        return "cannot replace the old " + path.u8string() + ": " + ec.message();
+    }
 #ifdef _WIN32
-    {
-        std::ofstream empty(path, std::ios::binary | std::ios::trunc);
-        if (!empty) {
-            return "cannot create " + path.u8string();
-        }
-    }
-    if (std::string error = restrict_to_user(path); !error.empty()) {
-        std::error_code ignored;
-        fs::remove(path, ignored);
-        return "the control secret could not be restricted to you (" + error +
-               "); set AI_DESKTOP_CONFIG_DIR to a folder that only you own";
-    }
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    out << content;
-    out.flush();
-    if (!out) {
-        return "cannot write " + path.u8string();
+    if (std::string error = create_user_only(path, content); !error.empty()) {
+        return error;
     }
 #else
-    const int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    // O_EXCL: a new file only, and never through a link that was put in its place meanwhile.
+    const int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
     if (fd < 0) {
         return "cannot create " + path.u8string();
     }
-    // The mode of open() applies to a new file only; an old one is set right here.
+    // The umask can take bits away from the mode of open(); the file gets exactly 0600.
     const bool ok = ::fchmod(fd, 0600) == 0 &&
                     ::write(fd, content.data(), content.size()) == static_cast<ssize_t>(content.size());
     ::close(fd);
     if (!ok) {
+        ::unlink(path.c_str());
         return "cannot write " + path.u8string();
     }
 #endif
