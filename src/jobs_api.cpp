@@ -254,14 +254,31 @@ void answer_once_instead(const HooksPtr& hooks, const std::string& id, std::uint
 // (Read, Glob, Grep; shell, edits and the web refused), another model answers once. Nothing is written.
 void run_review(const HooksPtr& hooks, const std::string& id, std::uint64_t run, const jobs::Job& job) {
     const jobs::Request& request = job.request;
-    // review-done reads the commits that delivered the task, prepare-decision the ones its references name.
+    // review-done reads the commits that delivered the task, prepare-decision the ones its references name;
+    // split-plan reads no commits, but the brief of the tasks family for the allowed values of its drafts.
     const bool decision = request.kind == review::kDecisionKind;
-    const auto commits = decision ? review::refs_of(request.markdown, "refs") : review::commits_of(request.markdown);
-    const std::string diff_text = review::diffs(request.vault, commits);
-    const std::string prompt =
-        decision ? review::decision_prompt(request, diff_text, id) : review::prompt(request, diff_text, id);
-    const std::string system = decision ? review::decision_system() : review::system();
-    const std::string what = decision ? "decision" : "review";
+    const bool split = request.kind == review::kSplitKind;
+    std::vector<review::Commit> commits;
+    if (decision) {
+        commits = review::refs_of(request.markdown, "refs");
+    } else if (!split) {
+        commits = review::commits_of(request.markdown);
+    }
+    std::string prompt;
+    std::string system;
+    std::string what;
+    if (split) {
+        agent::Brief brief;
+        const bool have_brief = agent::fetch_brief(agent::find_tasks(), by_of(id), brief).ok();
+        prompt = review::split_prompt(request, have_brief ? brief.markdown : "", id);
+        system = review::split_system();
+        what = "split";
+    } else {
+        const std::string diff_text = review::diffs(request.vault, commits);
+        prompt = decision ? review::decision_prompt(request, diff_text, id) : review::prompt(request, diff_text, id);
+        system = decision ? review::decision_system() : review::system();
+        what = decision ? "decision" : "review";
+    }
     if (!still_running(id, run)) {
         return;  // cancelled while the diffs were read
     }
@@ -299,7 +316,7 @@ void run_job(const HooksPtr& hooks, const std::string& id, std::uint64_t run) {
     }
     const jobs::Request& request = job->request;
     const std::string model = job->model;
-    if (request.kind == review::kKind || request.kind == review::kDecisionKind) {
+    if (request.kind == review::kKind || request.kind == review::kDecisionKind || request.kind == review::kSplitKind) {
         run_review(hooks, id, run, *job);
         return;
     }

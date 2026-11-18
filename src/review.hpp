@@ -24,6 +24,12 @@ constexpr const char* kDecisionKind = "prepare-decision";
 constexpr const char* kDecisionBegin = "<!-- decision:begin -->";
 constexpr const char* kDecisionEnd = "<!-- decision:end -->";
 
+// `split-plan`: the same read-only run for a plan file (sent with the list of the plan's tasks); the answer ends with
+// one JSON object of phases and task drafts between the markers, which tasks.nvim offers to tick and create.
+constexpr const char* kSplitKind = "split-plan";
+constexpr const char* kSplitBegin = "<!-- split:begin -->";
+constexpr const char* kSplitEnd = "<!-- split:end -->";
+
 // A diff is cut at this size, all of them together at the second.
 constexpr std::size_t kMaxDiffBytes = 48 * 1024;
 constexpr std::size_t kMaxDiffsBytes = 160 * 1024;
@@ -62,6 +68,11 @@ std::vector<std::filesystem::path> read_dirs(const std::string& vault, const std
 // The prompt and the system text of a decision (`prepare-decision`).
 std::string decision_prompt(const jobs::Request& request, const std::string& diffs, const std::string& job_id);
 std::string decision_system();
+
+// The prompt and the system text of splitting a plan (`split-plan`). `brief` is the brief of the tasks family (the
+// allowed values of every field) or empty when the tasks command was not found.
+std::string split_prompt(const jobs::Request& request, const std::string& brief, const std::string& job_id);
+std::string split_system();
 
 // The arguments of `claude` for a review: print mode, stream-json, read-only tools (Read, Glob, Grep), the folders to
 // read, the model when one is named. The prompt goes on stdin.

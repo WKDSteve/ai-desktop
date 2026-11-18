@@ -446,7 +446,8 @@ body, Gemini builds the path directly from the model name
   finished task against its acceptance read-only (the diffs of its commits in the prompt, no writing tools) and
   answers with a "Prüfung" section that the caller adds only after a yes; `prepare-decision` prepares a task that
   waits for a decision the same way (options with consequences, a recommendation, open questions to answer with one
-  choice; the person decides). Contract and threat model:
+  choice; the person decides); `split-plan` proposes the task drafts a plan still needs, which the caller creates
+  only when ticked. Contract and threat model:
   [docs/JOBS.md](docs/JOBS.md); the programs ai-desktop starts: [docs/PROCESSES.md](docs/PROCESSES.md).
 - `ollama_client.cpp` opens a new TCP connection to Ollama per request
   instead of reusing one -- known, deliberately deferred (would need a

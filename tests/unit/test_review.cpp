@@ -64,6 +64,25 @@ TEST(decision_prompt_asks_for_options_and_questions) {
     CHECK(review::decision_system().find("never decide") != std::string::npos);
 }
 
+TEST(split_prompt_asks_for_json_drafts) {
+    ai_desktop::jobs::Request request;
+    request.task_id = "ALL/the-plan";
+    request.area = "ALL";
+    request.vault = "/vault";
+    request.source = "tasks.nvim";
+    request.markdown = "---\ntitle: The plan\nphase_order: [analyse, build]\n---\n\nGoal.\n";
+    const std::string with_brief = review::split_prompt(request, "# Tasks family\n\nkind: feature, task\n", "j");
+    CHECK(with_brief.find(review::kSplitBegin) != std::string::npos);
+    CHECK(with_brief.find(review::kSplitEnd) != std::string::npos);
+    CHECK(with_brief.find("\"tasks\"") != std::string::npos);
+    CHECK(with_brief.find("phase_order: [analyse, build]") != std::string::npos);
+    CHECK(with_brief.find("kind: feature, task") != std::string::npos);
+    CHECK(with_brief.find("create no task") != std::string::npos);
+    const std::string without = review::split_prompt(request, "", "j");
+    CHECK(without.find("was not available here") != std::string::npos);
+    CHECK(review::split_system().find("never create") != std::string::npos);
+}
+
 TEST(review_reads_only) {
     const auto args = review::claude_args({"/vault", "/repos/x"}, "sonnet");
     for (const char* tool : {"Read", "Glob", "Grep", "Bash", "Edit", "Write", "WebFetch"}) {

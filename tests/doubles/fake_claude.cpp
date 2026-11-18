@@ -74,6 +74,20 @@ int main(int argc, char** argv) {
     }
     emit({{"type", "system"}, {"subtype", "init"}, {"model", "fake-model"}, {"cwd", std::filesystem::current_path().u8string()}});
 
+    // A plan to split (kind split-plan): read only, answer with the JSON drafts.
+    if (prompt.find("<!-- split:begin -->") != std::string::npos) {
+        const std::string block =
+            "<!-- split:begin -->\n"
+            "{\"phases\": [{\"name\": \"build\", \"new\": false}, {\"name\": \"polish\", \"new\": true}],\n"
+            " \"tasks\": [{\"title\": \"Build the thing\", \"area\": \"demo\", \"kind\": \"feature\", \"prio\": 2, "
+            "\"effort\": \"S\", \"value\": 4, \"phase\": \"build\", \"summary\": \"It is built.\", "
+            "\"acceptance\": [\"it runs\"], \"after\": [], \"blocked_by\": []}]}\n"
+            "<!-- split:end -->";
+        emit({{"type", "assistant"},
+              {"message", {{"content", json::array({{{"type", "text"}, {"text", "Split it.\n\n" + block}}})}}}});
+        emit({{"type", "result"}, {"subtype", "success"}, {"is_error", false}, {"result", block}});
+        return 0;
+    }
     // A decision (kind prepare-decision): read only, answer with the decision block.
     if (prompt.find("<!-- decision:begin -->") != std::string::npos) {
         const std::string block = "<!-- decision:begin -->\n## Vorschlag\n\n2026-11-18, the stand-in: take the file\n\n"

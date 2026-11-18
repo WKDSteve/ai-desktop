@@ -48,8 +48,9 @@ field is refused. The whole body is at most 320 KiB.
 
 `kind` names what the job asks for, so the family has one channel: `handoff` hands over a task to work on,
 `review-done` checks a finished task against its acceptance (see "Reviews"), `prepare-decision` prepares a task that
-waits for a decision (see "Decisions"). The other kinds are named and stored now and shown in the dashboard; their own
-prompts come with their own tasks, until then they run with the prompt of a hand-over.
+waits for a decision (see "Decisions"), `split-plan` splits a plan into task drafts (see "Splitting a plan").
+`draft-task` is named and stored and shown in the dashboard; its own prompt comes with a task of its own, until then
+it runs with the prompt of a hand-over.
 
 Answer `201`:
 
@@ -155,6 +156,26 @@ one block from `<!-- decision:begin -->` to `<!-- decision:end -->` with two sec
   tasks-desktop) answers with one choice.
 
 The agent decides nothing. The caller adds the sections only after a yes, and the task stays `decision`.
+
+## Splitting a plan (`kind: split-plan`)
+
+The caller sends the plan file as `markdown` (its id as `task_id`), with the list of the plan's tasks appended (id,
+status, phase, title), so that a model without tools sees them too. The run is read-only as a review is (the vault and
+the repository of the area to read); no commits are read, but ai-desktop puts the brief of the tasks family
+(`tasks agent-brief`, the allowed values of every field) into the prompt when the tasks command is there, else the
+values it knows. The prompt asks for what is missing to reach the plan's definition of done: no draft that repeats a
+task of the plan, small checkable tasks, the plan's phases where they fit. The answer ends with one JSON object between
+`<!-- split:begin -->` and `<!-- split:end -->`:
+
+```json
+{"phases": [{"name": "build", "new": false}],
+ "tasks": [{"title": "...", "area": "...", "kind": "feature", "prio": 2, "effort": "S", "value": 3,
+            "phase": "build", "summary": "...", "acceptance": ["..."], "after": ["area/slug", "#1"],
+            "blocked_by": []}]}
+```
+
+`#N` in `after`/`blocked_by` names another draft of the list. Nothing is created by the agent: the caller shows the
+drafts to tick and creates the ticked ones after a yes, a new phase only after its own question.
 
 Why read-only and no note file: the result must never reach the task by itself, and a single place for it (the job's
 output) is what the caller reads and offers. A private area asks first, as every job does.

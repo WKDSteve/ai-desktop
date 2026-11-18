@@ -3,7 +3,7 @@
 // not claude-code gets the same prompt for one answer. Nothing starts the real Claude Code.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -13,6 +13,7 @@ import { binaryPath, startServer } from "./helpers/server.mjs";
 
 const exe = process.platform === "win32" ? ".exe" : "";
 const fakeClaude = path.join(path.dirname(binaryPath()), `fake_claude${exe}`);
+const fakeTasks = path.join(path.dirname(binaryPath()), `fake_tasks${exe}`);
 
 function git(cwd, args) {
   return execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...args], {
@@ -64,6 +65,9 @@ describe("a job of the kind review-done", { skip: !existsSync(fakeClaude) && "bu
     git(repo, ["commit", "-q", "-m", "feat: the feature"]);
     sha = git(repo, ["rev-parse", "--short=12", "HEAD"]);
     mock = await startMock();
+    // The tasks command (a stand-in): split-plan puts its brief, the allowed values, into the prompt.
+    mkdirSync(path.join(root, "bin"));
+    copyFileSync(fakeTasks, path.join(root, "bin", `tasks${exe}`));
     const configDir = path.join(root, "config");
     mkdirSync(configDir);
     writeFileSync(
@@ -78,6 +82,7 @@ describe("a job of the kind review-done", { skip: !existsSync(fakeClaude) && "bu
       configDir,
       env: {
         AI_DESKTOP_CLAUDE_CLI: fakeClaude,
+        AI_DESKTOP_TASKS_CLI: path.join(root, "bin", `tasks${exe}`),
         AI_DESKTOP_JOBS_PER_MINUTE: "1000",
         FAKE_CLAUDE_LOG: claudeLog(),
         FAKE_TASKS_LOG: path.join(root, "tasks.log"),
@@ -161,6 +166,32 @@ describe("a job of the kind review-done", { skip: !existsSync(fakeClaude) && "bu
     assert.match(call.prompt, /Which store\?/);
     const dirs = call.args.flatMap((a, i) => (a === "--add-dir" ? [path.resolve(call.args[i + 1])] : []));
     assert.ok(dirs.includes(path.resolve(repo)), "the repository of the area");
+  });
+
+  it("split-plan reads the plan with its tasks and the allowed values, and answers with JSON drafts", async () => {
+    const plan = [
+      "---",
+      "title: The plan",
+      "status: doing",
+      "phase_order: [build]",
+      "---",
+      "",
+      "Goal: the thing works.",
+      "",
+      "## Tasks of this plan",
+      "",
+      "- demo/existing (open, phase build): Existing work",
+    ].join("\n");
+    const job = await run({ ...task(), task_id: "demo/the-plan", title: "The plan", kind: "split-plan", markdown: plan });
+    assert.equal(job.status, "done", JSON.stringify(job));
+    assert.match(job.note, /split: read only/);
+    assert.match(job.output, /<!-- split:begin -->/);
+    const call = lines(claudeLog()).at(-1);
+    assert.deepEqual(call.args.slice(call.args.indexOf("--allowedTools") + 1), ["Read", "Glob", "Grep"]);
+    assert.match(call.prompt, /create no task/);
+    assert.match(call.prompt, /demo\/existing \(open, phase build\)/, "the plan's tasks, against doubles");
+    assert.match(call.prompt, /Tasks family \(fake\)/, "the brief with the allowed values");
+    assert.equal(lines(path.join(root, "tasks.log")).length, 0, "the brief only: no claim, no new task");
   });
 
   it("another model gets the same prompt for one answer", async () => {

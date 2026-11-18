@@ -246,6 +246,45 @@ std::string decision_prompt(const jobs::Request& request, const std::string& dif
     return text;
 }
 
+std::string split_prompt(const jobs::Request& request, const std::string& brief, const std::string& job_id) {
+    std::string text;
+    text += "Split the plan " + request.task_id + " of the task vault " + request.vault + " (area " + request.area +
+            ") into phases and task drafts. This is job " + job_id + ", handed over by " + request.source + ".\n\n";
+    text += "You only read and answer: create no task, change no file. You may read the vault and the repository of "
+            "the area (Read, Glob, Grep). The person ticks the drafts they want; the editor creates those.\n\n";
+    text += "Read the plan's goal, guidelines, definition of done and `phase_order`, and the tasks it has already "
+            "(listed below the plan). Propose what is missing to reach the definition of done: no draft that "
+            "repeats a task the plan has (open or finished), each draft small enough to finish in one go, each with "
+            "an acceptance a reviewer can check. Use the plan's phases where they fit; name a new phase only when "
+            "none fits (kebab-case).\n\n";
+    text += "Use only the allowed values of the tasks family for kind, prio, effort and value (the brief below). An "
+            "area is a folder of the vault (the plan's own, or one its `areas` name). `after` and `blocked_by` name "
+            "existing task ids (`area/slug`) or another draft as `#N` (its position in your list, from 1).\n\n";
+    text += "Think it through in your answer, then end it with exactly one block from the line `" +
+            std::string(kSplitBegin) + "` to the line `" + std::string(kSplitEnd) +
+            "` holding one JSON object and nothing else, its texts in the language of the plan:\n\n";
+    text += std::string(kSplitBegin) + "\n";
+    text += "{\"phases\": [{\"name\": \"<phase>\", \"new\": false}],\n";
+    text += " \"tasks\": [{\"title\": \"<title>\", \"area\": \"<area>\", \"kind\": \"feature\", \"prio\": 2, "
+            "\"effort\": \"S\", \"value\": 3, \"phase\": \"<phase>\", \"summary\": \"<one sentence>\", "
+            "\"acceptance\": [\"<what must be true>\"], \"after\": [], \"blocked_by\": []}]}\n";
+    text += std::string(kSplitEnd) + "\n\n";
+    text += "## The plan and its tasks\n\n" + request.markdown + "\n\n";
+    if (brief.empty()) {
+        text += "## The tasks family\n\n(The brief with the allowed values was not available here: use kind feature, "
+                "task, bug, idea or research; prio 1 to 3; effort XS, S, M, L or XL; value 1 to 5. The editor checks "
+                "every draft and refuses a value that is not allowed.)\n";
+    } else {
+        text += "## The tasks family (the allowed values)\n\n" + brief + "\n";
+    }
+    return text;
+}
+
+std::string split_system() {
+    return "You plan the work of a task vault. You split a plan into small, checkable tasks without repeating what "
+           "is there, and you never create or change anything yourself.";
+}
+
 std::string decision_system() {
     return "You prepare decisions for the person who owns a task vault. You lay out options and their consequences "
            "fairly, recommend one with a reason, and name what you assumed. You never decide and never change "

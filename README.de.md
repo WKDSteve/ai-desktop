@@ -428,7 +428,8 @@ verschicken, baut Gemini den Pfad direkt aus dem Modellnamen
   Ein Auftrag der Art `review-done` prüft eine erledigte Task nur lesend gegen ihre Akzeptanz (die Diffs ihrer Commits
   im Prompt, keine schreibenden Werkzeuge) und antwortet mit einem Abschnitt „Prüfung“, den der Aufrufer erst nach
   einem Ja übernimmt; `prepare-decision` bereitet eine Task, die auf eine Entscheidung wartet, genauso vor (Optionen
-  mit Folgen, eine Empfehlung, offene Fragen zum Beantworten mit einer Wahl; entscheiden tut die Person).
+  mit Folgen, eine Empfehlung, offene Fragen zum Beantworten mit einer Wahl; entscheiden tut die Person);
+  `split-plan` schlägt die Task-Entwürfe vor, die einem Plan noch fehlen, und der Aufrufer legt nur die abgehakten an.
   Vertrag und Threat-Model: [docs/JOBS.md](docs/JOBS.md); welche Programme ai-desktop startet:
   [docs/PROCESSES.md](docs/PROCESSES.md).
 - `ollama_client.cpp` öffnet pro Request eine neue TCP-Verbindung zu Ollama
