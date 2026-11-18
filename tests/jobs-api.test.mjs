@@ -167,7 +167,9 @@ describe("POST /jobs", () => {
 
   it("stores every kind and shows it", async () => {
     for (const kind of ["handoff", "review-done", "draft-task", "prepare-decision", "split-plan"]) {
-      const res = await server.post("/jobs", { ...TASK, kind }, auth(server));
+      // A draft carries the values of the vault (tests/draft-jobs.test.mjs).
+      const choices = kind === "draft-task" ? { choices: { areas: ["a"], kinds: ["task"] } } : {};
+      const res = await server.post("/jobs", { ...TASK, kind, ...choices }, auth(server));
       assert.equal(res.status, 201, kind);
       assert.equal((await server.get(`/jobs/${res.json.job_id}`)).json.kind, kind);
     }

@@ -15,6 +15,7 @@
 #include "api.hpp"
 #include "config.hpp"
 #include "control_secret.hpp"
+#include "draft.hpp"
 #include "jobs.hpp"
 #include "legacy.hpp"
 #include "models.hpp"
@@ -307,6 +308,59 @@ void run_review(const HooksPtr& hooks, const std::string& id, std::uint64_t run,
     jobs::store().finish(id, run, run_claude(hooks, id, run, std::move(spec), job.model));
 }
 
+// A draft (`draft-task`, src/draft.hpp): one answer without tools, on Claude Code (every tool refused, in an empty
+// folder of its own, so no CLAUDE.md of a project is read) or any other model. The block of the answer is checked
+// against the schema and the job's choices and kept as `draft` (or `draft_error`); the run itself fails only when the
+// model gave no answer.
+void run_draft(const HooksPtr& hooks, const std::string& id, std::uint64_t run, const jobs::Job& job) {
+    namespace fs = std::filesystem;
+    const jobs::Request& request = job.request;
+    const std::string prompt = draft::prompt(request);
+    std::string model = job.model;
+    std::string error;
+    if (agent::is_agent_model(model)) {
+        std::string why;
+        const auto claude = agent::find_claude(&why);
+        std::error_code ec;
+        const fs::path cwd = fs::u8path(config::directory()) / "draft-work";
+        if (why.empty()) {
+            fs::create_directories(cwd, ec);
+            if (ec) {
+                why = "cannot make the folder " + cwd.u8string();
+            }
+        }
+        if (why.empty()) {
+            jobs::store().describe(id, run, agent::kModel, "draft: one answer, no tools", nullptr);
+            process::Spec spec;
+            spec.program = claude;
+            spec.args = draft::claude_args(agent::submodel(model));
+            spec.cwd = cwd;
+            spec.stdin_text = prompt;
+            error = run_claude(hooks, id, run, std::move(spec), model);
+        } else {
+            model = config::effective("default_model");
+            jobs::store().describe(id, run, "model", why + "; one answer of " + model + " instead", nullptr);
+            // A draft counts as private (its area is not known yet): the fallback must run locally.
+            if (!models::resolve(model).local) {
+                jobs::store().finish(id, run, "the area of a draft is not known yet and " + model +
+                                                  " is not local: nothing was sent");
+                return;
+            }
+            error = run_once(hooks, id, run, prompt, draft::system(), model);
+        }
+    } else {
+        jobs::store().describe(id, run, "model", "draft: one answer", nullptr);
+        error = run_once(hooks, id, run, prompt, draft::system(), model);
+    }
+    if (error.empty()) {
+        if (const auto now = jobs::store().get(id)) {
+            const draft::Result result = draft::extract(now->output, request.choices);
+            jobs::store().set_draft(id, run, result.draft, result.error);
+        }
+    }
+    jobs::store().finish(id, run, error);
+}
+
 // The run of a job that Store::start() moved to Running, on a thread of its own: a review, Claude Code for the agent
 // model (when it, the tasks command and its brief are there), else one answer of the model.
 void run_job(const HooksPtr& hooks, const std::string& id, std::uint64_t run) {
@@ -318,6 +372,10 @@ void run_job(const HooksPtr& hooks, const std::string& id, std::uint64_t run) {
     const std::string model = job->model;
     if (request.kind == review::kKind || request.kind == review::kDecisionKind || request.kind == review::kSplitKind) {
         run_review(hooks, id, run, *job);
+        return;
+    }
+    if (request.kind == draft::kKind) {
+        run_draft(hooks, id, run, *job);
         return;
     }
     if (!agent::is_agent_model(model)) {
@@ -453,7 +511,9 @@ void register_routes(httplib::Server& server, Hooks plain_hooks) {
             api::send_error(res, st.http, st.message);
             return;
         }
-        const bool is_private = jobs::is_private(request.area, request.private_hint);
+        // A draft is made before its area is chosen: the strictest class holds (a local model, or the person's yes).
+        const bool is_draft = request.kind == draft::kKind;
+        const bool is_private = is_draft || jobs::is_private(request.area, request.private_hint);
         const bool run = request.mode == jobs::Mode::Run;
         const std::string model = model_or_default(request.model);
         const std::string id = jobs::store().add(std::move(request), is_private);
@@ -471,7 +531,10 @@ void register_routes(httplib::Server& server, Hooks plain_hooks) {
         if (const auto job = jobs::store().get(id)) {
             out["status"] = jobs::status_name(job->status);
         }
-        hooks->show(id);
+        // A draft is answered to the form that asked; the dashboard does not come to the front for it.
+        if (!is_draft) {
+            hooks->show(id);
+        }
         api::send_json(res, 201, out);
     });
 

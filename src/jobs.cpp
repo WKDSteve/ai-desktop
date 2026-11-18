@@ -7,6 +7,7 @@
 #include <random>
 #include <string_view>
 
+#include "draft.hpp"
 #include "usage.hpp"
 
 using json = nlohmann::json;
@@ -189,7 +190,8 @@ config::Status parse_request(const json& body, Request& out) {
         return {400, "the request body must be a JSON object"};
     }
     static const char* const kKnown[] = {"source", "task_id", "title", "markdown", "vault",
-                                         "area",   "mode",    "kind",  "model",    "private"};
+                                         "area",   "mode",    "kind",  "model",    "private",
+                                         "choices"};
     for (const auto& item : body.items()) {
         if (std::find_if(std::begin(kKnown), std::end(kKnown), [&](const char* k) { return item.key() == k; }) ==
             std::end(kKnown)) {
@@ -213,9 +215,6 @@ config::Status parse_request(const json& body, Request& out) {
     if (!(st = string_field(body, "markdown", kMaxMarkdownBytes, true, true, r.markdown)).ok()) return st;
     if (!(st = string_field(body, "vault", kMaxVaultBytes, false, true, r.vault)).ok()) return st;
     if (!(st = string_field(body, "area", kMaxAreaBytes, false, true, r.area)).ok()) return st;
-    if (!valid_area(r.area)) {
-        return {400, "'area': expected [A-Za-z0-9._-]"};
-    }
     std::string mode;
     if (!(st = string_field(body, "mode", 16, false, true, mode)).ok()) return st;
     if (mode == "prefill") {
@@ -230,6 +229,19 @@ config::Status parse_request(const json& body, Request& out) {
         r.kind = "handoff";
     } else if (!valid_kind(r.kind)) {
         return {400, "'kind': expected handoff, review-done, draft-task, prepare-decision or split-plan"};
+    }
+    // A draft is made before its area is known: there the area may be empty (and the job counts as private).
+    const bool is_draft = r.kind == draft::kKind;
+    if (!valid_area(r.area) && !(is_draft && r.area.empty())) {
+        return {400, "'area': expected [A-Za-z0-9._-]"};
+    }
+    if (is_draft) {
+        if (!body.contains("choices")) {
+            return {400, "'choices' is required for a draft-task"};
+        }
+        if (!(st = draft::parse_choices(body["choices"], r.choices)).ok()) return st;
+    } else if (body.contains("choices")) {
+        return {400, "'choices' belongs to a draft-task only"};
     }
     if (!(st = string_field(body, "model", kMaxModelBytes, false, false, r.model)).ok()) return st;
     r.model = trimmed(r.model);
@@ -338,6 +350,12 @@ json to_json(const Job& job, bool with_text) {
     if (!job.brief.is_null()) {
         out["brief"] = job.brief;
     }
+    if (with_text && !job.draft.is_null()) {
+        out["draft"] = job.draft;
+    }
+    if (with_text && !job.draft_error.empty()) {
+        out["draft_error"] = job.draft_error;
+    }
     if (with_text) {
         out["markdown"] = job.request.markdown;
         out["output"] = job.output;
@@ -443,6 +461,8 @@ config::Status Store::start(const std::string& id, const std::string& model,
     job->error.clear();
     job->runner.clear();
     job->note.clear();
+    job->draft = nullptr;
+    job->draft_error.clear();
     job->brief = nullptr;
     job->updated = usage::now_iso8601();
     return {};
@@ -496,6 +516,16 @@ void Store::finish(const std::string& id, std::uint64_t run, const std::string& 
     job->status = error.empty() ? Status::Done : Status::Failed;
     job->error = error;
     job->updated = usage::now_iso8601();
+}
+
+void Store::set_draft(const std::string& id, std::uint64_t run, const json& draft, const std::string& error) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    Job* job = find_locked(id);
+    if (!job || job->status != Status::Running || job->run != run) {
+        return;
+    }
+    job->draft = draft;
+    job->draft_error = error;
 }
 
 void Store::describe(const std::string& id, std::uint64_t run, const std::string& runner, const std::string& note,

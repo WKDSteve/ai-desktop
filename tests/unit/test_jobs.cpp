@@ -78,6 +78,11 @@ TEST(jobs_every_kind_is_taken_and_an_unknown_one_refused) {
     for (const char* kind : jobs::kKinds) {
         json body = valid_body();
         body["kind"] = kind;
+        if (std::string(kind) == "draft-task") {
+            // A draft needs the values of the vault (tests/unit/test_draft.cpp).
+            CHECK_EQ(status_of(body), 400);
+            body["choices"] = {{"areas", {"a"}}, {"kinds", {"task"}}};
+        }
         CHECK_EQ(status_of(body), 0);
     }
     json body = valid_body();

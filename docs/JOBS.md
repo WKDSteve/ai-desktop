@@ -35,11 +35,12 @@ Content-Type: application/json
 | `title` | yes | one line, not empty, up to 300 bytes |
 | `markdown` | yes | the task file, up to 256 KiB |
 | `vault` | yes | the folder of the vault, one line, up to 1024 bytes (shown and passed on, never opened by ai-desktop) |
-| `area` | yes | `[A-Za-z0-9._-]`, up to 100 bytes |
+| `area` | yes | `[A-Za-z0-9._-]`, up to 100 bytes; empty for a `draft-task` whose area is not chosen yet |
 | `mode` | yes | `prefill` (stands in the dashboard, nothing runs) or `run` (runs at once) |
 | `kind` | no | `handoff` (default), `review-done`, `draft-task`, `prepare-decision`, `split-plan`; see below |
 | `model` | no | the model of a run: `claude-code` (or `claude-code:<model>`) runs Claude Code with the brief of the tasks family, any other model answers once (see "Runs"); empty: the setting `jobs_model` (`claude-code` unless set) |
 | `private` | no | `true` when the caller knows the area is private (see "Private areas") |
+| `choices` | `draft-task` only | the values the vault allows: `{areas, kinds, tags?, categories?, plans?}`, see "Drafts"; refused on any other kind |
 
 Every text is valid UTF-8 and holds no control or invisible character, the same rule as
 `tools/check-control-chars.py`: no C0 control (in `markdown` line feed, carriage return and tab are allowed), no DEL,
@@ -48,9 +49,8 @@ field is refused. The whole body is at most 320 KiB.
 
 `kind` names what the job asks for, so the family has one channel: `handoff` hands over a task to work on,
 `review-done` checks a finished task against its acceptance (see "Reviews"), `prepare-decision` prepares a task that
-waits for a decision (see "Decisions"), `split-plan` splits a plan into task drafts (see "Splitting a plan").
-`draft-task` is named and stored and shown in the dashboard; its own prompt comes with a task of its own, until then
-it runs with the prompt of a hand-over.
+waits for a decision (see "Decisions"), `split-plan` splits a plan into task drafts (see "Splitting a plan"),
+`draft-task` turns a free text into the fields of a new task (see "Drafts").
 
 Answer `201`:
 
@@ -179,6 +179,67 @@ drafts to tick and creates the ticked ones after a yes, a new phase only after i
 
 Why read-only and no note file: the result must never reach the task by itself, and a single place for it (the job's
 output) is what the caller reads and offers. A private area asks first, as every job does.
+
+## Drafts (`kind: draft-task`)
+
+A free text (a note, a piece of a mail, a thought) becomes the fields of a new task (`src/draft.cpp`). The caller
+(tasks-desktop's "Felder vorschlagen", tasks.nvim's `:Tasks new` with a text) sends the text as `markdown`, any
+`task_id` (`draft/new`), its form's title or the start of the text as `title`, `area` empty or the area chosen so far,
+and the values its vault allows:
+
+```json
+"choices": {
+  "areas": ["ai-desktop", "tasks.nvim"],
+  "kinds": ["task", "feature", "bug"],
+  "tags": ["ui", "tasks-family"],
+  "categories": ["ux"],
+  "plans": ["ALL/ki-der-ai-familie-in-der-tasks-familie-tasks-an-einen-agente"]
+}
+```
+
+`areas` and `kinds` must not be empty; every entry is a name of `[A-Za-z0-9._/-]` (1-200 bytes, at most 1000 a list).
+
+1. **Private, always.** The area of a draft is not known yet, so the strictest class holds whatever `area` and
+   `private` say: a local model runs at once, any other (Claude Code included) waits for a yes (`needs_confirmation`;
+   the caller asks its person and sends `POST /jobs/<id>/run` with `confirm_private: true` and the secret, or the
+   person answers in the dashboard). The dashboard does not come to the front: the answer goes to the form that asked.
+2. **One answer, no tools.** On `claude-code` the call is `claude -p --output-format stream-json --verbose
+   --append-system-prompt <system> --permission-mode default --disallowedTools Bash Edit Write MultiEdit NotebookEdit
+   WebFetch WebSearch Read Glob Grep Task TodoWrite [--model <m>]`, in an empty folder of its own
+   (`<config>/draft-work`, so no `CLAUDE.md` of a project is read), no `--add-dir`. Without Claude Code the job answers
+   with `default_model`, and only when that is local. Any other model answers once.
+3. **The prompt** lists the allowed values, asks for title, summary and acceptance in the language of the text, and
+   for one block from `<!-- draft:begin -->` to `<!-- draft:end -->` holding one JSON object (a ```` ```json ```` fence
+   is allowed). The text stands in a fence of its own, as data.
+4. **The check.** When the run ends, ai-desktop reads the last block and checks it; `GET /jobs/<id>` then has either
+   `draft` or `draft_error` (the run itself is `done` either way; `failed` only when the model gave no answer):
+
+```json
+"draft": {
+  "schema": "tasks-draft/1",
+  "title": "Knopf blau machen",
+  "area": "tasks.nvim", "kind": "task", "prio": 2, "effort": "S", "value": 3,
+  "tags": ["ui"], "category": ["ux"], "plan": "ALL/...",
+  "summary": "Der Knopf wird blau.",
+  "acceptance": ["Der Knopf ist blau"],
+  "dropped": ["tags: made-up"]
+}
+```
+
+| Key | Rule |
+|---|---|
+| `title` | required, one line, 1-300 bytes after trimming |
+| `area`, `kind`, `plan` | one of `choices`; another value is left out and named in `dropped`; `""` means none |
+| `tags`, `category` | lists (a single string is taken as a list of one); the allowed ones are kept (at most 20), the others dropped |
+| `prio` | 1-3, `value` 1-5 (a digit as a string is taken); out of range: dropped |
+| `effort` | `XS`, `S`, `M`, `L`, `XL`; another: dropped |
+| `summary` | text up to 2000 bytes (lines allowed) |
+| `acceptance` | up to 20 lines of at most 500 bytes; a leading `- [ ] ` is taken off, empty lines are left out |
+
+A key that is missing stays missing (the form keeps its default). A value of the wrong type, a missing or empty
+title, or a control character (the character rule above) makes the whole draft invalid: `draft_error` names why and
+nothing is filled in. The caller checks the values once more against its own lists (they may have changed), fills its
+form, and the person creates the task with the form's own button: ai-desktop never writes a task.
 
 ## The control secret
 

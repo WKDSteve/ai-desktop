@@ -74,6 +74,18 @@ int main(int argc, char** argv) {
     }
     emit({{"type", "system"}, {"subtype", "init"}, {"model", "fake-model"}, {"cwd", std::filesystem::current_path().u8string()}});
 
+    // A draft (kind draft-task): no tools, one answer with the draft block.
+    if (prompt.find("<!-- draft:begin -->") != std::string::npos) {
+        const std::string block = "<!-- draft:begin -->\n```json\n"
+                                  "{\"title\": \"Knopf blau machen\", \"area\": \"demo\", \"kind\": \"task\", "
+                                  "\"prio\": 2, \"effort\": \"S\", \"value\": 3, \"tags\": [\"ui\", \"made-up\"], "
+                                  "\"category\": [\"ux\"], \"plan\": \"\", \"summary\": \"Der Knopf wird blau.\", "
+                                  "\"acceptance\": [\"Der Knopf ist blau\"]}\n```\n<!-- draft:end -->";
+        emit({{"type", "assistant"},
+              {"message", {{"content", json::array({{{"type", "text"}, {"text", block}}})}}}});
+        emit({{"type", "result"}, {"subtype", "success"}, {"is_error", false}, {"result", block}});
+        return 0;
+    }
     // A plan to split (kind split-plan): read only, answer with the JSON drafts.
     if (prompt.find("<!-- split:begin -->") != std::string::npos) {
         const std::string block =

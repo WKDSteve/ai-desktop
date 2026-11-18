@@ -56,6 +56,7 @@ struct Request {
     std::string kind = "handoff";  // one of kKinds
     std::string model;     // optional: the model of a run; "" = default_model of the settings
     bool private_hint = false;  // the caller knows the area is private
+    nlohmann::json choices;     // draft-task only: the values the vault allows (draft::parse_choices); else null
 };
 
 // Checks text against the rules of tools/check-control-chars.py: valid UTF-8, no C0 control but (with
@@ -98,6 +99,8 @@ struct Job {
     std::string runner;      // "claude-code" (an agent run) or "model" (one answer); empty before a run
     std::string note;        // what the person should know about the run (a fallback, a newer brief)
     nlohmann::json brief;    // the brief of an agent run: {brief_version, contract_schema, engine_version}
+    nlohmann::json draft;    // draft-task: the checked draft (draft::check), once the run ended with one
+    std::string draft_error; // draft-task: why the answer gave no draft
     std::string created;     // UTC, YYYY-MM-DDTHH:MM:SSZ
     std::string updated;
 };
@@ -134,6 +137,8 @@ public:
     // Says how a running job runs: the runner, a note, the brief of an agent run.
     void describe(const std::string& id, std::uint64_t run, const std::string& runner, const std::string& note,
                   const nlohmann::json& brief);
+    // Keeps the draft of a running draft-task (or why there is none); call it before finish().
+    void set_draft(const std::string& id, std::uint64_t run, const nlohmann::json& draft, const std::string& error);
     // Cancels a running job: 404 unknown, 409 when it does not run.
     config::Status cancel(const std::string& id);
 
