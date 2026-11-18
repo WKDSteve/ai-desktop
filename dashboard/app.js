@@ -746,12 +746,13 @@ loadJobs().then(() => {
   if (id) selectJob(id);
 });
 window.addEventListener('hashchange', () => {
-  // A new address with a ticket (ai-desktop opened this tab again): a page that had no token reads everything anew.
+  // A new address with a ticket (ai-desktop opened this tab again): a page that had no valid token (none, or one of an
+  // earlier start of the server, which showed the login) reads everything anew.
   if (new URLSearchParams(location.hash.slice(1)).has('ticket')) {
-    const hadToken = !!sessionToken;
+    const wasLoggedOut = !sessionToken || !document.getElementById('login-banner').hidden;
     loginReady = takeTicket();
     loginReady.then((ok) => {
-      if (ok && !hadToken) location.reload();
+      if (ok && wasLoggedOut) location.reload();
     });
   }
   const id = jobFromHash();

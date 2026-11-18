@@ -42,6 +42,23 @@ test('a ticket logs the page in and leaves the address; the token outlives a rel
   await expect(page.locator('#login-banner')).toBeHidden();
 });
 
+test('a new ticket for a page with a token of an earlier start reads everything anew', async ({ page }) => {
+  expect((await server.put('/settings', { private_areas: 'login-area' })).status).toBe(200);
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem('seeded')) {
+      sessionStorage.setItem('seeded', '1');
+      localStorage.setItem('ai-desktop.session', '0'.repeat(64));
+    }
+  });
+  await page.goto(`http://127.0.0.1:${server.port}/`);
+  await expect(page.getByRole('alert').filter({ hasText: 'Not logged in' })).toBeVisible();
+  await page.goto(await server.dashboardUrl());
+  await expect(page.locator('#login-banner')).toBeHidden();
+  await expect(page.locator('#private-areas')).toHaveValue('login-area');
+  await expect(page.locator('#sse-status')).toHaveText('Connected');
+  await server.put('/settings', { private_areas: null });
+});
+
 test('a used ticket does not log in again', async ({ page }) => {
   const url = await server.dashboardUrl();
   const ticket = new URL(url).hash.slice('#ticket='.length);
