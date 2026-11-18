@@ -62,6 +62,7 @@ TEST(session_names_the_routes_that_want_a_proof) {
              {"POST", "/jobs/0123456789abcdef/run"},
              {"POST", "/jobs/0123456789abcdef/cancel"},
              {"DELETE", "/jobs/0123456789abcdef"},
+             {"GET", "/jobs/0123456789abcdef"},
              {"GET", "/jobs/0123456789ABCDEF"},
              {"GET", "/jobs/"},
              {"GET", "/settings"},
@@ -94,7 +95,6 @@ TEST(session_names_the_routes_that_want_a_proof) {
              {"POST", "/session"},
              {"POST", "/session/ticket"},
              {"POST", "/jobs"},
-             {"GET", "/jobs/0123456789abcdef"},
              {"GET", "/jobsx"},
          }) {
         if (session::needs_proof(method, path)) {

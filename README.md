@@ -289,7 +289,7 @@ task, see [docs/JOBS.md](docs/JOBS.md).
 | `/session/ticket` | POST | A one-time ticket for a program with the control secret that opens the dashboard |
 
 The routes with an effect, and those that read jobs or settings (`/events`, `/decision`, `/usage`, `/settings`,
-`/keys`, `/models/custom`, `/jobs` but `POST /jobs` and `GET /jobs/<id>`), want `Authorization: Bearer` with the
+`/keys`, `/models/custom`, `/jobs` but `POST /jobs`), want `Authorization: Bearer` with the
 control secret or a session token of the dashboard. The dashboard logs in with the link that ai-desktop prints on its
 console (`Dashboard: http://127.0.0.1:<port>/#ticket=...`) or opens for a job; see "The login of the dashboard" in
 [docs/JOBS.md](docs/JOBS.md).

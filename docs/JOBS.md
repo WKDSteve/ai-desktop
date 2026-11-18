@@ -77,7 +77,7 @@ that is not local; the job waits in the dashboard, `note` says why). A `run` whi
 | Route | Who | What |
 |---|---|---|
 | `GET /jobs` | the dashboard (its session token) or the control secret | the jobs, newest last, without their text; `enabled` = the setting `jobs` |
-| `GET /jobs/<id>` | any local caller, for now | one job with `markdown` and `output`; open until tasks-desktop and tasks.nvim send the secret when they watch a job (a job id is 64 random bits that only `GET /jobs` shows) |
+| `GET /jobs/<id>` | likewise (tasks-desktop and tasks.nvim send the secret when they watch a job) | one job with `markdown` and `output` |
 | `POST /jobs/<id>/run` | the dashboard (its session token) or the control secret | `{ "model"?, "markdown"?, "confirm_private"? }`: run it with the text the person left; `409` with `"status": "needs_confirmation"` for a private area on a model that is not local without `confirm_private: true` |
 | `POST /jobs/<id>/cancel` | likewise | stop a running job: the process tree of an agent ends, a single answer is no longer shown; `409` when it does not run |
 | `DELETE /jobs/<id>` | likewise | put it away (`204`; a running job is cancelled first) |
@@ -315,7 +315,7 @@ The first two are in the dashboard under "Settings of the jobs"; all are in `GET
 effect, and every route that reads jobs or settings, wants a proof only the person can have (`src/session.hpp`;
 the pre-routing handler of `src/main.cpp` asks for it before any route):
 
-- `/jobs` (all but `POST /jobs`, which wants the control secret itself, and `GET /jobs/<id>`, see above), `/settings`,
+- `/jobs` (all but `POST /jobs`, which wants the control secret itself), `/settings`,
   `/keys`, `/models/custom`, `/usage` (all but `POST /usage/events`), `/events`, `/decision`;
 - open: the files of the dashboard, `/health`, `/models`, `/models/info`, the ai.nvim contract (`/ask`, `/ask/stream`,
   `POST /usage/events`; a task of its own decides how ai.nvim proves itself) and the two routes below.
@@ -362,15 +362,15 @@ the control secret included; that is the same boundary as the appkit hubs, and a
 well read the vault itself. The management API holds that boundary against everything else that reaches
 `127.0.0.1` (every program of every user account on this machine): each route with an effect, and each route that
 reads jobs or settings, wants the control secret or a session token of the dashboard (see "The login of the
-dashboard"); an `Origin` proves nothing. Open on purpose: `GET /jobs/<id>` until the family apps send the secret
-there, and the ai.nvim contract (`/ask`, `/ask/stream`, `POST /usage/events`), which a task of its own closes.
+dashboard"); an `Origin` proves nothing. Open on purpose: the ai.nvim contract (`/ask`, `/ask/stream`,
+`POST /usage/events`), which a task of its own closes.
 
 | Attacker | Attack | Defence |
 |---|---|---|
 | A web page in the person's browser | `fetch`/form `POST /jobs` to 127.0.0.1 (CSRF) | a browser always sends `Origin` on a POST (and `Sec-Fetch-*`): refused with 403 before anything else, the dashboard's own origin included. The page cannot read `control.secret`, so it has no secret; `application/json` makes a cross-origin request a preflight, which gets no CORS headers (no `Access-Control-Allow-*` anywhere). |
 | A web page through DNS rebinding | a name of its own resolved to 127.0.0.1, so the browser treats it as same-origin and sends no `Origin` on a GET | every request of the server (the pre-routing handler) must name `127.0.0.1`, `localhost` or `[::1]` with the port in `Host`: a foreign name gets 403, so the page reads no job and no setting. The routes of the jobs also refuse a request without `Host`. |
 | Another machine | reach the port | the server binds `127.0.0.1` only. |
-| Another user on this machine | read the secret, send jobs, use the routes of the dashboard | the file is readable by the person only (Windows: protected ACL with one entry; elsewhere 0600), so `POST /jobs` is closed; the other routes want the secret or a session token (next row). Its own server on another port gets no token either: the page keeps it in `localStorage`, which is per port (a cookie would not be). On Linux and macOS it could read the command line of a browser that ai-desktop starts, which is why no ticket goes there. **Not defended:** `GET /jobs/<id>` for a job id it learns (64 random bits; the list wants a proof), and the ai.nvim contract (`/ask`: it can use the models at the person's cost). |
+| Another user on this machine | read the secret, send jobs, use the routes of the dashboard | the file is readable by the person only (Windows: protected ACL with one entry; elsewhere 0600), so `POST /jobs` is closed; the other routes want the secret or a session token (next row). Its own server on another port gets no token either: the page keeps it in `localStorage`, which is per port (a cookie would not be). On Linux and macOS it could read the command line of a browser that ai-desktop starts, which is why no ticket goes there. **Not defended:** the ai.nvim contract (`/ask`: it can use the models at the person's cost). |
 | A local program without the secret (another account's) | send a job, confirm a private area, put jobs away, change the settings or the keys, read the jobs | `401` for all of them, a forged `Origin: http://127.0.0.1:<port>` included: run, cancel, delete, `GET /jobs`, `GET/PUT /settings`, `/keys`, `/models/custom`, `/usage`, `/events` and `/decision` want the control secret or a session token, and `POST /session` gives a token only for a ticket. So it cannot send a private job to a cloud model without the person's yes, nor set `claude_cli` to a program of its own. A program of the person has the secret anyway. |
 | A family app gone wrong | flood the dashboard, send huge or hostile text | 10 jobs a minute (counted after the secret, so a stranger cannot use them up), 320 KiB a body, 100 jobs kept, 2 runs at once; every text follows the character rule above (no bidi trick, no escape sequence for a terminal); the page shows the text as text only (Trusted Types, `textContent`/`value`). |
 | A stolen old secret | replay it | a new secret at every start; the file is removed at the end. |
@@ -382,8 +382,7 @@ there, and the ai.nvim contract (`/ask`, `/ask/stream`, `POST /usage/events`), w
 | The settings `claude_cli` / `tasks_cli` | a program sets them to another executable | only an absolute path, set through `PUT /settings`, which wants the control secret or a session token: neither a page (Origin, Host) nor a program of another account gets there. |
 
 **Not covered:** a program running as the person (it has the secret, the vault and the person's Claude Code
-anyway); another user account on this machine as far as `GET /jobs/<id>` and the ai.nvim contract go (see the trust
-boundary);
+anyway); another user account on this machine as far as the ai.nvim contract goes (see the trust boundary);
 an agent doing harm with its tools (it can change and push the repository of the area, and through git start any
 program as the person): what it committed is in git and can be reverted; the real boundary is the person's account,
 not the tool list.

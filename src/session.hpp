@@ -43,8 +43,7 @@ bool token_matches(const std::string& authorization);
 
 // Does a request of `method` on `path` want the control secret or a session token? The routes of the ai.nvim
 // contract (/health, /ask, /ask/stream, /usage/events), the model list, the static files of the dashboard and the
-// session routes themselves do not; POST /jobs checks the control secret itself; GET /jobs/<id> stays readable
-// without a proof until the family apps send one (a job id is 64 random bits that only the list would show).
+// session routes themselves do not; POST /jobs checks the control secret itself.
 bool needs_proof(const std::string& method, const std::string& path);
 
 // Forgets every ticket and token (the unit tests).

@@ -30,6 +30,7 @@ describe("the management API wants a proof", () => {
   });
 
   const routes = () => [
+    ["GET", `/jobs/${jobId}`, undefined],
     ["POST", `/jobs/${jobId}/run`, { model: "mock-local" }],
     ["POST", `/jobs/${jobId}/cancel`, {}],
     ["DELETE", `/jobs/${jobId}`, undefined],
@@ -79,8 +80,8 @@ describe("the management API wants a proof", () => {
     assert.notEqual(ask.status, 401);
   });
 
-  it("leaves GET /jobs/<id> open until the family apps send the secret", async () => {
-    assert.equal((await server.get(`/jobs/${jobId}`, NO_AUTH)).status, 200);
+  it("reads a job to the control secret, as tasks-desktop and tasks.nvim send it", async () => {
+    assert.equal((await server.get(`/jobs/${jobId}`)).status, 200);
   });
 });
 

@@ -61,14 +61,6 @@ bool under(const std::string& path, const std::string& prefix) {
     return path == prefix || starts_with(path, prefix + "/");
 }
 
-bool is_job_path(const std::string& path) {
-    static const std::string kPrefix = "/jobs/";
-    if (path.size() != kPrefix.size() + 16 || !starts_with(path, kPrefix)) {
-        return false;
-    }
-    return path.find_first_not_of("0123456789abcdef", kPrefix.size()) == std::string::npos;
-}
-
 }  // namespace
 
 std::string new_ticket(std::chrono::seconds lifetime) {
@@ -136,9 +128,6 @@ bool needs_proof(const std::string& method, const std::string& path) {
     if (under(path, "/jobs")) {
         if (method == "POST" && path == "/jobs") {
             return false;  // the control secret, checked by the route itself (and no Origin at all)
-        }
-        if (method == "GET" && is_job_path(path)) {
-            return false;  // until tasks-desktop and tasks.nvim send the secret when they watch a job
         }
         return true;
     }
