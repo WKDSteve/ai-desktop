@@ -47,9 +47,9 @@ no C1, no soft hyphen, no zero-width, line or paragraph separator, bidirectional
 field is refused. The whole body is at most 320 KiB.
 
 `kind` names what the job asks for, so the family has one channel: `handoff` hands over a task to work on,
-`review-done` checks a finished task against its acceptance (see "Reviews"). The other kinds are named and stored now
-and shown in the dashboard; their own prompts come with their own tasks, until then they run with the prompt of a
-hand-over.
+`review-done` checks a finished task against its acceptance (see "Reviews"), `prepare-decision` prepares a task that
+waits for a decision (see "Decisions"). The other kinds are named and stored now and shown in the dashboard; their own
+prompts come with their own tasks, until then they run with the prompt of a hand-over.
 
 Answer `201`:
 
@@ -140,6 +140,21 @@ A finished task is checked against its acceptance (`src/review.cpp`). The caller
    the commits as `--add-dir`, the working folder as for a hand-over. Another model answers once with the same prompt.
 4. The block is a proposal. The caller shows it and adds it to the task as a section only after a yes (tasks.nvim:
    `:Tasks agent <id> kind=review-done`); a proposed follow-up task is created only after a second yes.
+
+## Decisions (`kind: prepare-decision`)
+
+A task that waits for the person (`status: decision`) is prepared, the same read-only way as a review: the diffs of
+the commits its `refs:` name (`repo@sha`; paths in `refs` are left to the agent to read), read access to the vault, the
+repository of the area and those of the references, the same tools allowed and refused. The prompt asks for 2 to 4
+real options with their consequences, one recommendation with its reason and the assumptions nobody confirmed, and for
+one block from `<!-- decision:begin -->` to `<!-- decision:end -->` with two sections:
+
+- `## Vorschlag` (`## Proposal`): `### Optionen`, `### Empfehlung`, `### Offene Annahmen`;
+- `## Offene Fragen` (`## Open questions`): one `### ...? [qN]` per decision, its options as unticked boxes, exactly
+  one marked `(empfohlen)`: the format of tasks.nvim's questions, which `tasks answer` (and the question view of
+  tasks-desktop) answers with one choice.
+
+The agent decides nothing. The caller adds the sections only after a yes, and the task stays `decision`.
 
 Why read-only and no note file: the result must never reach the task by itself, and a single place for it (the job's
 output) is what the caller reads and offers. A private area asks first, as every job does.

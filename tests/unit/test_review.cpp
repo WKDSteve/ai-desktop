@@ -39,6 +39,31 @@ TEST(review_commits_come_from_the_front_matter) {
     CHECK_EQ(review::commits_of(many).size(), review::kMaxCommits);
 }
 
+TEST(review_refs_name_commits_and_paths) {
+    // `refs` mixes paths and commits: only the commits are diffs.
+    CHECK_EQ(ids(review::refs_of("---\nrefs: [docs/x.md, ai-desktop@a00618c, lua/y.lua]\n---\n", "refs")),
+             std::string("ai-desktop@a00618c "));
+    CHECK_EQ(ids(review::refs_of("---\ncommits: [a@1234567]\n---\n", "refs")), std::string(""));
+}
+
+TEST(decision_prompt_asks_for_options_and_questions) {
+    ai_desktop::jobs::Request request;
+    request.task_id = "demo/choose";
+    request.area = "demo";
+    request.vault = "/vault";
+    request.source = "tasks.nvim";
+    request.markdown = "---\ntitle: Choose\nstatus: decision\n---\n\nWhich store?\n";
+    const std::string text = review::decision_prompt(request, "(The task names no commits.)\n", "0123456789abcdef");
+    CHECK(text.find(review::kDecisionBegin) != std::string::npos);
+    CHECK(text.find(review::kDecisionEnd) != std::string::npos);
+    CHECK(text.find("## Vorschlag") != std::string::npos);
+    CHECK(text.find("## Offene Fragen") != std::string::npos);
+    CHECK(text.find("(empfohlen)") != std::string::npos);
+    CHECK(text.find("decide nothing") != std::string::npos);
+    CHECK(text.find("Which store?") != std::string::npos);
+    CHECK(review::decision_system().find("never decide") != std::string::npos);
+}
+
 TEST(review_reads_only) {
     const auto args = review::claude_args({"/vault", "/repos/x"}, "sonnet");
     for (const char* tool : {"Read", "Glob", "Grep", "Bash", "Edit", "Write", "WebFetch"}) {

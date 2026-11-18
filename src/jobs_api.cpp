@@ -254,15 +254,20 @@ void answer_once_instead(const HooksPtr& hooks, const std::string& id, std::uint
 // (Read, Glob, Grep; shell, edits and the web refused), another model answers once. Nothing is written.
 void run_review(const HooksPtr& hooks, const std::string& id, std::uint64_t run, const jobs::Job& job) {
     const jobs::Request& request = job.request;
-    const auto commits = review::commits_of(request.markdown);
+    // review-done reads the commits that delivered the task, prepare-decision the ones its references name.
+    const bool decision = request.kind == review::kDecisionKind;
+    const auto commits = decision ? review::refs_of(request.markdown, "refs") : review::commits_of(request.markdown);
     const std::string diff_text = review::diffs(request.vault, commits);
-    const std::string prompt = review::prompt(request, diff_text, id);
+    const std::string prompt =
+        decision ? review::decision_prompt(request, diff_text, id) : review::prompt(request, diff_text, id);
+    const std::string system = decision ? review::decision_system() : review::system();
+    const std::string what = decision ? "decision" : "review";
     if (!still_running(id, run)) {
         return;  // cancelled while the diffs were read
     }
     if (!agent::is_agent_model(job.model)) {
-        jobs::store().describe(id, run, "model", "review: one answer, read only", nullptr);
-        jobs::store().finish(id, run, run_once(hooks, id, run, prompt, review::system(), job.model));
+        jobs::store().describe(id, run, "model", what + ": one answer, read only", nullptr);
+        jobs::store().finish(id, run, run_once(hooks, id, run, prompt, system, job.model));
         return;
     }
     std::string why;
@@ -272,13 +277,14 @@ void run_review(const HooksPtr& hooks, const std::string& id, std::uint64_t run,
         cwd = agent::work_dir(request.vault, request.area, &why);
     }
     if (!why.empty()) {
-        answer_once_instead(hooks, id, run, job, why, prompt, review::system());
+        answer_once_instead(hooks, id, run, job, why, prompt, system);
         return;
     }
-    jobs::store().describe(id, run, agent::kModel, "review: read only (Read, Glob, Grep)", nullptr);
+    jobs::store().describe(id, run, agent::kModel, what + ": read only (Read, Glob, Grep)", nullptr);
     process::Spec spec;
     spec.program = claude;
-    spec.args = review::claude_args(review::read_dirs(request.vault, commits), agent::submodel(job.model));
+    spec.args =
+        review::claude_args(review::read_dirs(request.vault, commits, request.area), agent::submodel(job.model));
     spec.cwd = cwd;
     spec.stdin_text = prompt;
     jobs::store().finish(id, run, run_claude(hooks, id, run, std::move(spec), job.model));
@@ -293,7 +299,7 @@ void run_job(const HooksPtr& hooks, const std::string& id, std::uint64_t run) {
     }
     const jobs::Request& request = job->request;
     const std::string model = job->model;
-    if (request.kind == review::kKind) {
+    if (request.kind == review::kKind || request.kind == review::kDecisionKind) {
         run_review(hooks, id, run, *job);
         return;
     }

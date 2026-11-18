@@ -74,6 +74,19 @@ int main(int argc, char** argv) {
     }
     emit({{"type", "system"}, {"subtype", "init"}, {"model", "fake-model"}, {"cwd", std::filesystem::current_path().u8string()}});
 
+    // A decision (kind prepare-decision): read only, answer with the decision block.
+    if (prompt.find("<!-- decision:begin -->") != std::string::npos) {
+        const std::string block = "<!-- decision:begin -->\n## Vorschlag\n\n2026-11-18, the stand-in: take the file\n\n"
+                                  "### Optionen\n\n1. **A file**: simple. Folgen: no server.\n"
+                                  "2. **A database**: more. Folgen: a server to run.\n\n"
+                                  "### Empfehlung\n\nA file, since it is enough.\n\n### Offene Annahmen\n\n- one user\n\n"
+                                  "## Offene Fragen\n\n### Which store? [q1]\n- [ ] A file (empfohlen)\n- [ ] A database\n"
+                                  "<!-- decision:end -->";
+        emit({{"type", "assistant"},
+              {"message", {{"content", json::array({{{"type", "text"}, {"text", "Weighed it.\n\n" + block}}})}}}});
+        emit({{"type", "result"}, {"subtype", "success"}, {"is_error", false}, {"result", block}});
+        return 0;
+    }
     // A review (kind review-done): read only, answer with the block between the markers; no tasks command.
     if (prompt.find("<!-- review:begin -->") != std::string::npos) {
         const std::string block = "<!-- review:begin -->\n## Prüfung\n\n2026-11-18, review by the stand-in: one open\n\n"

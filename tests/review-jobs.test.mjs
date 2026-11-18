@@ -140,6 +140,29 @@ describe("a job of the kind review-done", { skip: !existsSync(fakeClaude) && "bu
     assert.equal(lines(path.join(root, "tasks.log")).length, 0, "no tasks command: nothing claimed or finished");
   });
 
+  it("prepare-decision reads the task's references and answers with the decision block, read only", async () => {
+    const job = await run({
+      ...task(),
+      task_id: "demo/choose",
+      title: "Choose",
+      kind: "prepare-decision",
+      markdown: `---\ntitle: Choose\nstatus: decision\nrefs: [docs/x.md, demo@${sha}]\n---\n\nWhich store?\n`,
+    });
+    assert.equal(job.status, "done", JSON.stringify(job));
+    assert.equal(job.runner, "claude-code");
+    assert.match(job.note, /decision: read only/);
+    assert.match(job.output, /<!-- decision:begin -->\n## Vorschlag/);
+    assert.match(job.output, /## Offene Fragen\n\n### Which store\? \[q1\]/);
+    const call = lines(claudeLog()).at(-1);
+    assert.deepEqual(call.args.slice(call.args.indexOf("--allowedTools") + 1), ["Read", "Glob", "Grep"]);
+    assert.ok(call.args.includes("Edit") && call.args.indexOf("Edit") < call.args.indexOf("--allowedTools"), "Edit refused");
+    assert.match(call.prompt, /decide nothing/);
+    assert.match(call.prompt, /\+the acceptance is met here/, "the diff of the commit its refs name");
+    assert.match(call.prompt, /Which store\?/);
+    const dirs = call.args.flatMap((a, i) => (a === "--add-dir" ? [path.resolve(call.args[i + 1])] : []));
+    assert.ok(dirs.includes(path.resolve(repo)), "the repository of the area");
+  });
+
   it("another model gets the same prompt for one answer", async () => {
     const job = await run(task("mock-local"));
     assert.equal(job.status, "done", JSON.stringify(job));

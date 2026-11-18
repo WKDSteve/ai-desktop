@@ -17,6 +17,13 @@ constexpr const char* kKind = "review-done";
 constexpr const char* kBegin = "<!-- review:begin -->";
 constexpr const char* kEnd = "<!-- review:end -->";
 
+// `prepare-decision`: the same read-only run for a task in `status: decision`; the answer ends with a block of the
+// sections `## Vorschlag` (options, consequences, the recommendation, open assumptions) and `## Offene Fragen` (the
+// format of tasks.nvim's questions, which `tasks answer` answers). The person decides.
+constexpr const char* kDecisionKind = "prepare-decision";
+constexpr const char* kDecisionBegin = "<!-- decision:begin -->";
+constexpr const char* kDecisionEnd = "<!-- decision:end -->";
+
 // A diff is cut at this size, all of them together at the second.
 constexpr std::size_t kMaxDiffBytes = 48 * 1024;
 constexpr std::size_t kMaxDiffsBytes = 160 * 1024;
@@ -31,6 +38,9 @@ struct Commit {
 // form are skipped; at most kMaxCommits.
 std::vector<Commit> commits_of(const std::string& markdown);
 
+// The same for another key of the front matter (`refs`: its `repo@sha` entries; paths are skipped).
+std::vector<Commit> refs_of(const std::string& markdown, const std::string& key);
+
 // `<vault>/../<repo>` when it is a git repository (it has a `.git`), else empty.
 std::filesystem::path repo_dir(const std::string& vault, const std::string& repo);
 
@@ -44,8 +54,14 @@ std::string prompt(const jobs::Request& request, const std::string& diffs, const
 // The system text of a one-answer review (a model without tools).
 std::string system();
 
-// The folders the agent may read besides its working folder: the vault and the repositories of the commits.
-std::vector<std::filesystem::path> read_dirs(const std::string& vault, const std::vector<Commit>& commits);
+// The folders the agent may read besides its working folder: the vault, the repository of `area` (when there is one
+// beside the vault) and the repositories of the commits.
+std::vector<std::filesystem::path> read_dirs(const std::string& vault, const std::vector<Commit>& commits,
+                                             const std::string& area = "");
+
+// The prompt and the system text of a decision (`prepare-decision`).
+std::string decision_prompt(const jobs::Request& request, const std::string& diffs, const std::string& job_id);
+std::string decision_system();
 
 // The arguments of `claude` for a review: print mode, stream-json, read-only tools (Read, Glob, Grep), the folders to
 // read, the model when one is named. The prompt goes on stdin.

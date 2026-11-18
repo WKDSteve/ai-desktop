@@ -444,7 +444,9 @@ body, Gemini builds the path directly from the model name
   `tasks agent-brief`, so the agent claims and finishes the task itself; Stop ends its whole process tree. Without
   Claude Code or the tasks command the job answers once and says why. A job of the kind `review-done` checks a
   finished task against its acceptance read-only (the diffs of its commits in the prompt, no writing tools) and
-  answers with a "Prüfung" section that the caller adds only after a yes. Contract and threat model:
+  answers with a "Prüfung" section that the caller adds only after a yes; `prepare-decision` prepares a task that
+  waits for a decision the same way (options with consequences, a recommendation, open questions to answer with one
+  choice; the person decides). Contract and threat model:
   [docs/JOBS.md](docs/JOBS.md); the programs ai-desktop starts: [docs/PROCESSES.md](docs/PROCESSES.md).
 - `ollama_client.cpp` opens a new TCP connection to Ollama per request
   instead of reusing one -- known, deliberately deferred (would need a

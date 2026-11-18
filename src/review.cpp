@@ -52,6 +52,10 @@ void take(const std::string& word, std::vector<Commit>& out) {
 }  // namespace
 
 std::vector<Commit> commits_of(const std::string& markdown) {
+    return refs_of(markdown, "commits");
+}
+
+std::vector<Commit> refs_of(const std::string& markdown, const std::string& key) {
     std::vector<Commit> out;
     std::string text = markdown;
     text.erase(std::remove(text.begin(), text.end(), '\r'), text.end());
@@ -66,8 +70,8 @@ std::vector<Commit> commits_of(const std::string& markdown) {
         const std::size_t eol = std::min(front.find('\n', pos), front.size());
         const std::string line = front.substr(pos, eol - pos);
         pos = eol + 1;
-        if (line.rfind("commits:", 0) == 0) {
-            const std::string rest = trimmed(line.substr(8));
+        if (line.rfind(key + ":", 0) == 0) {
+            const std::string rest = trimmed(line.substr(key.size() + 1));
             if (!rest.empty() && rest.front() == '[') {
                 const std::size_t close = rest.find(']');
                 const std::string list = rest.substr(1, close == std::string::npos ? std::string::npos : close - 1);
@@ -190,15 +194,62 @@ std::string system() {
            "task do not show is not checkable.";
 }
 
-std::vector<fs::path> read_dirs(const std::string& vault, const std::vector<Commit>& commits) {
+std::vector<fs::path> read_dirs(const std::string& vault, const std::vector<Commit>& commits, const std::string& area) {
     std::vector<fs::path> dirs = {fs::u8path(vault)};
-    for (const auto& commit : commits) {
-        const fs::path dir = repo_dir(vault, commit.repo);
+    const auto add = [&](const std::string& repo) {
+        const fs::path dir = repo_dir(vault, repo);
         if (!dir.empty() && std::find(dirs.begin(), dirs.end(), dir) == dirs.end()) {
             dirs.push_back(dir);
         }
+    };
+    if (!area.empty()) {
+        add(area);
+    }
+    for (const auto& commit : commits) {
+        add(commit.repo);
     }
     return dirs;
+}
+
+std::string decision_prompt(const jobs::Request& request, const std::string& diff_text, const std::string& job_id) {
+    std::string text;
+    text += "Prepare the decision of the task " + request.task_id + " of the task vault " + request.vault + " (area " +
+            request.area + "). This is job " + job_id + ", handed over by " + request.source + ".\n\n";
+    text += "You only read and answer: change no file, no task and no repository, and decide nothing. The person "
+            "decides; you lay out what there is to decide. You may read the vault, the repository of the area and the "
+            "repositories its references name (Read, Glob, Grep). Read what the task refers to (its `refs`, links, "
+            "named files and tasks) before you answer.\n\n";
+    text += "Find 2 to 4 real options (not variations of one), each with what it means and its consequences (effort, "
+            "risk, what it makes easier or harder later), one recommendation with the reason, and the assumptions it "
+            "rests on that nobody has confirmed. A decision the task names already is no option to invent again.\n\n";
+    text += "Think it through in your answer, then end it with exactly one block from the line `" +
+            std::string(kDecisionBegin) + "` to the line `" + std::string(kDecisionEnd) +
+            "`, written in the language of the task, in this form (German headings for a German task):\n\n";
+    text += std::string(kDecisionBegin) + "\n";
+    text += "## Vorschlag\n\n";
+    text += "<one line: the date, job " + job_id + ", the recommendation in a few words>\n\n";
+    text += "### Optionen\n\n";
+    text += "1. **<option>**: <what it means>. Folgen: <consequences>.\n";
+    text += "2. **<option>**: <what it means>. Folgen: <consequences>.\n\n";
+    text += "### Empfehlung\n\n<the option, and why>\n\n";
+    text += "### Offene Annahmen\n\n- <an assumption nobody confirmed>\n\n";
+    text += "## Offene Fragen\n\n";
+    text += "### <the question to decide>? [q1]\n";
+    text += "- [ ] <option> (empfohlen)\n";
+    text += "- [ ] <option>\n";
+    text += std::string(kDecisionEnd) + "\n\n";
+    text += "`## Offene Fragen` holds one `### ...? [qN]` per decision the task waits for, its options as unticked "
+            "boxes, exactly one marked `(empfohlen)`; tick none. In English: `## Proposal`, `### Options`, "
+            "`### Recommendation`, `### Open assumptions`, `## Open questions`, `(recommended)`.\n\n";
+    text += "## The task\n\n" + request.markdown + "\n\n";
+    text += "## The commits its references name, as git shows them\n\n" + diff_text;
+    return text;
+}
+
+std::string decision_system() {
+    return "You prepare decisions for the person who owns a task vault. You lay out options and their consequences "
+           "fairly, recommend one with a reason, and name what you assumed. You never decide and never change "
+           "anything.";
 }
 
 const std::vector<std::string>& allowed_tools() {
