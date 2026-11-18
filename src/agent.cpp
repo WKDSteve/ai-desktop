@@ -263,12 +263,10 @@ std::string prompt(const jobs::Request& request, const std::string& by) {
     return text;
 }
 
-Event render(const std::string& line) {
-    Event event;
-    const json doc = json::parse(line, nullptr, false);
-    if (doc.is_discarded() || !doc.is_object()) {
-        return event;
-    }
+namespace {
+
+// render() for one parsed line; json::value() and get() throw on a value of another type than expected.
+void render_doc(const json& doc, Event& event) {
     const std::string type = doc.value("type", "");
     if (type == "system" && doc.value("subtype", "") == "init") {
         event.text = "▸ Claude Code";
@@ -332,6 +330,23 @@ Event render(const std::string& line) {
                 event.output_tokens = usage["output_tokens"].get<long>();
             }
         }
+    }
+}
+
+}  // namespace
+
+Event render(const std::string& line) {
+    Event event;
+    const json doc = json::parse(line, nullptr, false);
+    if (doc.is_discarded() || !doc.is_object()) {
+        return event;
+    }
+    try {
+        render_doc(doc, event);
+    } catch (const json::exception&) {
+        // A line of another form than Claude Code writes (a key of another type): skipped like one that is no JSON,
+        // never an exception out of the reading of the run.
+        event = Event{};
     }
     // Text from the agent is foreign text: the output keeps only what the character rule of the jobs allows.
     event.text = jobs::sanitize(event.text);

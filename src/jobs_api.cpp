@@ -141,6 +141,22 @@ std::string run_claude(const HooksPtr& hooks, const std::string& id, std::uint64
         process::Child* raw = child.get();
         g_cancels[id] = Cancel{run, [raw] { raw->kill(); }};
     }
+    // Takes this run's entry away before the child goes, on every way out (an exception too): a stop must never
+    // reach a child that is gone. Only this run's entry: a run started since (after a cancel) has its own.
+    struct Unregister {
+        const std::string& id;
+        std::uint64_t run;
+        bool done = false;
+        void now() {
+            if (done) return;
+            done = true;
+            std::lock_guard<std::mutex> lock(g_cancel_mutex);
+            if (const auto it = g_cancels.find(id); it != g_cancels.end() && it->second.run == run) {
+                g_cancels.erase(it);
+            }
+        }
+        ~Unregister() { now(); }
+    } unregister{id, run};
     // Cancelled while the brief or the diffs were fetched, or the child started: it ends at once.
     if (!still_running(id, run)) {
         child->kill();
@@ -167,13 +183,7 @@ std::string run_claude(const HooksPtr& hooks, const std::string& id, std::uint64
         1024 * 1024);
     const int code = child->wait();
     const std::string stderr_text = child->stderr_tail();
-    {
-        std::lock_guard<std::mutex> lock(g_cancel_mutex);
-        // Only this run's entry: a run started since (after a cancel) has its own.
-        if (const auto it = g_cancels.find(id); it != g_cancels.end() && it->second.run == run) {
-            g_cancels.erase(it);
-        }
-    }
+    unregister.now();
     child.reset();
 
     const bool ok = got_result && result_error.empty() && code == 0;

@@ -164,6 +164,32 @@ TEST(agent_stream_json_becomes_output) {
     CHECK_EQ(ai_desktop::jobs::text_error(e.text, true), std::string(""));
 }
 
+// A line of JSON whose keys have other types than Claude Code writes is skipped like one that is no JSON: an
+// exception out of render() would leave the reading of the run (and its cancel entry) behind.
+TEST(agent_stream_json_of_another_form_is_skipped) {
+    const char* lines[] = {
+        R"({"type":5})",
+        R"({"type":"system","subtype":["init"]})",
+        R"({"type":"assistant","message":{"content":[{"type":"tool_use","name":null,"input":{}}]}})",
+        R"({"type":"assistant","message":{"content":[{"type":7}]}})",
+        R"({"type":"user","message":{"content":[{"type":"tool_result","is_error":"yes","content":"x"}]}})",
+        R"({"type":"result","is_error":null})",
+        R"({"type":"result","subtype":3})",
+    };
+    for (const char* line : lines) {
+        bool threw = false;
+        agent::Event e;
+        try {
+            e = agent::render(line);
+        } catch (...) {
+            threw = true;
+        }
+        CHECK(!threw);
+        CHECK(e.text.empty());
+        CHECK(!e.final);
+    }
+}
+
 TEST(agent_finds_its_programs_from_the_settings) {
     const fs::path dir = minitest::make_temp_dir("agent-find");
     minitest::set_env("AI_DESKTOP_CONFIG_DIR", dir.string());
