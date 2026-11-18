@@ -11,6 +11,7 @@
 #include <objbase.h>
 #include <shellapi.h>
 #else
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -74,6 +75,10 @@ void show(const std::string& url) {
 #endif
     const pid_t child = fork();
     if (child == 0) {
+        // The thread that forks has SIGINT and SIGTERM blocked (main.cpp); the browser it may start must not.
+        sigset_t none;
+        sigemptyset(&none);
+        sigprocmask(SIG_SETMASK, &none, nullptr);
         execlp(opener, opener, url.c_str(), static_cast<char*>(nullptr));
         _exit(127);
     }

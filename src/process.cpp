@@ -496,6 +496,11 @@ std::unique_ptr<Child> start(const Spec& spec, std::string* error) {
         ::dup2(out_pipe[1], 1);
         ::dup2(err_pipe[1], 2);
         for (long fd = 3; fd < max_fd; ++fd) ::close(static_cast<int>(fd));
+        // The server's threads block SIGINT and SIGTERM (main.cpp waits for them in a thread of its own), and the
+        // mask survives execve: the child starts with none blocked, so a SIGTERM to it or its tree works.
+        sigset_t none;
+        sigemptyset(&none);
+        ::sigprocmask(SIG_SETMASK, &none, nullptr);
         if (!cwd.empty() && ::chdir(cwd.c_str()) != 0) ::_exit(126);
         ::execve(argv[0], argv.data(), envp.data());
         ::_exit(127);

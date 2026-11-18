@@ -78,3 +78,28 @@ TEST(process_the_brief_of_a_tasks_command_is_read) {
     CHECK_EQ(brief.brief_version, 1);
     CHECK(brief.markdown.find("--by=ai-desktop:0123456789abcdef") != std::string::npos);
 }
+
+#ifndef _WIN32
+#include <csignal>
+#include <pthread.h>
+
+// main.cpp blocks SIGINT and SIGTERM in the server's threads (a thread of its own waits for them); a child started
+// from such a thread must not keep that mask across execve, or Claude Code, git and tasks would ignore a SIGTERM.
+TEST(process_child_does_not_inherit_blocked_signals) {
+    sigset_t block;
+    sigset_t old;
+    sigemptyset(&block);
+    sigaddset(&block, SIGTERM);
+    sigaddset(&block, SIGINT);
+    pthread_sigmask(SIG_BLOCK, &block, &old);
+    process::Spec spec;
+    spec.program = "/bin/sh";
+    spec.args = {"-c", "kill -TERM $$; echo survived"};
+    std::string out;
+    std::string error;
+    const int code = process::run_capture(spec, std::chrono::seconds(10), 4096, out, &error);
+    pthread_sigmask(SIG_SETMASK, &old, nullptr);
+    CHECK(out.find("survived") == std::string::npos);
+    CHECK_EQ(code, -1);  // ended by the signal
+}
+#endif
