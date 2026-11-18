@@ -60,3 +60,62 @@ test('a failed check turns its badge red', async ({ page }) => {
   await expect(page.locator('#backends-status')).toHaveText('not reachable');
   await expect(badge(page, 'SSE')).toHaveClass(/badge-err/);
 });
+
+for (const colorScheme of ['light', 'dark']) {
+  test(`a backend whose listing failed shows a warning and the reason, not a tick (${colorScheme})`, async ({ page }) => {
+    // The key is present (/health), the provider rejected it when the models were listed: the 401 a stale key in the
+    // credential store gave on 2026-11-18, the same text the server keeps (with the key part already replaced).
+    await page.emulateMedia({ colorScheme });
+    await page.route('**/health', (route) => route.fulfill({ json: {
+      status: 'ready', backends: { ollama: true, openai: true, anthropic: true, gemini: false },
+      catalog_errors: {
+        anthropic: 'anthropic: HTTP 401: invalid x-api-key',
+        openai: 'openai: HTTP 401: Incorrect API key provided: <key>. You can find your API key at ...',
+      },
+    } }));
+    await page.goto(await server.dashboardUrl());
+    await expect(badge(page, 'Backends')).toHaveClass(/badge-warn/);
+    await expect(page.locator('#backends-status')).toContainText('Anthropic ⚠');
+    await expect(page.locator('#backends-status')).toContainText('OpenAI ⚠');
+    await expect(page.locator('#backends-status')).toContainText('Gemini ✗');
+    await expect(page.locator('#backends-errors')).toBeVisible();
+    await expect(page.locator('#backends-errors')).toContainText('Anthropic: key rejected (invalid or revoked)');
+    await expect(page.locator('#backends-errors')).not.toContainText('sk-');
+    // The warning colour keeps its contrast in the card (the other cards have checks of their own).
+    const result = await new AxeBuilder({ page })
+      .include('.card:has(#backends-status)')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze();
+    const found = result.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`);
+    expect(found).toEqual([]);
+  });
+}
+
+test('a backend that lists fine keeps its tick and no error line', async ({ page }) => {
+  await page.route('**/health', (route) => route.fulfill({ json: {
+    status: 'ready', backends: { ollama: true, openai: false, anthropic: true, gemini: false }, catalog_errors: {},
+  } }));
+  await page.goto(await server.dashboardUrl());
+  await expect(badge(page, 'Backends')).toHaveClass(/badge-ok/);
+  await expect(page.locator('#backends-status')).toContainText('Anthropic ✓');
+  await expect(page.locator('#backends-errors')).toBeHidden();
+});
+
+test('the model list replaces what /health had cached: a fixed key clears the warning, a new failure shows', async ({ page }) => {
+  await page.route('**/health', (route) => route.fulfill({ json: {
+    status: 'ready', backends: { ollama: true, openai: false, anthropic: true, gemini: false },
+    catalog_errors: { anthropic: 'anthropic: HTTP 401: invalid x-api-key' },
+  } }));
+  await page.route('**/models', (route) => route.fulfill({ json: {
+    default: 'llama3.1:8b', models: [{ id: 'claude-fable-5-2', category: 'cloud', provider: 'anthropic', available: true }],
+    errors: { ollama: 'ollama: Could not establish connection' },
+  } }));
+  await page.goto(await server.dashboardUrl());
+  await expect(page.locator('#backends-status')).toContainText('Anthropic ⚠');
+  await page.locator('#ask-model').focus();
+  await expect(page.locator('#backends-status')).toContainText('Anthropic ✓');
+  await expect(page.locator('#backends-status')).toContainText('Ollama ⚠');
+  await expect(page.locator('#backends-errors')).toHaveText('Ollama: Could not establish connection');
+  await expect(page.locator('#ask-model-errors')).toBeVisible();
+  await expect(page.locator('#ask-model-errors')).toHaveText('Model list incomplete: Ollama: Could not establish connection');
+});

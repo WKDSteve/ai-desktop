@@ -65,7 +65,7 @@ bool get_json(const std::string& origin, const std::string& path, const httplib:
         if (detail.size() > 200) {
             detail.resize(200);
         }
-        error = label + ": HTTP " + std::to_string(res->status) + (detail.empty() ? "" : ": " + detail);
+        error = label + ": HTTP " + std::to_string(res->status) + (detail.empty() ? "" : ": " + redact_keys(detail));
         return false;
     }
     return true;
@@ -222,6 +222,28 @@ json list(bool refresh) {
     }
 
     return {{"default", config::effective("default_model")}, {"models", models}, {"errors", errors}};
+}
+
+json cached_errors() {
+    // What each listing depends on right now: a cached failure for another host or another key says nothing
+    // about the current one (a key replaced through PUT /keys drops the old 401 at once).
+    std::map<std::string, std::string> current = {{"ollama", ollama::host()}};
+    for (const auto& provider : providers::cloud()) {
+        const std::string key = secrets::get(provider.key_name);
+        if (!key.empty()) {
+            current[provider.name] = key_fingerprint(key);
+        }
+    }
+    json errors = json::object();
+    std::lock_guard<std::mutex> lock(g_mutex);
+    for (const auto& [name, fingerprint] : current) {
+        auto hit = g_remote.find(name);
+        if (hit != g_remote.end() && hit->second.valid && hit->second.fingerprint == fingerprint &&
+            !hit->second.error.empty()) {
+            errors[name] = hit->second.error;
+        }
+    }
+    return errors;
 }
 
 InfoResult info(const std::string& id) {

@@ -155,22 +155,56 @@ function setBadge(id, state) {
 }
 
 // The state of the backends (it replaced a fixed "Model: simulation" line, misleading since /ask/stream is real).
+// ✓ has a key (Ollama: always), ✗ has none, ⚠ its model listing failed: a key that is present but rejected (401)
+// looked like a working one before. The errors come from /health (the last listing, cached on the server, no
+// request to a provider) and from GET /models once the model field asked for it.
+const BACKEND_NAMES = { ollama: 'Ollama', openai: 'OpenAI', anthropic: 'Anthropic', gemini: 'Gemini' };
+let knownBackends = null;
+let backendErrors = {};
+let errorsFromList = false; // GET /models answered: its errors are newer than what /health read from the cache
+
+// One line for a listing error: what to do about a rejected key, else the server's own text (keys already
+// replaced by "<key>" there).
+function backendErrorText(id, message) {
+  const name = BACKEND_NAMES[id] || id;
+  if (/HTTP 40[13]\b/.test(message)) return `${name}: ${t('key_rejected')}`;
+  return `${name}: ${message.startsWith(`${id}: `) ? message.slice(id.length + 2) : message}`;
+}
+
+function failedBackends() {
+  return Object.keys(BACKEND_NAMES).filter((id) => knownBackends[id] && typeof backendErrors[id] === 'string');
+}
+
+function renderBackends() {
+  if (!knownBackends) return;
+  const failures = failedBackends();
+  const status = document.getElementById('backends-status');
+  status.replaceChildren();
+  Object.keys(BACKEND_NAMES).forEach((id, i) => {
+    const present = !!knownBackends[id];
+    const failed = failures.includes(id);
+    const part = document.createElement('span');
+    part.style.color = failed ? 'var(--warn)' : present ? 'var(--ok)' : 'var(--muted)';
+    part.textContent = `${BACKEND_NAMES[id]} ${failed ? '⚠' : present ? '✓' : '✗'}`;
+    if (i > 0) status.append('  ');
+    status.append(part);
+  });
+  setBadge('backends-badge', failures.length ? 'warn' : 'ok');
+  const detail = document.getElementById('backends-errors');
+  detail.replaceChildren(...failures.map((id) => {
+    const line = document.createElement('div');
+    line.textContent = backendErrorText(id, backendErrors[id]);
+    return line;
+  }));
+  detail.hidden = failures.length === 0;
+}
+
 fetch('/health')
   .then((r) => r.json())
   .then((data) => {
-    const names = { ollama: 'Ollama', openai: 'OpenAI', anthropic: 'Anthropic', gemini: 'Gemini' };
-    const backends = data.backends || {};
-    setBadge('backends-badge', 'ok');
-    const status = document.getElementById('backends-status');
-    status.replaceChildren();
-    Object.keys(names).forEach((id, i) => {
-      const ok = !!backends[id];
-      const part = document.createElement('span');
-      part.style.color = ok ? 'var(--ok)' : 'var(--muted)';
-      part.textContent = `${names[id]} ${ok ? '✓' : '✗'}`;
-      if (i > 0) status.append('  ');
-      status.append(part);
-    });
+    knownBackends = data.backends || {};
+    if (!errorsFromList) backendErrors = data.catalog_errors || {};
+    renderBackends();
   })
   .catch(() => {
     setBadge('backends-badge', 'err');
@@ -194,6 +228,15 @@ function fillModelPresets() {
         option.value = m.id;
         return option;
       }));
+      // The list is fresh: its errors replace what /health had cached, and a backend that listed fine is fine.
+      const errors = data.errors || {};
+      backendErrors = errors;
+      errorsFromList = true;
+      renderBackends();
+      const hint = document.getElementById('ask-model-errors');
+      const lines = Object.keys(errors).map((id) => backendErrorText(id, errors[id]));
+      hint.textContent = lines.length ? `${t('model_list_incomplete')} ${lines.join(' · ')}` : '';
+      hint.hidden = lines.length === 0;
     })
     .catch(() => {});
 }

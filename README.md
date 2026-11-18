@@ -249,7 +249,12 @@ via `AI_DESKTOP_PREFIXES_OPENAI`/`AI_DESKTOP_PREFIXES_CLAUDE`/`AI_DESKTOP_PREFIX
 model family without a rebuild. Read once at startup.
 
 `GET /health` shows which backends are currently configured (presence
-check only, never the key value itself).
+check only, never the key value itself). A key that is present can still be
+rejected: `catalog_errors` names what the last model listing (`GET /models`)
+failed with per backend, from the cache only, so `/health` itself never asks a
+provider (empty until something listed the models). Anything shaped like a key
+in a provider's message is replaced by `<key>`. The dashboard shows such a
+backend with a warning and the reason instead of a tick.
 
 ## Found by the other apps (the family)
 
@@ -301,6 +306,7 @@ console (`Dashboard: http://127.0.0.1:<port>/#ticket=...`) or opens for a job; s
   "status": "ready",
   "model_router_ready": true,
   "backends": { "ollama": true, "openai": true, "anthropic": false, "gemini": false },
+  "catalog_errors": { "openai": "openai: HTTP 401: Incorrect API key provided: <key>. ..." },
   "app": "ai-desktop",
   "version": "0.1.0",
   "instance": "0123456789abcdef0123456789abcdef"

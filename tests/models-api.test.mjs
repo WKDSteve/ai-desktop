@@ -183,3 +183,29 @@ describe("GET /models with Ollama down", () => {
     assert.match(res.json.error.message, /^ollama: /);
   });
 });
+
+describe("GET /health and the errors of the model listing", () => {
+  let server;
+  before(async () => {
+    // Ollama down gives a real listing error without asking any cloud provider.
+    server = await startServer({ env: { AI_DESKTOP_OLLAMA_HOST: `http://127.0.0.1:${await freePort()}` } });
+  });
+  after(async () => {
+    await server.stop();
+  });
+
+  it("names no error before anything listed the models: /health asks no provider itself", async () => {
+    const res = await server.get("/health");
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.json.catalog_errors, {});
+  });
+
+  it("names the failure of the last listing afterwards, from the cache", async () => {
+    const listing = await server.get("/models");
+    assert.match(listing.json.errors.ollama, /^ollama: /);
+    const res = await server.get("/health");
+    assert.equal(res.json.catalog_errors.ollama, listing.json.errors.ollama);
+    // presence of the backends is unchanged: Ollama has no key and stays "configured"
+    assert.equal(res.json.backends.ollama, true);
+  });
+});

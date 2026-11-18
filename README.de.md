@@ -227,7 +227,13 @@ um eine neue OpenAI-Modellfamilie ohne Neubau aufzunehmen. Wird einmal beim
 Start gelesen.
 
 `GET /health` zeigt, welche Backends aktuell konfiguriert sind (nur
-Presence-Check, nie der Key-Wert selbst).
+Presence-Check, nie der Key-Wert selbst). Ein vorhandener Key kann trotzdem
+abgelehnt werden: `catalog_errors` nennt je Backend, woran die letzte
+Modellliste (`GET /models`) gescheitert ist, nur aus dem Cache, `/health`
+fragt selbst nie einen Provider (leer, bis etwas die Modelle gelistet hat).
+Was in der Meldung eines Providers wie ein Key aussieht, wird durch `<key>`
+ersetzt. Das Dashboard zeigt so ein Backend mit Warnzeichen und Grund statt
+mit Haken.
 
 ## Von den anderen Apps gefunden (die Familie)
 
@@ -279,6 +285,7 @@ login of the dashboard“ in [docs/JOBS.md](docs/JOBS.md).
   "status": "ready",
   "model_router_ready": true,
   "backends": { "ollama": true, "openai": true, "anthropic": false, "gemini": false },
+  "catalog_errors": { "openai": "openai: HTTP 401: Incorrect API key provided: <key>. ..." },
   "app": "ai-desktop",
   "version": "0.1.0",
   "instance": "0123456789abcdef0123456789abcdef"

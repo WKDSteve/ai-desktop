@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <regex>
 #include <vector>
 
 #include "models.hpp"
@@ -71,6 +72,14 @@ std::string truncated(std::string text) {
 }
 
 }  // namespace
+
+std::string redact_keys(const std::string& text) {
+    // OpenAI answers a wrong key with "Incorrect API key provided: sk-proj-****...XMoA": the masked key still
+    // shows its last characters, and the message reaches the dashboard and /health. Anthropic (sk-ant-) and
+    // Gemini (AIza) keys get the same treatment in case a provider ever echoes one.
+    static const std::regex key(R"(\b(sk-|AIza)[A-Za-z0-9_*\-]+)");
+    return std::regex_replace(text, key, "<key>");
+}
 
 std::string iso_date(long long epoch_seconds) {
     if (epoch_seconds <= 0) {

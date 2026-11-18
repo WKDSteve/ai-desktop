@@ -17,6 +17,11 @@ namespace ai_desktop::catalog {
 // `refresh` bypasses the cache.
 nlohmann::json list(bool refresh);
 
+// The errors of the last listing that still hold for the current Ollama host and keys, from the cache only (no
+// request leaves): {"<provider>": "msg"}. For GET /health, so a rejected key shows without the dashboard asking the
+// providers on every open. Empty until something listed the models (GET /models).
+nlohmann::json cached_errors();
+
 struct InfoResult {
     int http = 200;
     nlohmann::json body;  // {"id","category","provider","details"} or {"error":{"message"}}

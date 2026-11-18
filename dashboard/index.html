@@ -78,6 +78,8 @@
       <span class="badge badge-idle" id="backends-badge">Backends</span>
       <span id="backends-status" class="muted" data-i18n="loading"></span>
     </div>
+    <!-- A backend whose model listing failed (a rejected key, Ollama down): the reason, one line each (app.js). -->
+    <div id="backends-errors" class="backend-errors" role="status" hidden></div>
   </div>
 </div>
 
@@ -131,6 +133,8 @@
   </div>
   <div id="ask-hint"><span data-i18n="ask_hint_before"></span><code>gpt-</code>/<code>o1-</code>/<code>o3-</code>
     → OpenAI, <code>claude-</code> → Anthropic, <code>gemini-</code> → Gemini<span data-i18n="ask_hint_after"></span></div>
+  <!-- Filled with the errors of GET /models: the list then holds only the built-in suggestions of that backend. -->
+  <div id="ask-model-errors" class="backend-errors" role="status" hidden></div>
   <div id="ask-status"></div>
   <div id="ask-output"></div>
 </div>

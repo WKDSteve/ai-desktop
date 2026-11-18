@@ -25,6 +25,7 @@
 
 #include "anthropic_client.hpp"
 #include "api.hpp"
+#include "catalog.hpp"
 #include "control_secret.hpp"
 #include "family.hpp"
 #include "foreground.hpp"
@@ -739,6 +740,9 @@ int main(int argc, char** argv) {
         for (const auto& cloud : ai_desktop::providers::cloud()) {
             body["backends"][cloud.name] = !ai_desktop::secrets::get(cloud.key_name).empty();
         }
+        // A key that is present is not yet a key that works: the last model listing's failures (a 401 for a
+        // revoked key, an Ollama that is down), from the cache only, so this check stays cheap.
+        body["catalog_errors"] = ai_desktop::catalog::cached_errors();
         // Who answers: the same app, version and instance as hub.json, so a client of the family can tell
         // that the server on this port is the one the file names.
         body["app"] = ai_desktop::family::kApp;

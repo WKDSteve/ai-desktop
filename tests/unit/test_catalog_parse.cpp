@@ -154,3 +154,12 @@ TEST(presets_are_marked_as_suggestions) {
     }
     CHECK(catalog::presets("nobody").empty());
 }
+
+TEST(redact_keys_hides_every_part_of_a_provider_key) {
+    // OpenAI's own answer to a wrong key, masked but with the last characters.
+    CHECK_EQ(catalog::redact_keys("Incorrect API key provided: sk-proj-****************XMoA. You can find"),
+             std::string("Incorrect API key provided: <key>. You can find"));
+    CHECK_EQ(catalog::redact_keys("bad key sk-ant-api03-abc_DEF-123 and AIzaSyA1b2C3"), std::string("bad key <key> and <key>"));
+    CHECK_EQ(catalog::redact_keys("invalid x-api-key"), std::string("invalid x-api-key"));  // "x-api-key" is no key
+    CHECK_EQ(catalog::redact_keys("risk-free task-runner"), std::string("risk-free task-runner"));  // a word that only contains sk- stays
+}

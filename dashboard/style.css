@@ -105,6 +105,8 @@ h1 { color: var(--accent); font-size: 1.1rem;
 .btn-muted:hover:not(:disabled) { background: var(--line); }
 .btn:disabled { opacity: .4; cursor: default; }
 #ask-hint { font-size: .68rem; color: var(--muted); margin-top: .4rem; }
+.backend-errors { font-size: .72rem; color: var(--warn); margin-top: .4rem; overflow-wrap: anywhere; }
+.backend-errors[hidden] { display: none; }
 #ask-status { font-size: .74rem; color: var(--muted); margin-top: .5rem; }
 #ask-output {
   margin-top: .5rem; background: var(--bg); border: 1px solid var(--line);
