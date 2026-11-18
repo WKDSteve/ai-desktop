@@ -74,8 +74,8 @@ const STRINGS = {
     private_areas_placeholder: 'Bereiche, durch Komma getrennt',
     job_settings_saved: 'Gespeichert.',
     login_title: 'Nicht angemeldet',
-    login_hint: 'Öffne das Dashboard über den Link in der Konsole von ai-desktop (Dashboard: …#ticket=…) oder über ' +
-      'einen Auftrag; nach einem Neustart von ai-desktop gilt die alte Anmeldung nicht mehr.',
+    login_hint: 'Öffne das Dashboard über die Kachel im Hub, den Link in der Konsole von ai-desktop ' +
+      '(Dashboard: …#ticket=…) oder einen Auftrag; nach einem Neustart von ai-desktop gilt die alte Anmeldung nicht mehr.',
     job_meta: '{task_id} · Bereich {area} · aus {source} · Art {kind}',
     job_private: ' · privat',
     job_received: 'Auftrag erhalten: ',
@@ -166,8 +166,8 @@ const STRINGS = {
     private_areas_placeholder: 'areas, separated by commas',
     job_settings_saved: 'Saved.',
     login_title: 'Not logged in',
-    login_hint: 'Open the dashboard from the link in the console of ai-desktop (Dashboard: …#ticket=…) or from a ' +
-      'job; after ai-desktop started again, the old login no longer holds.',
+    login_hint: 'Open the dashboard from its tile in the hub, the link in the console of ai-desktop ' +
+      '(Dashboard: …#ticket=…) or a job; after ai-desktop started again, the old login no longer holds.',
     job_meta: '{task_id} · area {area} · from {source} · kind {kind}',
     job_private: ' · private',
     job_received: 'Job received: ',
