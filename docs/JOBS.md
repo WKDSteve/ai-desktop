@@ -291,8 +291,9 @@ to case, since an area is a folder and `Kunde` and `kunde` are the same one on W
 tasks go to a local model only (Ollama, or a custom model on a loopback address). A request may also say `"private":
 true`. A private job that is to run on any other model is held (`needs_confirmation`); the dashboard asks
 "The area ... is private. The model ... does not run locally: shall the task go there anyway?", and only the answer
-yes sends it (`confirm_private`). The question cannot be answered blind by a program without the secret: the run route
-wants the dashboard's `Origin` or the secret.
+yes sends it (`confirm_private`). A web page cannot answer the question: the run route wants the dashboard's `Origin`
+or the secret, and a page cannot send that `Origin`. A local program can: it sets the header itself (see the threat
+model), so the question protects against pages and mistakes, not against a program that means harm.
 
 ## Settings
 
@@ -314,15 +315,20 @@ front).
 
 **Trust boundary:** the user account on this machine. Every program that runs as the person can read their files,
 the control secret included; that is the same boundary as the appkit hubs, and a program with those rights could as
-well read the vault itself. The secret keeps out everything outside that boundary.
+well read the vault itself. The secret guards `POST /jobs` only. The rest of the management API (run, cancel and
+delete a job, `PUT /settings`) is guarded against web pages only (`Host`, `Origin`, `Sec-Fetch-*`), not against
+programs: the dashboard proves itself by its `Origin`, and any program that is not a browser can send that header
+itself. So everything that reaches `127.0.0.1` (every program of every user account on this machine) can use those
+routes; the boundary holds there only on a machine with one account. A login for the whole management API is a task
+of its own (ai-desktop, "Anmeldung für die ganze Verwaltungs-API").
 
 | Attacker | Attack | Defence |
 |---|---|---|
 | A web page in the person's browser | `fetch`/form `POST /jobs` to 127.0.0.1 (CSRF) | a browser always sends `Origin` on a POST (and `Sec-Fetch-*`): refused with 403 before anything else, the dashboard's own origin included. The page cannot read `control.secret`, so it has no secret; `application/json` makes a cross-origin request a preflight, which gets no CORS headers (no `Access-Control-Allow-*` anywhere). |
 | A web page through DNS rebinding | a name of its own resolved to 127.0.0.1, so the browser treats it as same-origin and sends no `Origin` on a GET | every request of the server (the pre-routing handler) must name `127.0.0.1`, `localhost` or `[::1]` with the port in `Host`: a foreign name gets 403, so the page reads no job and no setting. The routes of the jobs also refuse a request without `Host`. |
 | Another machine | reach the port | the server binds `127.0.0.1` only. |
-| Another user on this machine | read the secret, send jobs | the file is readable by the person only (Windows: protected ACL with one entry; elsewhere 0600). |
-| A local program without the secret | send a job, confirm a private area, put jobs away | `401` for `POST /jobs`; run and delete want the dashboard's `Origin` or the secret. It can read jobs (`GET /jobs`), as it can read the vault. |
+| Another user on this machine | read the secret, send jobs | the file is readable by the person only (Windows: protected ACL with one entry; elsewhere 0600), so `POST /jobs` is closed. **Not defended:** loopback is shared by all accounts, and the other routes take a forged `Origin` (next row). |
+| A local program without the secret (the person's or another account's) | send a job, confirm a private area, put jobs away, change the settings | `401` for `POST /jobs`. **Not defended otherwise:** run, cancel and delete want the dashboard's `Origin` or the secret, and a program sends `Origin: http://127.0.0.1:<port>` itself; `GET/PUT /settings` want no proof at all. So it can run any job, send a private one to a cloud model with `confirm_private: true` without the person's yes, stop or delete jobs, and set `claude_cli` to a program of its own, which the next run then starts **as the person**. It can read jobs (`GET /jobs`). For a program of the person this gives nothing new; for another account it is a way in. |
 | A family app gone wrong | flood the dashboard, send huge or hostile text | 10 jobs a minute (counted after the secret, so a stranger cannot use them up), 320 KiB a body, 100 jobs kept, 2 runs at once; every text follows the character rule above (no bidi trick, no escape sequence for a terminal); the page shows the text as text only (Trusted Types, `textContent`/`value`). |
 | A stolen old secret | replay it | a new secret at every start; the file is removed at the end. |
 | A cloud provider | gets a private task | only after the person said yes in the dashboard; a local model needs no question. |
@@ -330,10 +336,11 @@ well read the vault itself. The secret keeps out everything outside that boundar
 | Focus theft | a job steals the focus at a bad moment | ai-desktop never takes the focus on its own: only with the right the sending app granted at the person's click. |
 | The agent (Claude Code) | it writes in the vault and the repository of the area, runs `tasks` and `git` (commit and push as the person) | it runs as the person, in the folders of the task only, with the tools of its list (no shell beyond `tasks` and `git`, no web access, no other program; print mode refuses the rest) and the person's own Claude Code settings; it claims under its own name (`ai-desktop:<job>`), so a task it holds shows who; a claim of somebody else stops it (the brief says so). A run is started by a family app with the secret or by the person in the dashboard, never by a page. Stop ends it with its whole process tree (a job object on Windows, a process group elsewhere), and so does the end of ai-desktop. |
 | A task steering the agent (prompt injection) | text in a task file tells the agent to do something else | the tool list bounds what it can do at all (no network, no other program); what it did is in the job's output and in git. A task from a vault the person does not trust should not be handed over. |
-| The settings `claude_cli` / `tasks_cli` | a program sets them to another executable | only an absolute path, set through `PUT /settings`, which a page cannot reach (Origin, Host); a program that can do that runs as the person anyway. |
+| The settings `claude_cli` / `tasks_cli` | a program sets them to another executable | only an absolute path, set through `PUT /settings`, which a page cannot reach (Origin, Host). **Not defended against another account:** `PUT /settings` asks no proof, so a program of another user can set them and have its executable started as the person (row "A local program" above). |
 
 **Not covered:** a program running as the person (it has the secret, the vault and the person's Claude Code
-anyway); an agent doing harm within its tools (it can change and push the repository of the area): what it did is in
+anyway); another user account on this machine, as far as the routes beyond `POST /jobs` go (see the trust boundary);
+an agent doing harm within its tools (it can change and push the repository of the area): what it did is in
 git and can be reverted, and its tool list is the boundary.
 
 **The agent may push (decision of 2026-11-18).** `Bash(git:*)` includes `git push`, on purpose: a task is finished
