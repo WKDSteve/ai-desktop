@@ -215,7 +215,8 @@ std::string run_agent(const HooksPtr& hooks, const std::string& id, std::uint64_
     std::error_code ec;
     const fs::path dir = fs::u8path(config::directory()) / "job-briefs";
     fs::create_directories(dir, ec);
-    const fs::path brief_file = dir / (id + ".brief.md");
+    // One file per run: a run cancelled before removes its own file at its end, never the one of a run started since.
+    const fs::path brief_file = dir / (id + "-" + std::to_string(run) + ".brief.md");
     {
         std::ofstream out(brief_file, std::ios::binary | std::ios::trunc);
         out << brief.markdown;

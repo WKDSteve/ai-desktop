@@ -200,6 +200,21 @@ describe("Claude Code runs that end otherwise", { skip: !existsSync(fakeClaude) 
       assert.equal(job.status, "cancelled", "the end of the run does not overwrite the cancel");
       assert.ok(!lines(w.tasksLog).some((c) => c.args[0] === "done"));
       assert.equal((await server.post(`/jobs/${id}/cancel`, {}, auth(server))).status, 409);
+
+      // Run again: the new run gets a brief file of its own, so the end of the cancelled run (which removes its
+      // file) can never take away the brief of the run started after it.
+      const firstBrief = lines(w.claudeLog).at(-1).args;
+      const again = await server.post(`/jobs/${id}/run`, {}, auth(server));
+      assert.equal(again.status, 200, again.text);
+      await waitFor(server, id, (j) => /tasks sleep/.test(j.output || ""));
+      const secondBrief = lines(w.claudeLog).at(-1).args;
+      const briefOf = (args) => args[args.indexOf("--append-system-prompt-file") + 1];
+      assert.notEqual(briefOf(secondBrief), briefOf(firstBrief), "every run has its own brief file");
+      assert.ok(existsSync(briefOf(secondBrief)), "the brief of the running run is there");
+      assert.equal((await server.post(`/jobs/${id}/cancel`, {}, auth(server))).status, 200);
+      const end = Date.now() + 5000;
+      while (existsSync(briefOf(secondBrief)) && Date.now() < end) await new Promise((r) => setTimeout(r, 100));
+      assert.ok(!existsSync(briefOf(firstBrief)) && !existsSync(briefOf(secondBrief)), "each run removed its own");
     } finally {
       await server.stop();
       w.cleanup();
