@@ -27,7 +27,8 @@ class Child {
 public:
     virtual ~Child() = default;
     // Calls `on_line` with every line of stdout (without its line end) until stdout ends. Lines longer than
-    // `max_line` bytes are cut there.
+    // `max_line` bytes are cut there. Stdout ends at the latest when the child itself ends: then everything it
+    // started is ended too, so a descendant holding the pipe cannot keep this waiting.
     virtual void read_lines(const std::function<void(const std::string&)>& on_line, std::size_t max_line) = 0;
     // Waits for the end; the exit code (-1 when it was killed or is unknown).
     virtual int wait() = 0;

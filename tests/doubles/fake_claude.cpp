@@ -7,6 +7,8 @@
 //   $FAKE_CLAUDE_PID_FILE   its process id is written there
 //   $FAKE_CLAUDE_SLEEP_MS   waits that long after the claim (the cancel test), and starts a child that waits too
 //   $FAKE_CLAUDE_FAIL=1     ends with an error result
+//   $FAKE_CLAUDE_LEAVE_MS   before its result, starts `tasks sleep <ms>` in the background with stdout and stderr
+//                           inherited and does not wait for it (a descendant that keeps the output pipes open)
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -24,7 +26,9 @@
 #include <process.h>
 #define getpid _getpid
 #else
+#include <spawn.h>
 #include <unistd.h>
+extern char** environ;
 #endif
 
 using json = nlohmann::json;
@@ -46,6 +50,18 @@ void tool(const std::string& command) {
     const int rc = std::system(command.c_str());
     emit({{"type", "user"},
           {"message", {{"content", json::array({{{"type", "tool_result"}, {"is_error", rc != 0}, {"content", rc == 0 ? "ok" : "failed"}}})}}}});
+}
+
+// Starts `tasks sleep <ms>` (the tasks on PATH) without waiting: it inherits stdout and stderr and outlives us.
+void leave_behind(const std::string& ms) {
+#ifdef _WIN32
+    _spawnlp(_P_NOWAIT, "tasks", "tasks", "sleep", ms.c_str(), nullptr);
+#else
+    pid_t pid = 0;
+    std::string a0 = "tasks", a1 = "sleep", a2 = ms;
+    char* argv[] = {a0.data(), a1.data(), a2.data(), nullptr};
+    posix_spawnp(&pid, "tasks", nullptr, nullptr, argv, environ);
+#endif
 }
 
 }  // namespace
@@ -149,6 +165,9 @@ int main(int argc, char** argv) {
         return 1;
     }
     tool("tasks done " + id + " --done-in=fake --by=" + by);
+    if (const std::string leave = env("FAKE_CLAUDE_LEAVE_MS"); !leave.empty()) {
+        leave_behind(leave);
+    }
     emit({{"type", "result"},
           {"subtype", "success"},
           {"is_error", false},

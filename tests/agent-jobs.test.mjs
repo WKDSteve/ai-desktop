@@ -221,6 +221,24 @@ describe("Claude Code runs that end otherwise", { skip: !existsSync(fakeClaude) 
     }
   });
 
+  it("a descendant that keeps the output open does not hold the run once Claude Code ended", async () => {
+    const w = world();
+    // fake_claude leaves `tasks sleep 20000` behind with its stdout and stderr, then ends with its result.
+    const server = await serverFor(w, { FAKE_CLAUDE_LEAVE_MS: "20000" });
+    try {
+      const started = Date.now();
+      const res = await server.post("/jobs", { ...TASK, vault: w.vault }, auth(server));
+      assert.equal(res.status, 201, res.text);
+      const job = await waitFor(server, res.json.job_id, (j) => j.status !== "running", 8000);
+      assert.equal(job.status, "done", JSON.stringify(job));
+      assert.ok(Date.now() - started < 8000, "the run ended with Claude Code, not with its descendant");
+      assert.match(job.output, /Did the work of demo\/first-task/, "the output written before the end is kept");
+    } finally {
+      await server.stop();
+      w.cleanup();
+    }
+  });
+
   it("an error result fails the job", async () => {
     const w = world();
     const server = await serverFor(w, { FAKE_CLAUDE_FAIL: "1" });

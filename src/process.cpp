@@ -217,6 +217,14 @@ public:
                 keep_tail(err_, buffer, got);
             }
         });
+        // The run ends with the child, not with its output: a descendant that inherited stdout or stderr (a server
+        // Claude Code left behind, a hook's background job) would keep the pipes open, and read_lines() would wait
+        // for it. When the child ends, the job takes the rest of the tree, and the pipes reach their end; what the
+        // child wrote before stays in the pipe and is still read.
+        watch_thread_ = std::thread([this] {
+            WaitForSingleObject(process_, INFINITE);
+            TerminateJobObject(job_, 1);
+        });
     }
 
     ~WinChild() override {
@@ -244,7 +252,8 @@ public:
         WaitForSingleObject(process_, INFINITE);
         DWORD code = 0;
         const bool known = GetExitCodeProcess(process_, &code) != 0;
-        // The children of the child may still hold its stderr open; they belong to the job and go with it.
+        // The children of the child may still hold its stderr open; they belong to the job and go with it (the
+        // watcher did that already).
         TerminateJobObject(job_, 1);
         join();
         return (killed_ || !known) ? -1 : static_cast<int>(code);
@@ -264,6 +273,7 @@ private:
     void join() {
         if (in_thread_.joinable()) in_thread_.join();
         if (err_thread_.joinable()) err_thread_.join();
+        if (watch_thread_.joinable()) watch_thread_.join();
     }
 
     HANDLE process_;
@@ -272,6 +282,7 @@ private:
     HANDLE err_read_;
     std::thread in_thread_;
     std::thread err_thread_;
+    std::thread watch_thread_;
     std::mutex mutex_;
     std::string err_;
     std::atomic<bool> killed_{false};
@@ -393,13 +404,27 @@ public:
                 keep_tail(err_, buffer, static_cast<std::size_t>(got));
             }
         });
+        // The run ends with the child, not with its output (see WinChild): when the child ends, its process group
+        // goes, so a descendant that inherited stdout or stderr cannot keep read_lines() waiting. waitid(WNOWAIT)
+        // leaves the child a zombie until the group is killed: its pid (the group's id) cannot be taken by another
+        // process before that kill.
+        watch_thread_ = std::thread([this] {
+            siginfo_t info{};
+            while (::waitid(P_PID, static_cast<id_t>(pid_), &info, WEXITED | WNOWAIT) < 0 && errno == EINTR) {
+            }
+            std::lock_guard<std::mutex> lock(reap_mutex_);
+            ::kill(-pid_, SIGKILL);  // what it started and left behind goes with it
+            int status = 0;
+            while (::waitpid(pid_, &status, 0) < 0 && errno == EINTR) {
+            }
+            status_ = status;
+            reaped_ = true;
+        });
     }
 
     ~PosixChild() override {
-        if (!reaped_) {
-            kill();
-            wait();
-        }
+        kill();
+        if (watch_thread_.joinable()) watch_thread_.join();
         if (in_thread_.joinable()) in_thread_.join();
         if (err_thread_.joinable()) err_thread_.join();
         ::close(out_fd_);
@@ -419,11 +444,8 @@ public:
     }
 
     int wait() override {
-        int status = 0;
-        while (::waitpid(pid_, &status, 0) < 0 && errno == EINTR) {
-        }
-        reaped_ = true;
-        ::kill(-pid_, SIGKILL);  // what it started and left behind goes with it
+        if (watch_thread_.joinable()) watch_thread_.join();
+        const int status = status_;
         if (in_thread_.joinable()) in_thread_.join();
         if (err_thread_.joinable()) err_thread_.join();
         if (killed_ || !WIFEXITED(status)) return -1;
@@ -432,6 +454,7 @@ public:
 
     void kill() override {
         killed_ = true;
+        std::lock_guard<std::mutex> lock(reap_mutex_);
         if (!reaped_) ::kill(-pid_, SIGKILL);
     }
 
@@ -446,8 +469,11 @@ private:
     int err_fd_;
     std::thread in_thread_;
     std::thread err_thread_;
+    std::thread watch_thread_;
     std::mutex mutex_;
     std::string err_;
+    std::mutex reap_mutex_;
+    int status_ = 0;  // written by the watcher before it ends; read after joining it
     std::atomic<bool> killed_{false};
     std::atomic<bool> reaped_{false};
 };
