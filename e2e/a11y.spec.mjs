@@ -19,7 +19,7 @@ test.afterAll(async () => {
 });
 
 async function open(page) {
-  await page.goto(`http://127.0.0.1:${server.port}/`);
+  await page.goto(await server.dashboardUrl());
   // The page has asked the server what it has: the backends and the usage are filled in.
   await expect(page.locator('#backends-status')).not.toHaveText(/lädt/);
 }

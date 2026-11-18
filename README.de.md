@@ -263,6 +263,14 @@ Person lesbar, beim Beenden entfernt): eine App der Familie schickt es als `Auth
 | `/jobs` | POST | Eine App der Familie übergibt eine Task (nur mit dem Kontroll-Geheimnis, nie aus einer Webseite; siehe [docs/JOBS.md](docs/JOBS.md)) |
 | `/jobs`, `/jobs/<id>` | GET | Die Aufträge fürs Dashboard |
 | `/jobs/<id>/run`, `/jobs/<id>` | POST, DELETE | Einen Auftrag ausführen oder wegräumen (das Dashboard) |
+| `/session` | POST | Das Dashboard tauscht das Ticket seiner Adresse gegen ein Sitzungs-Token |
+| `/session/ticket` | POST | Ein Einmal-Ticket für ein Programm mit dem Kontroll-Geheimnis, das das Dashboard öffnet |
+
+Die Routen mit Wirkung und die, die Aufträge oder Einstellungen lesen (`/events`, `/decision`, `/usage`, `/settings`,
+`/keys`, `/models/custom`, `/jobs` außer `POST /jobs` und `GET /jobs/<id>`), verlangen `Authorization: Bearer` mit dem
+Kontroll-Geheimnis oder einem Sitzungs-Token des Dashboards. Das Dashboard meldet sich über den Link an, den ai-desktop
+in seiner Konsole zeigt (`Dashboard: http://127.0.0.1:<port>/#ticket=...`) oder für einen Auftrag öffnet; siehe „The
+login of the dashboard“ in [docs/JOBS.md](docs/JOBS.md).
 
 `/health`:
 

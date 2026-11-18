@@ -76,13 +76,14 @@ that is not local; the job waits in the dashboard, `note` says why). A `run` whi
 
 | Route | Who | What |
 |---|---|---|
-| `GET /jobs` | any local caller | the jobs, newest last, without their text; `enabled` = the setting `jobs` |
-| `GET /jobs/<id>` | any local caller | one job with `markdown` and `output` |
-| `POST /jobs/<id>/run` | the dashboard (its `Origin`) or the control secret | `{ "model"?, "markdown"?, "confirm_private"? }`: run it with the text the person left; `409` with `"status": "needs_confirmation"` for a private area on a model that is not local without `confirm_private: true` |
+| `GET /jobs` | the dashboard (its session token) or the control secret | the jobs, newest last, without their text; `enabled` = the setting `jobs` |
+| `GET /jobs/<id>` | any local caller, for now | one job with `markdown` and `output`; open until tasks-desktop and tasks.nvim send the secret when they watch a job (a job id is 64 random bits that only `GET /jobs` shows) |
+| `POST /jobs/<id>/run` | the dashboard (its session token) or the control secret | `{ "model"?, "markdown"?, "confirm_private"? }`: run it with the text the person left; `409` with `"status": "needs_confirmation"` for a private area on a model that is not local without `confirm_private: true` |
 | `POST /jobs/<id>/cancel` | likewise | stop a running job: the process tree of an agent ends, a single answer is no longer shown; `409` when it does not run |
 | `DELETE /jobs/<id>` | likewise | put it away (`204`; a running job is cancelled first) |
 
-All of them refuse a foreign `Host` (`403`). The jobs live in memory only: a task can be private, so nothing of it is
+All of them refuse a foreign `Host` (`403`) and a request without the proof they want (`401`; see "The login of the
+dashboard"). The jobs live in memory only: a task can be private, so nothing of it is
 written to disk, and the jobs are gone when the server ends (at most 100; the oldest that does not run goes first).
 A run is metadata in the usage log like every `/ask/stream` (never its text); a run of Claude Code is logged with
 the provider `claude-code` and the tokens of its result.
@@ -291,9 +292,10 @@ to case, since an area is a folder and `Kunde` and `kunde` are the same one on W
 tasks go to a local model only (Ollama, or a custom model on a loopback address). A request may also say `"private":
 true`. A private job that is to run on any other model is held (`needs_confirmation`); the dashboard asks
 "The area ... is private. The model ... does not run locally: shall the task go there anyway?", and only the answer
-yes sends it (`confirm_private`). A web page cannot answer the question: the run route wants the dashboard's `Origin`
-or the secret, and a page cannot send that `Origin`. A local program can: it sets the header itself (see the threat
-model), so the question protects against pages and mistakes, not against a program that means harm.
+yes sends it (`confirm_private`). Nobody else can answer the question: the run route wants the dashboard's session
+token or the control secret, which neither a web page nor a program of another account has. A program of the person
+has the secret (see the threat model), so the question protects against pages, other accounts and mistakes, not
+against a program of the person that means harm.
 
 ## Settings
 
@@ -307,6 +309,48 @@ model), so the question protects against pages and mistakes, not against a progr
 
 The first two are in the dashboard under "Settings of the jobs"; all are in `GET/PUT /settings`.
 
+## The login of the dashboard
+
+127.0.0.1 is reachable by every account of the machine, and a program can send any `Origin`. So every route with an
+effect, and every route that reads jobs or settings, wants a proof only the person can have (`src/session.hpp`;
+the pre-routing handler of `src/main.cpp` asks for it before any route):
+
+- `/jobs` (all but `POST /jobs`, which wants the control secret itself, and `GET /jobs/<id>`, see above), `/settings`,
+  `/keys`, `/models/custom`, `/usage` (all but `POST /usage/events`), `/events`, `/decision`;
+- open: the files of the dashboard, `/health`, `/models`, `/models/info`, the ai.nvim contract (`/ask`, `/ask/stream`,
+  `POST /usage/events`; a task of its own decides how ai.nvim proves itself) and the two routes below.
+
+A **program** sends the control secret (`Authorization: Bearer <control.secret>`). The **dashboard** sends a session
+token (`Authorization: Bearer <token>`), which it gets for a ticket:
+
+| Route | Who | What |
+|---|---|---|
+| `POST /session` | anybody with a ticket | `{ "ticket": "<hex>" }` → `{ "token": "<hex>" }`; a one-time ticket is used up. With the control secret and no ticket it gives a token too. `401` for an unknown, used or expired ticket |
+| `POST /session/ticket` | the control secret | `{ "ticket": "<hex>", "expires_in": 120 }`: a one-time ticket for a program that opens the dashboard at `http://127.0.0.1:<port>/#ticket=<ticket>` (the hub's tile, the dashboard link of a family app) |
+
+Where the page gets its ticket:
+
+- the **console** of ai-desktop shows `Dashboard: http://127.0.0.1:<port>/#ticket=<hex>`, a ticket good while the server
+  runs and more than once (the person may click it again after closing the browser). Only a console gets it: when
+  stdout goes to a file or a pipe, the line names the plain address;
+- the address ai-desktop opens for a **new job** carries a one-time ticket (`/#job=<id>&ticket=<hex>`), on Windows. On
+  Linux and macOS the command line of `xdg-open`/`open` and of the browser can be read by other accounts
+  (`/proc/<pid>/cmdline`), so no ticket goes there; the page then asks for the console's link;
+- a **program with the secret** asks `POST /session/ticket`.
+
+The page trades the ticket at once and takes it out of the address (`history.replaceState`), keeps the token in
+`localStorage` and sends it with every request; `/events` is read with `fetch()` for that (`EventSource` cannot send
+the header). Without a valid token it shows "Not logged in" and how to get in. **Why `localStorage` and no cookie:**
+a cookie knows no port, so a cookie of `127.0.0.1` would go to every server on any port of that address, a server of
+another account included, as soon as the person's browser loaded a page of it (`SameSite` does not help: all ports
+are the same site). `localStorage` belongs to the origin, port included. A script of the page could read it, but
+the page runs only its own script (the Content-Security-Policy with Trusted Types).
+
+Tickets and tokens are 32 random bytes, kept in memory only and new at every start (a token of the last start gets
+`401`), compared in constant time, at most 32 tokens at once (the oldest goes). A ticket travels in the fragment of
+the address, which a browser never sends to a server, so no server log or proxy sees it; the answers of both routes
+carry `Cache-Control: no-store`.
+
 ## Threat model
 
 **What is protected:** the person's tasks (they can be private: a private area, a customer), the models and keys of
@@ -315,20 +359,19 @@ front).
 
 **Trust boundary:** the user account on this machine. Every program that runs as the person can read their files,
 the control secret included; that is the same boundary as the appkit hubs, and a program with those rights could as
-well read the vault itself. The secret guards `POST /jobs` only. The rest of the management API (run, cancel and
-delete a job, `PUT /settings`) is guarded against web pages only (`Host`, `Origin`, `Sec-Fetch-*`), not against
-programs: the dashboard proves itself by its `Origin`, and any program that is not a browser can send that header
-itself. So everything that reaches `127.0.0.1` (every program of every user account on this machine) can use those
-routes; the boundary holds there only on a machine with one account. A login for the whole management API is a task
-of its own (ai-desktop, "Anmeldung für die ganze Verwaltungs-API").
+well read the vault itself. The management API holds that boundary against everything else that reaches
+`127.0.0.1` (every program of every user account on this machine): each route with an effect, and each route that
+reads jobs or settings, wants the control secret or a session token of the dashboard (see "The login of the
+dashboard"); an `Origin` proves nothing. Open on purpose: `GET /jobs/<id>` until the family apps send the secret
+there, and the ai.nvim contract (`/ask`, `/ask/stream`, `POST /usage/events`), which a task of its own closes.
 
 | Attacker | Attack | Defence |
 |---|---|---|
 | A web page in the person's browser | `fetch`/form `POST /jobs` to 127.0.0.1 (CSRF) | a browser always sends `Origin` on a POST (and `Sec-Fetch-*`): refused with 403 before anything else, the dashboard's own origin included. The page cannot read `control.secret`, so it has no secret; `application/json` makes a cross-origin request a preflight, which gets no CORS headers (no `Access-Control-Allow-*` anywhere). |
 | A web page through DNS rebinding | a name of its own resolved to 127.0.0.1, so the browser treats it as same-origin and sends no `Origin` on a GET | every request of the server (the pre-routing handler) must name `127.0.0.1`, `localhost` or `[::1]` with the port in `Host`: a foreign name gets 403, so the page reads no job and no setting. The routes of the jobs also refuse a request without `Host`. |
 | Another machine | reach the port | the server binds `127.0.0.1` only. |
-| Another user on this machine | read the secret, send jobs | the file is readable by the person only (Windows: protected ACL with one entry; elsewhere 0600), so `POST /jobs` is closed. **Not defended:** loopback is shared by all accounts, and the other routes take a forged `Origin` (next row). |
-| A local program without the secret (the person's or another account's) | send a job, confirm a private area, put jobs away, change the settings | `401` for `POST /jobs`. **Not defended otherwise:** run, cancel and delete want the dashboard's `Origin` or the secret, and a program sends `Origin: http://127.0.0.1:<port>` itself; `GET/PUT /settings` want no proof at all. So it can run any job, send a private one to a cloud model with `confirm_private: true` without the person's yes, stop or delete jobs, and set `claude_cli` to a program of its own, which the next run then starts **as the person**. It can read jobs (`GET /jobs`). For a program of the person this gives nothing new; for another account it is a way in. |
+| Another user on this machine | read the secret, send jobs, use the routes of the dashboard | the file is readable by the person only (Windows: protected ACL with one entry; elsewhere 0600), so `POST /jobs` is closed; the other routes want the secret or a session token (next row). Its own server on another port gets no token either: the page keeps it in `localStorage`, which is per port (a cookie would not be). On Linux and macOS it could read the command line of a browser that ai-desktop starts, which is why no ticket goes there. **Not defended:** `GET /jobs/<id>` for a job id it learns (64 random bits; the list wants a proof), and the ai.nvim contract (`/ask`: it can use the models at the person's cost). |
+| A local program without the secret (another account's) | send a job, confirm a private area, put jobs away, change the settings or the keys, read the jobs | `401` for all of them, a forged `Origin: http://127.0.0.1:<port>` included: run, cancel, delete, `GET /jobs`, `GET/PUT /settings`, `/keys`, `/models/custom`, `/usage`, `/events` and `/decision` want the control secret or a session token, and `POST /session` gives a token only for a ticket. So it cannot send a private job to a cloud model without the person's yes, nor set `claude_cli` to a program of its own. A program of the person has the secret anyway. |
 | A family app gone wrong | flood the dashboard, send huge or hostile text | 10 jobs a minute (counted after the secret, so a stranger cannot use them up), 320 KiB a body, 100 jobs kept, 2 runs at once; every text follows the character rule above (no bidi trick, no escape sequence for a terminal); the page shows the text as text only (Trusted Types, `textContent`/`value`). |
 | A stolen old secret | replay it | a new secret at every start; the file is removed at the end. |
 | A cloud provider | gets a private task | only after the person said yes in the dashboard; a local model needs no question. |
@@ -336,10 +379,11 @@ of its own (ai-desktop, "Anmeldung für die ganze Verwaltungs-API").
 | Focus theft | a job steals the focus at a bad moment | ai-desktop never takes the focus on its own: only with the right the sending app granted at the person's click. |
 | The agent (Claude Code) | it writes in the vault and the repository of the area, runs `tasks` and `git` (commit and push as the person) | it runs as the person, in the folders of the task (the file tools; see below for git), with the tools of its list (the shell tool only for `tasks` and `git`, no web tool, no MCP server; print mode refuses the rest) and the person's own Claude Code settings. **This is no sandbox:** `git` with `Write` can start any program as the person, e.g. a hook it writes into `.git/hooks` and then triggers with `git commit`, `git -c core.hooksPath=...`, `git -c core.sshCommand=...` or an alias `!...` it sets with `git config`, and git reaches any remote it is told to; so whatever such a program can do (network, files outside the task's folders), a steered agent can do too; it claims under its own name (`ai-desktop:<job>`), so a task it holds shows who; a claim of somebody else stops it (the brief says so). A run is started by a family app with the secret or by the person in the dashboard, never by a page. Stop ends it with its whole process tree (a job object on Windows, a process group elsewhere), and so does the end of ai-desktop. |
 | A task steering the agent (prompt injection) | text in a task file tells the agent to do something else | the tool list bounds what it can do directly, but not what a program started through git can do (row above): a steered agent can in effect run any program as the person. What it did through its tools is in the job's output, and its commits are in git; what such a program did is not necessarily. A task from a vault the person does not trust must not be handed over. |
-| The settings `claude_cli` / `tasks_cli` | a program sets them to another executable | only an absolute path, set through `PUT /settings`, which a page cannot reach (Origin, Host). **Not defended against another account:** `PUT /settings` asks no proof, so a program of another user can set them and have its executable started as the person (row "A local program" above). |
+| The settings `claude_cli` / `tasks_cli` | a program sets them to another executable | only an absolute path, set through `PUT /settings`, which wants the control secret or a session token: neither a page (Origin, Host) nor a program of another account gets there. |
 
 **Not covered:** a program running as the person (it has the secret, the vault and the person's Claude Code
-anyway); another user account on this machine, as far as the routes beyond `POST /jobs` go (see the trust boundary);
+anyway); another user account on this machine as far as `GET /jobs/<id>` and the ai.nvim contract go (see the trust
+boundary);
 an agent doing harm with its tools (it can change and push the repository of the area, and through git start any
 program as the person): what it committed is in git and can be reverted; the real boundary is the person's account,
 not the tool list.

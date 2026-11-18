@@ -16,7 +16,7 @@ test.afterAll(async () => {
 const GERMAN = /Anfragen|Nutzung|Senden|Zeitraum|lädt|Verbinde|Agenten|Erlauben|Ereignisse|Aktualisieren/;
 
 async function open(page) {
-  await page.goto(`http://127.0.0.1:${server.port}/`);
+  await page.goto(await server.dashboardUrl());
   await expect(page.locator('#backends-status')).not.toHaveText(/lädt|loading/);
 }
 

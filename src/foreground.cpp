@@ -5,6 +5,7 @@
 #include <thread>
 
 #include "legacy.hpp"
+#include "session.hpp"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -95,8 +96,16 @@ void show_job(int port, const std::string& job_id) {
     if (const char* off = legacy::env("AI_DESKTOP_JOBS_FOREGROUND"); off && std::string(off) == "0") {
         return;
     }
-    // The id is 16 hex digits (jobs::new_id), so the address holds nothing but ASCII of a fixed form.
-    const std::string url = "http://127.0.0.1:" + std::to_string(port) + "/#job=" + job_id;
+    // The id is 16 hex digits (jobs::new_id), so the address holds nothing but ASCII of a fixed form. On Windows a
+    // one-time ticket logs the page in (src/session.hpp): the command line of the person's browser is not readable by
+    // another account. Elsewhere it is (/proc/<pid>/cmdline of xdg-open and the browser), so no ticket goes there:
+    // the page asks for the console's link instead.
+    std::string url = "http://127.0.0.1:" + std::to_string(port) + "/#job=" + job_id;
+#ifdef _WIN32
+    if (const std::string ticket = session::new_ticket(); !ticket.empty()) {
+        url += "&ticket=" + ticket;
+    }
+#endif
     std::thread([url] { show(url); }).detach();
 }
 

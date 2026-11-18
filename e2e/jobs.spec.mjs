@@ -74,7 +74,7 @@ const jobText = (page) => page.getByRole('textbox', { name: 'Text of the job' })
 test('a prefilled job stands in the dashboard with its text, and nothing runs', async ({ page }) => {
   const before = asked.length;
   const { json } = await sendJob(TASK);
-  await page.goto(`http://127.0.0.1:${server.port}/#job=${json.job_id}`);
+  await page.goto(await server.dashboardUrl(`job=${json.job_id}`));
   await expect(jobText(page)).toHaveValue(TASK.markdown);
   await expect(page.locator('#job-status')).toHaveText(/Prefilled/);
   await expect(page.locator('#job-meta')).toContainText('ai-desktop/auftrag-von-aussen');
@@ -85,7 +85,7 @@ test('a prefilled job stands in the dashboard with its text, and nothing runs', 
 });
 
 test('a job sent while the page is open is selected; Run sends the edited text', async ({ page }) => {
-  await page.goto(`http://127.0.0.1:${server.port}/`);
+  await page.goto(await server.dashboardUrl());
   await expect(page.locator('#sse-status')).toHaveText('Connected');
   const { json } = await sendJob({ ...TASK, title: 'Sent while open', kind: 'review-done' });
   await expect(page.locator(`[data-job="${json.job_id}"]`)).toHaveAttribute('aria-current', 'true');
@@ -102,7 +102,7 @@ test('a job sent while the page is open is selected; Run sends the edited text',
 
 test('a private area asks before a cloud model, and is accessible while it asks', async ({ page }) => {
   const { json } = await sendJob({ ...TASK, area: 'tricentis-vault', title: 'Private one' });
-  await page.goto(`http://127.0.0.1:${server.port}/#job=${json.job_id}`);
+  await page.goto(await server.dashboardUrl(`job=${json.job_id}`));
   await expect(page.locator('#job-meta')).toContainText('private');
   const before = asked.length;
   await page.getByRole('combobox', { name: 'Model of the job' }).fill('gpt-4o');
@@ -132,7 +132,7 @@ test('a private area asks before a cloud model, and is accessible while it asks'
 
 test('a job is put away', async ({ page }) => {
   const { json } = await sendJob({ ...TASK, title: 'To put away' });
-  await page.goto(`http://127.0.0.1:${server.port}/#job=${json.job_id}`);
+  await page.goto(await server.dashboardUrl(`job=${json.job_id}`));
   await expect(jobText(page)).toBeVisible();
   await page.getByRole('button', { name: 'Put away', exact: true }).click();
   await expect(page.locator(`[data-job="${json.job_id}"]`)).toHaveCount(0);
@@ -141,7 +141,7 @@ test('a job is put away', async ({ page }) => {
 });
 
 test('the settings turn the jobs off and name the private areas', async ({ page }) => {
-  await page.goto(`http://127.0.0.1:${server.port}/`);
+  await page.goto(await server.dashboardUrl());
   await page.getByText('Settings of the jobs').click();
   const accept = page.getByRole('checkbox', { name: 'Take jobs from the apps of the family' });
   await expect(accept).toBeChecked();
@@ -182,7 +182,7 @@ test('a job of claude-code shows how it runs, and Stop ends it', async ({ page }
     const secret = readFileSync(path.join(agentServer.configDir, 'control.secret'), 'utf8').trim();
     const { json } = await agentServer.post('/jobs', { ...TASK, vault: path.join(root, 'vault'), mode: 'run' },
       { Authorization: `Bearer ${secret}` });
-    await page.goto(`http://127.0.0.1:${agentServer.port}/#job=${json.job_id}`);
+    await page.goto(await agentServer.dashboardUrl(`job=${json.job_id}`));
     await expect(page.locator('#job-runner')).toHaveText(
       'Claude Code with the brief of the tasks family (brief 1, contract 1, tasks.nvim fake-0)');
     await expect(page.locator('#job-output')).toContainText('Bash: tasks claim ai-desktop/auftrag-von-aussen');
@@ -205,7 +205,7 @@ test('the settings arriving late keep what was typed', async ({ page }) => {
     if (route.request().method() === 'GET') await new Promise((r) => setTimeout(r, 800));
     await route.continue();
   });
-  await page.goto(`http://127.0.0.1:${server.port}/`);
+  await page.goto(await server.dashboardUrl());
   await page.getByText('Settings of the jobs').click();
   const areas = page.getByRole('textbox', { name: 'Private areas:' });
   await areas.fill('tricentis-vault,typed-early');
@@ -220,7 +220,7 @@ test('the settings arriving late keep what was typed', async ({ page }) => {
 
 test('the shown job selected again keeps the model that was typed', async ({ page }) => {
   const { json } = await sendJob({ ...TASK, title: 'Keep my model' });
-  await page.goto(`http://127.0.0.1:${server.port}/#job=${json.job_id}`);
+  await page.goto(await server.dashboardUrl(`job=${json.job_id}`));
   await expect(page.locator('#job-meta')).toContainText('ai-desktop/auftrag-von-aussen');
   const model = page.getByRole('combobox', { name: 'Model of the job' });
   await model.fill('gpt-4o');

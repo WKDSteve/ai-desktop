@@ -56,6 +56,12 @@ h1 { color: var(--accent); font-size: 1.1rem;
   animation: pulse-border 1.5s ease-in-out infinite;
 }
 #decision-banner.visible { display: block; }
+#login-banner {
+  margin-bottom: 1rem; padding: 1rem; border-radius: 8px;
+  background: color-mix(in srgb, var(--warn) 8%, var(--surface)); border: 1px solid var(--warn);
+}
+#login-banner[hidden] { display: none; }
+#login-banner h2 { font-size: .75rem; text-transform: uppercase; letter-spacing: .1em; margin-bottom: .5rem; }
 @keyframes pulse-border {
   0%, 100% { border-color: var(--bad); }
   50%       { border-color: color-mix(in srgb, var(--bad) 40%, var(--line)); }

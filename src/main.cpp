@@ -16,9 +16,11 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include <io.h>
 #else
 #include <pthread.h>
 #include <signal.h>
+#include <unistd.h>
 #endif
 
 #include "anthropic_client.hpp"
@@ -35,6 +37,7 @@
 #include "openai_client.hpp"
 #include "providers.hpp"
 #include "secrets.hpp"
+#include "session.hpp"
 #include "usage.hpp"
 
 using json = nlohmann::json;
@@ -388,6 +391,21 @@ void announce_to_family(httplib::Server& svr) {
     }
 }
 
+// The control secret (a program of the person) or a session token (the dashboard): docs/JOBS.md, "Threat model".
+bool has_proof(const httplib::Request& req) {
+    const std::string authorization = req.get_header_value("Authorization");
+    return ai_desktop::control_secret::matches(authorization, g_control_secret) ||
+           ai_desktop::session::token_matches(authorization);
+}
+
+bool stdout_is_console() {
+#ifdef _WIN32
+    return _isatty(_fileno(stdout)) != 0;
+#else
+    return isatty(STDOUT_FILENO) != 0;
+#endif
+}
+
 bool is_allowed_origin(const std::string& origin) {
     const std::string port = std::to_string(g_port);
     return origin == "http://127.0.0.1:" + port || origin == "http://localhost:" + port;
@@ -500,7 +518,15 @@ int main(int argc, char** argv) {
     }
 
     std::cout << "=== ai-desktop Framework ===\n";
-    std::cout << "Dashboard: " << base << "\n";
+    // The link with the console's ticket logs the dashboard in (src/session.hpp); only a console shows it, a file
+    // that stdout was sent to gets the plain address.
+    std::cout << "Dashboard: " << base << "/";
+    if (stdout_is_console()) {
+        if (const std::string ticket = ai_desktop::session::console_ticket(); !ticket.empty()) {
+            std::cout << "#ticket=" << ticket;
+        }
+    }
+    std::cout << "\n";
     std::cout << "SSE:       " << base << "/events\n";
     std::cout << "Health:    " << base << "/health\n";
     std::cout << "Ask:       POST " << base << "/ask\n";
@@ -521,7 +547,7 @@ int main(int argc, char** argv) {
                << "\n";
     std::cout << "Herkunft:  Anfragen mit fremdem Origin-Header werden abgelehnt "
                   "(schuetzt vor einer bösartigen Webseite im selben Browser)\n";
-    std::cout << "Stoppen:   Ctrl+C\n\n";
+    std::cout << "Stoppen:   Ctrl+C\n\n" << std::flush;
 
     httplib::Server svr;
 
@@ -569,6 +595,13 @@ int main(int argc, char** argv) {
             send_json_error(res, 403, "cross-origin request blocked");
             return httplib::Server::HandlerResponse::Handled;
         }
+        // Pages are kept out above; programs are not (any of them can send the dashboard's Origin, and 127.0.0.1 is
+        // shared by every account of the machine). A route with an effect, or one that reads jobs or settings,
+        // wants the control secret or a session token of the dashboard (src/session.hpp).
+        if (ai_desktop::session::needs_proof(req.method, req.path) && !has_proof(req)) {
+            send_json_error(res, 401, "a session of the dashboard or the control secret of ai-desktop is required");
+            return httplib::Server::HandlerResponse::Handled;
+        }
         return httplib::Server::HandlerResponse::Unhandled;
     });
 
@@ -608,6 +641,43 @@ int main(int argc, char** argv) {
     };
     job_hooks.show = [](const std::string& job_id) { ai_desktop::foreground::show_job(g_port, job_id); };
     ai_desktop::jobs_api::register_routes(svr, std::move(job_hooks));
+
+    // The login of the dashboard (src/session.hpp). {ticket} -> {token}: the page trades the ticket of its address
+    // for a session token. Without a ticket, the control secret gets a token too (a program of the person, the tests).
+    svr.Post("/session", [](const httplib::Request& req, httplib::Response& res) {
+        std::string token;
+        const json body = json::parse(req.body, nullptr, false);
+        if (body.is_object() && body.contains("ticket") && body["ticket"].is_string()) {
+            token = ai_desktop::session::redeem(body["ticket"].get<std::string>());
+        } else if (ai_desktop::control_secret::matches(req.get_header_value("Authorization"), g_control_secret)) {
+            token = ai_desktop::session::new_token();
+        }
+        if (token.empty()) {
+            send_json_error(res, 401, "the ticket is unknown, used or expired; open the dashboard from ai-desktop again");
+            return;
+        }
+        res.set_header("Cache-Control", "no-store");
+        res.set_content(json{{"token", token}}.dump(), "application/json");
+    });
+
+    // A one-time ticket for a program with the control secret, which opens the dashboard at
+    // http://127.0.0.1:<port>/#ticket=<ticket> (the hub's tile, the dashboard link of a family app).
+    svr.Post("/session/ticket", [](const httplib::Request& req, httplib::Response& res) {
+        if (!ai_desktop::control_secret::matches(req.get_header_value("Authorization"), g_control_secret)) {
+            send_json_error(res, 401, "the control secret of ai-desktop is required");
+            return;
+        }
+        const std::string ticket = ai_desktop::session::new_ticket();
+        if (ticket.empty()) {
+            send_json_error(res, 503, "no random source for a ticket");
+            return;
+        }
+        res.set_header("Cache-Control", "no-store");
+        res.set_content(json{{"ticket", ticket},
+                             {"expires_in", static_cast<long>(ai_desktop::session::kTicketLifetime.count())}}
+                            .dump(),
+                        "application/json");
+    });
 
     // SSE-Endpoint: Browser verbindet sich hier und empfängt live Events
     svr.Get("/events", [](const httplib::Request&, httplib::Response& res) {

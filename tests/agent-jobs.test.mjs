@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
 
-import { binaryPath, startServer } from "./helpers/server.mjs";
+import { NO_AUTH, binaryPath, startServer } from "./helpers/server.mjs";
 
 const exe = process.platform === "win32" ? ".exe" : "";
 const buildDir = path.dirname(binaryPath());
@@ -187,9 +187,11 @@ describe("Claude Code runs that end otherwise", { skip: !existsSync(fakeClaude) 
       await waitFor(server, id, (j) => /tasks sleep/.test(j.output || ""));
       const pid = Number(readFileSync(w.pidFile, "utf8"));
       assert.ok(alive(pid));
-      const blind = await server.post(`/jobs/${id}/cancel`, {});
+      const blind = await server.post(`/jobs/${id}/cancel`, {}, NO_AUTH);
       assert.equal(blind.status, 401, "the dashboard or the secret");
-      const cancelled = await server.post(`/jobs/${id}/cancel`, {}, { Origin: `http://127.0.0.1:${server.port}` });
+      const forged = await server.post(`/jobs/${id}/cancel`, {}, { ...NO_AUTH, Origin: `http://127.0.0.1:${server.port}` });
+      assert.equal(forged.status, 401, "the dashboard's Origin alone proves nothing");
+      const cancelled = await server.post(`/jobs/${id}/cancel`, {}, await server.session());
       assert.equal(cancelled.status, 200, cancelled.text);
       assert.equal(cancelled.json.status, "cancelled");
       const deadline = Date.now() + 5000;

@@ -15,7 +15,7 @@ test.afterAll(async () => {
 });
 
 test('the x in the choice of the provider takes the choice away in one click', async ({ page }) => {
-  await page.goto(`http://127.0.0.1:${server.port}/`);
+  await page.goto(await server.dashboardUrl());
   await expect(page.locator('#backends-status')).not.toHaveText(/lädt/);
   const choice = page.getByRole('combobox', { name: 'Provider' });
   const clear = page.getByRole('button', { name: 'Auswahl Provider entfernen' });

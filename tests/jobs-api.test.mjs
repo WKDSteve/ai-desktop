@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
 
-import { request, runToExit, startServer } from "./helpers/server.mjs";
+import { NO_AUTH, request, runToExit, startServer } from "./helpers/server.mjs";
 
 const TASK = {
   source: "tasks-desktop",
@@ -110,7 +110,7 @@ describe("POST /jobs", () => {
   });
 
   it("refuses a job without the secret, or with a wrong one", async () => {
-    for (const headers of [{}, { Authorization: "Bearer 00" }, { Authorization: `bearer ${secretOf(server)}` },
+    for (const headers of [NO_AUTH, { Authorization: "Bearer 00" }, { Authorization: `bearer ${secretOf(server)}` },
       { Authorization: `Bearer ${"0".repeat(64)}` }]) {
       const res = await server.post("/jobs", TASK, headers);
       assert.equal(res.status, 401, JSON.stringify(headers));
@@ -203,12 +203,15 @@ describe("POST /jobs", () => {
   });
 
   it("the dashboard runs a job with its edited text; a private one only after a yes", async () => {
-    const origin = { Origin: `http://127.0.0.1:${server.port}` };
+    const origin = await server.session();
     const created = await server.post("/jobs", { ...TASK, area: "tricentis-vault" }, auth(server));
     const id = created.json.job_id;
 
-    const blind = await server.post(`/jobs/${id}/run`, { model: "mock-local" });
+    const blind = await server.post(`/jobs/${id}/run`, { model: "mock-local" }, NO_AUTH);
     assert.equal(blind.status, 401, "neither the dashboard nor the secret");
+    const forged = await server.post(`/jobs/${id}/run`, { model: "gpt-4o", confirm_private: true },
+      { ...NO_AUTH, Origin: `http://127.0.0.1:${server.port}` });
+    assert.equal(forged.status, 401, "the dashboard's Origin alone proves nothing");
 
     const held = await server.post(`/jobs/${id}/run`, { model: "gpt-4o" }, origin);
     assert.equal(held.status, 409);
@@ -234,7 +237,7 @@ describe("POST /jobs", () => {
   it("a job is put away from the dashboard or with the secret", async () => {
     const created = await server.post("/jobs", TASK, auth(server));
     const id = created.json.job_id;
-    assert.equal((await server.del(`/jobs/${id}`)).status, 401);
+    assert.equal((await server.del(`/jobs/${id}`, NO_AUTH)).status, 401);
     assert.equal((await server.del(`/jobs/${id}`, auth(server))).status, 204);
     assert.equal((await server.get(`/jobs/${id}`)).status, 404);
     assert.equal((await server.del(`/jobs/${id}`, auth(server))).status, 404);
@@ -257,7 +260,7 @@ describe("POST /jobs, rate and lifetime of the secret", () => {
     const server = await startServer();
     try {
       for (let i = 0; i < 12; i += 1) {
-        assert.equal((await server.post("/jobs", TASK)).status, 401);
+        assert.equal((await server.post("/jobs", TASK, NO_AUTH)).status, 401);
       }
       const statuses = [];
       let last;

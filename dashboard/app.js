@@ -10,6 +10,69 @@ document.getElementById('app-title').textContent = '▸ ' + APP_NAME + ' Dashboa
 document.getElementById('app-icon').src = document.querySelector('link[rel="icon"]').href;
 let currentDecisionTs = null;
 
+// ---------------------------------------------------------------------------------------------------------------------
+// The login (docs/JOBS.md, "Threat model"): the routes with an effect, and those that read jobs or settings, want a
+// session token. The page gets one for the ticket in its address (#ticket=<hex>, or #job=<id>&ticket=<hex>), which
+// ai-desktop puts into the addresses it opens and into the link on its console. The token is kept in localStorage,
+// which belongs to this origin and port alone (a cookie would go to every port of 127.0.0.1); it is good until the
+// server ends.
+// ---------------------------------------------------------------------------------------------------------------------
+const TOKEN_KEY = 'ai-desktop.session';
+let sessionToken = null;
+try {
+  sessionToken = localStorage.getItem(TOKEN_KEY);
+} catch (_) {
+  // no storage (a private window that refuses it): the page works until it is reloaded
+}
+
+function setToken(token) {
+  sessionToken = token;
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch (_) {
+    // kept in memory only
+  }
+}
+
+function showLogin(show) {
+  document.getElementById('login-banner').hidden = !show;
+}
+
+// Takes the ticket out of the address at once (it is used up, and the address stays in the history), then trades it
+// for a token. Resolves to true when it got one; without a ticket at once to false.
+function takeTicket() {
+  const params = new URLSearchParams(location.hash.slice(1));
+  const ticket = params.get('ticket');
+  if (!ticket) return Promise.resolve(false);
+  params.delete('ticket');
+  const rest = params.toString();
+  history.replaceState(null, '', location.pathname + location.search + (rest ? '#' + rest : ''));
+  return fetch('/session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ticket }),
+  })
+    .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+    .then((data) => {
+      setToken(data.token);
+      showLogin(false);
+      return true;
+    })
+    .catch(() => false);
+}
+let loginReady = takeTicket();
+
+// fetch() with the session token, once a ticket of the address is traded; a 401 shows how to log in.
+async function api(path, options = {}) {
+  await loginReady;
+  const headers = new Headers(options.headers || {});
+  if (sessionToken) headers.set('Authorization', 'Bearer ' + sessionToken);
+  const res = await fetch(path, { ...options, headers });
+  if (res.status === 401) showLogin(true);
+  return res;
+}
+
 const COLORS = {
   // Who wrote a line, not how it went: the colours of the app, never those of ok/warn/bad.
   Planner:  'var(--secondary)',
@@ -77,7 +140,7 @@ function handleEvent(ev) {
 }
 
 function sendDecision(answer) {
-  fetch('/decision', {
+  api('/decision', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id: currentDecisionTs, answer })
@@ -339,7 +402,7 @@ async function loadUsage() {
 
   let data;
   try {
-    const res = await fetch('/usage?' + params.toString());
+    const res = await api('/usage?' + params.toString());
     if (!res.ok) throw new Error('HTTP ' + res.status);
     data = await res.json();
   } catch (err) {
@@ -448,7 +511,7 @@ function renderJobList(jobs) {
 
 async function loadJobs() {
   try {
-    const res = await fetch('/jobs');
+    const res = await api('/jobs');
     if (!res.ok) return [];
     const data = await res.json();
     const jobs = data.jobs || [];
@@ -497,7 +560,7 @@ function showJobOutput(job) {
 async function refreshJob(id, fillText) {
   let res;
   try {
-    res = await fetch(`/jobs/${id}`);
+    res = await api(`/jobs/${id}`);
   } catch (_) {
     return;
   }
@@ -565,7 +628,7 @@ async function postRun(confirmPrivate) {
   if (confirmPrivate) body.confirm_private = true;
   const status = document.getElementById('job-status');
   try {
-    const res = await fetch(`/jobs/${id}/run`, {
+    const res = await api(`/jobs/${id}/run`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -592,7 +655,7 @@ async function postRun(confirmPrivate) {
 async function stopJob() {
   const id = selectedJob;
   if (!id) return;
-  await fetch(`/jobs/${id}/cancel`, { method: 'POST' }).catch(() => {});
+  await api(`/jobs/${id}/cancel`, { method: 'POST' }).catch(() => {});
   refreshJob(id, false);
 }
 
@@ -607,7 +670,7 @@ function confirmJob() {
 async function dismissJob() {
   const id = selectedJob;
   if (!id) return;
-  await fetch(`/jobs/${id}`, { method: 'DELETE' }).catch(() => {});
+  await api(`/jobs/${id}`, { method: 'DELETE' }).catch(() => {});
   clearTimeout(jobPoll);
   selectedJob = null;
   selectedJobData = null;
@@ -619,7 +682,7 @@ async function dismissJob() {
 // The two settings of the jobs; a setting an environment variable locks cannot be changed here.
 async function loadJobSettings() {
   try {
-    const res = await fetch('/settings');
+    const res = await api('/settings');
     const data = await res.json();
     const s = data.settings || {};
     // The model of a job that names none: jobs_model (claude-code: Claude Code with the brief), else default_model.
@@ -648,7 +711,7 @@ async function saveJobSettings(which) {
   if (which === 'private_areas' && !areas.disabled) patch.private_areas = areas.value;
   if (Object.keys(patch).length === 0) return;
   try {
-    const res = await fetch('/settings', {
+    const res = await api('/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
@@ -683,6 +746,14 @@ loadJobs().then(() => {
   if (id) selectJob(id);
 });
 window.addEventListener('hashchange', () => {
+  // A new address with a ticket (ai-desktop opened this tab again): a page that had no token reads everything anew.
+  if (new URLSearchParams(location.hash.slice(1)).has('ticket')) {
+    const hadToken = !!sessionToken;
+    loginReady = takeTicket();
+    loginReady.then((ok) => {
+      if (ok && !hadToken) location.reload();
+    });
+  }
   const id = jobFromHash();
   if (id) {
     knownJobs.add(id);
@@ -695,9 +766,9 @@ const sseDot   = document.getElementById('sse-dot');
 const sseLabel = document.getElementById('sse-label');
 const sseStatus = document.getElementById('sse-status');
 
-const sse = new EventSource('/events');
-
-sse.onopen = () => {
+// GET /events wants the session token, which EventSource cannot send: fetch() and the "data: <json>" lines by hand
+// (as the Ask panel), connected again after a pause when the stream ends.
+function eventsOpened() {
   sseDot.className = 'dot active';
   sseLabel.textContent = t('connected');
   sseLabel.style.color = 'var(--ok)';
@@ -705,20 +776,44 @@ sse.onopen = () => {
   sseStatus.style.color = 'var(--ok)';
   setBadge('sse-badge', 'ok');
   appendLog('SYSTEM', t('dashboard_connected') + APP_NAME, 'var(--accent)');
-};
+}
 
-sse.onmessage = (e) => {
-  try { handleEvent(JSON.parse(e.data)); } catch (_) {}
-};
-
-sse.onerror = () => {
+function eventsLost() {
   sseDot.className = 'dot';
   sseLabel.textContent = t('disconnected_retry');
   sseLabel.style.color = 'var(--bad)';
   sseStatus.textContent = t('disconnected');
   sseStatus.style.color = 'var(--bad)';
   setBadge('sse-badge', 'err');
-};
+}
+
+async function connectEvents() {
+  try {
+    const res = await api('/events');
+    if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+    eventsOpened();
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let nl;
+      while ((nl = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, nl).replace(/\r$/, '');
+        buffer = buffer.slice(nl + 1);
+        if (!line.startsWith('data:')) continue;
+        try { handleEvent(JSON.parse(line.slice(5).trim())); } catch (_) {}
+      }
+    }
+  } catch (_) {
+    // shown below
+  }
+  eventsLost();
+  setTimeout(connectEvents, 3000);
+}
+connectEvents();
 
 // The controls name their action in data-on-click / data-on-change (no inline handlers under the CSP).
 const ACTIONS = {

@@ -21,14 +21,14 @@ const card = (page) => page.locator('.card', { has: page.getByRole('heading', { 
 const badge = (page, name) => card(page).locator('.badge', { hasText: name });
 
 test('the card shows no fixed value of the prototype', async ({ page }) => {
-  await page.goto(`http://127.0.0.1:${server.port}/`);
+  await page.goto(await server.dashboardUrl());
   await expect(page.locator('#backends-status')).not.toHaveText(/loading/);
   const text = await card(page).innerText();
   expect(text).not.toMatch(/Podman|rootless|WSL2|GPU|RTX|CUDA/);
 });
 
 test('the badges turn green once their check passed', async ({ page }) => {
-  await page.goto(`http://127.0.0.1:${server.port}/`);
+  await page.goto(await server.dashboardUrl());
   await expect(badge(page, 'SSE')).toHaveClass(/badge-ok/);
   await expect(badge(page, 'Backends')).toHaveClass(/badge-ok/);
 });
@@ -39,7 +39,7 @@ for (const colorScheme of ['light', 'dark']) {
     // /health and /events never answer: both checks are still running.
     await page.route('**/health', () => {});
     await page.route('**/events', () => {});
-    await page.goto(`http://127.0.0.1:${server.port}/`);
+    await page.goto(await server.dashboardUrl());
     await expect(badge(page, 'SSE')).toHaveClass(/badge-idle/);
     await expect(badge(page, 'Backends')).toHaveClass(/badge-idle/);
     await expect(card(page).locator('.badge-ok')).toHaveCount(0);
@@ -55,7 +55,7 @@ for (const colorScheme of ['light', 'dark']) {
 test('a failed check turns its badge red', async ({ page }) => {
   await page.route('**/health', (route) => route.abort());
   await page.route('**/events', (route) => route.abort());
-  await page.goto(`http://127.0.0.1:${server.port}/`);
+  await page.goto(await server.dashboardUrl());
   await expect(badge(page, 'Backends')).toHaveClass(/badge-err/);
   await expect(page.locator('#backends-status')).toHaveText('not reachable');
   await expect(badge(page, 'SSE')).toHaveClass(/badge-err/);

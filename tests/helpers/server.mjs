@@ -2,7 +2,7 @@
 // config directory, no API keys and an unreachable Ollama, so tests never
 // depend on (or touch) the developer's own setup.
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import http from "node:http";
 import net from "node:net";
 import os from "node:os";
@@ -40,10 +40,13 @@ export function request(port, { method = "GET", pathname = "/", headers = {}, bo
         port,
         method,
         path: pathname,
-        headers: {
-          ...(payload !== undefined ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) } : {}),
-          ...headers,
-        },
+        // A header given as undefined is left out (NO_AUTH).
+        headers: Object.fromEntries(
+          Object.entries({
+            ...(payload !== undefined ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) } : {}),
+            ...headers,
+          }).filter(([, value]) => value !== undefined),
+        ),
       },
       (res) => {
         const chunks = [];
@@ -65,6 +68,10 @@ export function request(port, { method = "GET", pathname = "/", headers = {}, bo
     req.end();
   });
 }
+
+// The headers of a request without any proof: the server's get/post/put/del send the control secret unless the
+// headers name an Authorization of their own (this one leaves it out).
+export const NO_AUTH = Object.freeze({ Authorization: undefined });
 
 // Starts the server; resolves once /health answers. `env` overrides the
 // hermetic defaults, `args` are passed on the command line.
@@ -130,14 +137,46 @@ export async function startServer({ env = {}, args = [], port, configDir, bin = 
     throw new Error(`server did not become ready; output:\n${output}`);
   }
 
+  // The management API wants a proof (src/session.hpp): the tests send the control secret, as a family app does,
+  // unless they name an Authorization themselves.
+  const secret = () => {
+    try {
+      return readFileSync(path.join(usedConfigDir, "control.secret"), "utf8").trim();
+    } catch {
+      return "";
+    }
+  };
+  const withAuth = (headers = {}) =>
+    "Authorization" in headers || !secret() ? headers : { Authorization: `Bearer ${secret()}`, ...headers };
+
   return {
     port: usedPort,
     configDir: usedConfigDir,
     output: () => output,
-    get: (pathname, headers) => request(usedPort, { pathname, headers }),
-    post: (pathname, body, headers) => request(usedPort, { method: "POST", pathname, body, headers }),
-    put: (pathname, body, headers) => request(usedPort, { method: "PUT", pathname, body, headers }),
-    del: (pathname, headers) => request(usedPort, { method: "DELETE", pathname, headers }),
+    get: (pathname, headers) => request(usedPort, { pathname, headers: withAuth(headers) }),
+    post: (pathname, body, headers) => request(usedPort, { method: "POST", pathname, body, headers: withAuth(headers) }),
+    put: (pathname, body, headers) => request(usedPort, { method: "PUT", pathname, body, headers: withAuth(headers) }),
+    del: (pathname, headers) => request(usedPort, { method: "DELETE", pathname, headers: withAuth(headers) }),
+    // The headers of the dashboard after its login: a session token for a ticket, as the page gets it.
+    async session() {
+      const url = await this.dashboardUrl();
+      const ticket = new URL(url).hash.match(/ticket=([0-9a-f]+)/)[1];
+      const res = await request(usedPort, { method: "POST", pathname: "/session", body: { ticket } });
+      if (res.status !== 200) throw new Error(`no session: ${res.status} ${res.text}`);
+      return { Authorization: `Bearer ${res.json.token}` };
+    },
+    // The address of the dashboard with a one-time ticket (as the hub's tile opens it); `hash` without "#", e.g.
+    // "job=<id>".
+    async dashboardUrl(hash = "") {
+      const res = await request(usedPort, {
+        method: "POST",
+        pathname: "/session/ticket",
+        headers: { Authorization: `Bearer ${secret()}` },
+      });
+      if (res.status !== 200) throw new Error(`no ticket: ${res.status} ${res.text}`);
+      const fragment = (hash ? hash + "&" : "") + "ticket=" + res.json.ticket;
+      return `http://127.0.0.1:${usedPort}/#${fragment}`;
+    },
     async stop() {
       if (child.exitCode === null) child.kill();
       await exited;

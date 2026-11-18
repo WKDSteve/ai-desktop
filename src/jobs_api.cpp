@@ -21,6 +21,7 @@
 #include "models.hpp"
 #include "process.hpp"
 #include "review.hpp"
+#include "session.hpp"
 
 using json = nlohmann::json;
 
@@ -68,17 +69,15 @@ const std::string& secret_of(const Hooks& hooks) {
     return hooks.secret ? *hooks.secret : none;
 }
 
-// The routes that change a job from the dashboard: the page of this server (its Origin; the pre-routing handler of
-// main.cpp has refused every other Origin) or a program with the control secret. A program without either is
-// refused, so the confirmation of a private area cannot be given blind.
+// The routes that change a job: the dashboard with its session token or a program with the control secret (the
+// pre-routing handler of main.cpp asks the same; this holds should a route be registered without it). An Origin
+// proves nothing: any program can send the dashboard's. So the confirmation of a private area cannot be given blind.
 bool dashboard_or_secret(const httplib::Request& req, httplib::Response& res, const Hooks& hooks) {
-    if (!req.get_header_value("Origin").empty()) {
+    const std::string authorization = req.get_header_value("Authorization");
+    if (control_secret::matches(authorization, secret_of(hooks)) || session::token_matches(authorization)) {
         return true;
     }
-    if (control_secret::matches(req.get_header_value("Authorization"), secret_of(hooks))) {
-        return true;
-    }
-    api::send_error(res, 401, "the dashboard or the control secret is required");
+    api::send_error(res, 401, "a session of the dashboard or the control secret of ai-desktop is required");
     return false;
 }
 

@@ -32,6 +32,7 @@ add_library(ai_desktop_core STATIC
     src/review.cpp
     src/draft.cpp
     src/secrets.cpp
+    src/session.cpp
     src/usage.cpp
 )
 target_include_directories(ai_desktop_core PUBLIC src)
@@ -101,6 +102,7 @@ if(AI_DESKTOP_BUILD_TESTS)
         tests/unit/test_draft.cpp
         tests/unit/test_providers.cpp
         tests/unit/test_secrets.cpp
+        tests/unit/test_session.cpp
         tests/unit/test_usage.cpp
     )
     target_link_libraries(ai_desktop_tests PRIVATE ai_desktop_core)

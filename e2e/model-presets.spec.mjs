@@ -33,7 +33,7 @@ test('the field has no fixed suggestion and does not ask before it gets the focu
     asked += 1;
     return route.fulfill({ json: LISTING });
   });
-  await page.goto(`http://127.0.0.1:${server.port}/`);
+  await page.goto(await server.dashboardUrl());
   await expect(page.locator('#backends-status')).not.toHaveText(/loading/);
   expect(await options(page)).toEqual([]);
   expect(asked).toBe(0);
@@ -45,7 +45,7 @@ test('the first focus fills the suggestions from /models, once', async ({ page }
     asked += 1;
     return route.fulfill({ json: LISTING });
   });
-  await page.goto(`http://127.0.0.1:${server.port}/`);
+  await page.goto(await server.dashboardUrl());
   const field = page.getByRole('combobox', { name: 'Model' });
   await field.focus();
   await expect.poll(() => options(page)).toEqual(['llama3.1:8b', 'gpt-5-mini', 'claude-haiku-5-5']);
@@ -57,7 +57,7 @@ test('the first focus fills the suggestions from /models, once', async ({ page }
 
 test('without an answer of /models the field stays free text', async ({ page }) => {
   await page.route('**/models', (route) => route.abort());
-  await page.goto(`http://127.0.0.1:${server.port}/`);
+  await page.goto(await server.dashboardUrl());
   const field = page.getByRole('combobox', { name: 'Model' });
   await field.focus();
   await field.fill('gemini-2.5-flash');

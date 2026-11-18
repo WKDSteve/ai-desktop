@@ -24,6 +24,11 @@
 </header>
 
 <main>
+<!-- Shown when the server wants a login: the page was opened without a ticket, or the server started anew. -->
+<div id="login-banner" role="alert" hidden>
+  <h2 data-i18n="login_title"></h2>
+  <p data-i18n="login_hint"></p>
+</div>
 <!-- Decision Banner (Hard Stop) -->
 <div id="decision-banner">
   <h2 data-i18n="decision_title"></h2>

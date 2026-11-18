@@ -285,6 +285,14 @@ task, see [docs/JOBS.md](docs/JOBS.md).
 | `/jobs` | POST | A family app hands over a task (control secret only, never from a web page; see [docs/JOBS.md](docs/JOBS.md)) |
 | `/jobs`, `/jobs/<id>` | GET | The jobs for the dashboard |
 | `/jobs/<id>/run`, `/jobs/<id>` | POST, DELETE | Run a job or put it away (the dashboard) |
+| `/session` | POST | The dashboard trades the ticket of its address for a session token |
+| `/session/ticket` | POST | A one-time ticket for a program with the control secret that opens the dashboard |
+
+The routes with an effect, and those that read jobs or settings (`/events`, `/decision`, `/usage`, `/settings`,
+`/keys`, `/models/custom`, `/jobs` but `POST /jobs` and `GET /jobs/<id>`), want `Authorization: Bearer` with the
+control secret or a session token of the dashboard. The dashboard logs in with the link that ai-desktop prints on its
+console (`Dashboard: http://127.0.0.1:<port>/#ticket=...`) or opens for a job; see "The login of the dashboard" in
+[docs/JOBS.md](docs/JOBS.md).
 
 `/health`:
 
