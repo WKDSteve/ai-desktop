@@ -74,13 +74,17 @@ std::string decision_system();
 std::string split_prompt(const jobs::Request& request, const std::string& brief, const std::string& job_id);
 std::string split_system();
 
-// The arguments of `claude` for a review: print mode, stream-json, read-only tools (Read, Glob, Grep), the folders to
-// read, the model when one is named. The prompt goes on stdin.
+// The arguments of `claude` for a review: print mode, stream-json, read-only tools (Read, Glob, Grep: the only
+// built-in tools of the session, no MCP server), the folders to read, the model when one is named. The prompt goes on stdin.
 std::vector<std::string> claude_args(const std::vector<std::filesystem::path>& dirs, const std::string& model);
 
 // The tools of a review run (in --allowedTools), and the ones refused even where the person's settings allow them
 // (in --disallowedTools: no shell, no edit, no web).
 const std::vector<std::string>& allowed_tools();
 const std::vector<std::string>& disallowed_tools();
+// The built-in tools a review's session has at all (--tools, comma-separated): Read, Glob and Grep. Without it every
+// other built-in tool (Task, Workflow, Monitor, EnterWorktree, CronCreate, Artifact, SendMessage, ...) would be there,
+// and --disallowedTools names only some of them.
+const std::string& tool_set();
 
 }  // namespace ai_desktop::review

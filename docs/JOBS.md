@@ -107,11 +107,14 @@ ai-desktop (`src/agent.cpp`, `src/process.cpp`):
 4. The folder: the repository of the area beside the vault (`<vault>/../<area>` with a `.git`, the layout of
    `$REPOS_DIR`), else the vault; the vault is always added (`--add-dir`) and named in `TASKS_VAULT`.
 5. The call: `claude -p --output-format stream-json --verbose --append-system-prompt-file <brief>
-   --permission-mode default --add-dir <vault> [--model <m>] --allowedTools "Bash(tasks:*)" "Bash(git:*)" Read Edit
-   Write Glob Grep`, the prompt (the task, its id, the claim name `ai-desktop:<job id>`, what to do: claim, work,
-   done or unclaim) on stdin. The folder of the tasks command comes first on the agent's `PATH`. No
+   --permission-mode default --tools Bash,Read,Edit,Write,Glob,Grep --strict-mcp-config --add-dir <vault>
+   [--model <m>] --allowedTools "Bash(tasks:*)" "Bash(git:*)" Read Edit Write Glob Grep`, the prompt (the task, its
+   id, the claim name `ai-desktop:<job id>`, what to do: claim, work, done or unclaim) on stdin. The folder of the tasks command comes first on the agent's `PATH`. No
    `--dangerously-skip-permissions`, no `bypassPermissions`: in print mode a tool outside the list is refused, and the
-   person's own settings of Claude Code (`~/.claude`) apply as in any session of theirs.
+   person's own settings of Claude Code (`~/.claude`) apply as in any session of theirs. `--tools` is the set of
+   built-in tools the session has at all: without it Claude Code also brings Task, Workflow, Monitor, EnterWorktree,
+   CronCreate, Artifact, SendMessage and more, which the allowed list does not name; `--strict-mcp-config` leaves out
+   the MCP servers of the person's configuration.
 6. The output: every line of stream-json becomes text in the job (the agent's words, `▸ Bash: tasks claim ...` for a
    tool, `✗ ...` for a refused one), cleaned by the character rule above; the `result` line ends it.
 
@@ -135,7 +138,8 @@ A finished task is checked against its acceptance (`src/review.cpp`). The caller
    whether it is met, open or not checkable, with evidence (`path:line` or `repo@sha`), and to end the answer with one
    block from `<!-- review:begin -->` to `<!-- review:end -->`: a section `## Prüfung` (`## Review` in English), one
    line per criterion, and, when something is open, `### Folgetask (Vorschlag)` with `- title:` and `- summary:`.
-3. On `claude-code`: the brief is not needed (a review claims nothing); `--allowedTools Read Glob Grep`,
+3. On `claude-code`: the brief is not needed (a review claims nothing); `--tools Read,Glob,Grep` (the only built-in
+   tools of the session) and `--strict-mcp-config` (no MCP server), `--allowedTools Read Glob Grep`,
    `--disallowedTools Bash Edit Write MultiEdit NotebookEdit WebFetch WebSearch` (a denial wins over the person's own
    settings of Claude Code, so the run stays read-only whatever `~/.claude` allows), the vault and the repositories of
    the commits as `--add-dir`, the working folder as for a hand-over. Another model answers once with the same prompt.
@@ -204,8 +208,9 @@ and the values its vault allows:
    the caller asks its person and sends `POST /jobs/<id>/run` with `confirm_private: true` and the secret, or the
    person answers in the dashboard). The dashboard does not come to the front: the answer goes to the form that asked.
 2. **One answer, no tools.** On `claude-code` the call is `claude -p --output-format stream-json --verbose
-   --append-system-prompt <system> --permission-mode default --disallowedTools Bash Edit Write MultiEdit NotebookEdit
-   WebFetch WebSearch Read Glob Grep Task TodoWrite [--model <m>]`, in an empty folder of its own
+   --append-system-prompt <system> --permission-mode default --tools "" --strict-mcp-config [--model <m>]
+   --disallowedTools Bash Edit Write MultiEdit NotebookEdit WebFetch WebSearch Read Glob Grep Task TodoWrite` (no
+   built-in tool and no MCP server at all; the refused list on top), in an empty folder of its own
    (`<config>/draft-work`, so no `CLAUDE.md` of a project is read), no `--add-dir`. Without Claude Code the job answers
    with `default_model`, and only when that is local. Any other model answers once.
 3. **The prompt** lists the allowed values, asks for title, summary and acceptance in the language of the text, and
@@ -321,7 +326,7 @@ well read the vault itself. The secret keeps out everything outside that boundar
 | A family app gone wrong | flood the dashboard, send huge or hostile text | 10 jobs a minute (counted after the secret, so a stranger cannot use them up), 320 KiB a body, 100 jobs kept, 2 runs at once; every text follows the character rule above (no bidi trick, no escape sequence for a terminal); the page shows the text as text only (Trusted Types, `textContent`/`value`). |
 | A stolen old secret | replay it | a new secret at every start; the file is removed at the end. |
 | A cloud provider | gets a private task | only after the person said yes in the dashboard; a local model needs no question. |
-| A review that writes | the review agent changes the task or the code it checks | read-only tools, the writing ones refused explicitly (`--disallowedTools`), no shell; ai-desktop runs only `git show` itself; the result goes to the task only after the person's yes. |
+| A review that writes | the review agent changes the task or the code it checks | the session has only Read, Glob and Grep (`--tools`) and no MCP server (`--strict-mcp-config`), the writing ones are refused explicitly as well (`--disallowedTools`), no shell; ai-desktop runs only `git show` itself; the result goes to the task only after the person's yes. |
 | Focus theft | a job steals the focus at a bad moment | ai-desktop never takes the focus on its own: only with the right the sending app granted at the person's click. |
 | The agent (Claude Code) | it writes in the vault and the repository of the area, runs `tasks` and `git` (commit and push as the person) | it runs as the person, in the folders of the task only, with the tools of its list (no shell beyond `tasks` and `git`, no web access, no other program; print mode refuses the rest) and the person's own Claude Code settings; it claims under its own name (`ai-desktop:<job>`), so a task it holds shows who; a claim of somebody else stops it (the brief says so). A run is started by a family app with the secret or by the person in the dashboard, never by a page. Stop ends it with its whole process tree (a job object on Windows, a process group elsewhere), and so does the end of ai-desktop. |
 | A task steering the agent (prompt injection) | text in a task file tells the agent to do something else | the tool list bounds what it can do at all (no network, no other program); what it did is in the job's output and in git. A task from a vault the person does not trust should not be handed over. |

@@ -95,6 +95,15 @@ TEST(agent_claude_args_limit_the_tools) {
     CHECK(!has("--dangerously-skip-permissions"));
     CHECK(!has("bypassPermissions"));
     CHECK_EQ(args.back(), agent::allowed_tools().back());  // the tool list is last
+    // The session has only the built-in tools of the allowed list (not Task, Workflow, Monitor, EnterWorktree, ...)
+    // and no MCP server of the person's settings.
+    const auto tools = std::find(args.begin(), args.end(), "--tools");
+    CHECK(tools != args.end() && tools + 1 != args.end());
+    if (tools != args.end() && tools + 1 != args.end()) {
+        CHECK_EQ(*(tools + 1), std::string("Bash,Read,Edit,Write,Glob,Grep"));
+        CHECK(tools + 2 != args.end() && (tools + 2)->rfind("--", 0) == 0);  // the variadic list ends there
+    }
+    CHECK(has("--strict-mcp-config"));
     const auto plain = agent::claude_args("/tmp/brief.md", "/vault", "");
     CHECK(std::find(plain.begin(), plain.end(), "--model") == plain.end());
 }

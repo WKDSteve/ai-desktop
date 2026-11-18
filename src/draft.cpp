@@ -149,7 +149,12 @@ std::vector<std::string> claude_args(const std::string& model) {
                                      "--append-system-prompt",
                                      system(),
                                      "--permission-mode",
-                                     "default"};
+                                     "default",
+                                     // No built-in tool at all (an empty --tools) and no MCP server of the person's
+                                     // settings: the list below names only some of the tools a session has.
+                                     "--tools",
+                                     "",
+                                     "--strict-mcp-config"};
     if (!model.empty()) {
         args.insert(args.end(), {"--model", model});
     }

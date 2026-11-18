@@ -296,6 +296,11 @@ const std::vector<std::string>& allowed_tools() {
     return tools;
 }
 
+const std::string& tool_set() {
+    static const std::string tools = "Read,Glob,Grep";
+    return tools;
+}
+
 const std::vector<std::string>& disallowed_tools() {
     static const std::vector<std::string> tools = {"Bash",         "Edit",     "Write",    "MultiEdit",
                                                    "NotebookEdit", "WebFetch", "WebSearch"};
@@ -310,7 +315,12 @@ std::vector<std::string> claude_args(const std::vector<fs::path>& dirs, const st
                                      "--append-system-prompt",
                                      system(),
                                      "--permission-mode",
-                                     "default"};
+                                     "default",
+                                     // Only the three readers exist in the session (--tools; the lists below only
+                                     // allow and refuse among them), and no MCP server of the person's settings.
+                                     "--tools",
+                                     tool_set(),
+                                     "--strict-mcp-config"};
     for (const auto& dir : dirs) {
         args.insert(args.end(), {"--add-dir", dir.u8string()});
     }

@@ -205,10 +205,19 @@ const std::vector<std::string>& allowed_tools() {
     return tools;
 }
 
+const std::string& tool_set() {
+    static const std::string tools = "Bash,Read,Edit,Write,Glob,Grep";
+    return tools;
+}
+
 std::vector<std::string> claude_args(const fs::path& brief_file, const fs::path& vault, const std::string& model) {
+    // --tools is the set of built-in tools the session has at all (the allowed list only says which run without a
+    // question): without it every other built-in tool (Task, Workflow, Monitor, EnterWorktree, CronCreate, Artifact,
+    // SendMessage, ...) is there too. --strict-mcp-config: no MCP server of the person's configuration.
     std::vector<std::string> args = {"-p", "--output-format", "stream-json", "--verbose",
                                      "--append-system-prompt-file", brief_file.u8string(),
-                                     "--permission-mode", "default", "--add-dir", vault.u8string()};
+                                     "--permission-mode", "default", "--tools", tool_set(), "--strict-mcp-config",
+                                     "--add-dir", vault.u8string()};
     if (!model.empty()) {
         args.insert(args.end(), {"--model", model});
     }

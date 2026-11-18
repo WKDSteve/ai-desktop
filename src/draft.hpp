@@ -47,8 +47,8 @@ std::string prompt(const jobs::Request& request);
 // The system text of the one answer.
 std::string system();
 
-// The arguments of `claude` for a draft: print mode, stream-json, every tool refused (one answer, nothing read or
-// written), the model when one is named. The prompt goes on stdin.
+// The arguments of `claude` for a draft: print mode, stream-json, no built-in tool (an empty --tools), no MCP server
+// and every tool refused besides (one answer, nothing read or written), the model when one is named. The prompt goes on stdin.
 std::vector<std::string> claude_args(const std::string& model);
 
 // The tools refused to a draft run (--disallowedTools).

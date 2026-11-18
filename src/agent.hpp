@@ -61,14 +61,17 @@ config::Status fetch_brief(const TasksCommand& tasks, const std::string& by, Bri
 // else the vault. Empty and `error` when the vault is not an existing absolute folder.
 std::filesystem::path work_dir(const std::string& vault, const std::string& area, std::string* error);
 
-// The arguments of `claude`: print mode, stream-json, the brief appended to the system prompt from a file, the
-// allowed tools (the tasks command, git, read and edit; nothing else is asked for, so in print mode nothing else
-// runs), the vault as an extra folder, the model when one is named. The prompt goes on stdin.
+// The arguments of `claude`: print mode, stream-json, the brief appended to the system prompt from a file, only the
+// built-in tools of tool_set() and no MCP server, the allowed tools (the tasks command, git, read and edit; nothing
+// else is asked for, so in print mode nothing else runs), the vault as an extra folder, the model when one is named.
+// The prompt goes on stdin.
 std::vector<std::string> claude_args(const std::filesystem::path& brief_file, const std::filesystem::path& vault,
                                      const std::string& model);
 
 // The tools the agent may use (in --allowedTools).
 const std::vector<std::string>& allowed_tools();
+// The built-in tools the agent's session has at all (--tools, comma-separated): the ones of allowed_tools(), no other.
+const std::string& tool_set();
 
 // The variables the agent must not inherit, as {name, ""} (removals for process::Spec::env): when ai-desktop was
 // itself started from a Claude Code session (CLAUDECODE is set), that session's variables (CLAUDECODE,

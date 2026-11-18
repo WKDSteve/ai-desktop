@@ -87,6 +87,14 @@ TEST(draft_claude_refuses_every_tool) {
         CHECK(std::find(args.begin(), args.end(), tool) != args.end());
     }
     CHECK(std::find(args.begin(), args.end(), "sonnet") != args.end());
+    // No built-in tool exists in the session (an empty --tools; the refused list names only some), no MCP server.
+    const auto tools = std::find(args.begin(), args.end(), "--tools");
+    CHECK(tools != args.end() && tools + 2 < args.end());
+    if (tools != args.end() && tools + 2 < args.end()) {
+        CHECK_EQ(*(tools + 1), std::string(""));
+        CHECK((tools + 2)->rfind("--", 0) == 0);
+    }
+    CHECK(std::find(args.begin(), args.end(), "--strict-mcp-config") != args.end());
 }
 
 TEST(draft_check_keeps_allowed_values_and_drops_others) {

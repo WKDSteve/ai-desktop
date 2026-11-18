@@ -95,6 +95,15 @@ TEST(review_reads_only) {
     CHECK((std::vector<std::string>(allowed + 1, args.end()) == review::allowed_tools()));
     CHECK(std::find(disallowed, allowed, "Bash") != allowed);
     CHECK(std::find(disallowed, allowed, "Edit") != allowed);
+    // Only the three readers exist in the session (Task, Workflow, Monitor, EnterWorktree, Artifact, SendMessage, ...
+    // are not refused by name), and no MCP server of the person's settings.
+    const auto tools = std::find(args.begin(), args.end(), "--tools");
+    CHECK(tools != args.end() && tools + 2 < args.end());
+    if (tools != args.end() && tools + 2 < args.end()) {
+        CHECK_EQ(*(tools + 1), std::string("Read,Glob,Grep"));
+        CHECK((tools + 2)->rfind("--", 0) == 0);
+    }
+    CHECK(std::find(args.begin(), args.end(), "--strict-mcp-config") != args.end());
     CHECK(!has(args, "--dangerously-skip-permissions"));
     CHECK(!has(args, "--append-system-prompt-file"));  // no brief: a review claims nothing
     CHECK(std::count(args.begin(), args.end(), "--add-dir") == 2);
