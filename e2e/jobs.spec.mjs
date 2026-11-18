@@ -87,10 +87,10 @@ test('a prefilled job stands in the dashboard with its text, and nothing runs', 
 test('a job sent while the page is open is selected; Run sends the edited text', async ({ page }) => {
   await page.goto(`http://127.0.0.1:${server.port}/`);
   await expect(page.locator('#sse-status')).toHaveText('Connected');
-  const { json } = await sendJob({ ...TASK, title: 'Sent while open', kind: 'draft-task' });
+  const { json } = await sendJob({ ...TASK, title: 'Sent while open', kind: 'review-done' });
   await expect(page.locator(`[data-job="${json.job_id}"]`)).toHaveAttribute('aria-current', 'true');
   await expect(jobText(page)).toHaveValue(TASK.markdown);
-  await expect(page.locator('#job-meta')).toContainText('kind draft-task');
+  await expect(page.locator('#job-meta')).toContainText('kind review-done');
 
   await jobText(page).fill('Edited by the person');
   await page.getByRole('button', { name: /Run/ }).click();
