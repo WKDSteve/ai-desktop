@@ -1,5 +1,7 @@
 #include "catalog_parse.hpp"
 #include "minitest.hpp"
+#include "model_client.hpp"
+#include "redact.hpp"
 
 using json = nlohmann::json;
 namespace catalog = ai_desktop::catalog;
@@ -157,9 +159,18 @@ TEST(presets_are_marked_as_suggestions) {
 
 TEST(redact_keys_hides_every_part_of_a_provider_key) {
     // OpenAI's own answer to a wrong key, masked but with the last characters.
-    CHECK_EQ(catalog::redact_keys("Incorrect API key provided: sk-proj-****************XMoA. You can find"),
+    CHECK_EQ(ai_desktop::redact_keys("Incorrect API key provided: sk-proj-****************XMoA. You can find"),
              std::string("Incorrect API key provided: <key>. You can find"));
-    CHECK_EQ(catalog::redact_keys("bad key sk-ant-api03-abc_DEF-123 and AIzaSyA1b2C3"), std::string("bad key <key> and <key>"));
-    CHECK_EQ(catalog::redact_keys("invalid x-api-key"), std::string("invalid x-api-key"));  // "x-api-key" is no key
-    CHECK_EQ(catalog::redact_keys("risk-free task-runner"), std::string("risk-free task-runner"));  // a word that only contains sk- stays
+    CHECK_EQ(ai_desktop::redact_keys("bad key sk-ant-api03-abc_DEF-123 and AIzaSyA1b2C3"), std::string("bad key <key> and <key>"));
+    CHECK_EQ(ai_desktop::redact_keys("invalid x-api-key"), std::string("invalid x-api-key"));  // "x-api-key" is no key
+    CHECK_EQ(ai_desktop::redact_keys("risk-free task-runner"), std::string("risk-free task-runner"));  // a word that only contains sk- stays
+}
+
+TEST(error_text_of_every_client_replaces_a_key_the_provider_echoed) {
+    // The way /ask and /ask/stream build their errors (openai_client, anthropic_client, ...): one place.
+    json object = {{"message", "Incorrect API key provided: sk-proj-***XMoA. You can find your key"}};
+    CHECK_EQ(ai_desktop::error_text(object), std::string("Incorrect API key provided: <key>. You can find your key"));
+    CHECK_EQ(ai_desktop::error_text(json("bad sk-ant-api03-x_y")), std::string("bad <key>"));
+    CHECK_EQ(ai_desktop::error_text(json{{"code", "AIzaSyZZZ"}}), std::string("{\"code\":\"<key>\"}"));
+    CHECK_EQ(ai_desktop::error_text(json{{"message", "invalid x-api-key"}}), std::string("invalid x-api-key"));
 }

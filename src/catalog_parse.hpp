@@ -14,10 +14,6 @@
 // stale in code).
 namespace ai_desktop::catalog {
 
-// `text` with anything shaped like a provider key (sk-..., AIza...) replaced by "<key>", masked or not. For
-// the error text of a provider (catalog.cpp), which may echo the key it refused.
-std::string redact_keys(const std::string& text);
-
 // GET <ollama>/api/tags  ->  entries (category "local").
 nlohmann::json parse_ollama_tags(const nlohmann::json& response);
 

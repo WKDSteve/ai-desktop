@@ -65,7 +65,8 @@ bool get_json(const std::string& origin, const std::string& path, const httplib:
         if (detail.size() > 200) {
             detail.resize(200);
         }
-        error = label + ": HTTP " + std::to_string(res->status) + (detail.empty() ? "" : ": " + redact_keys(detail));
+        // error_text has replaced anything shaped like a key already (redact.hpp)
+        error = label + ": HTTP " + std::to_string(res->status) + (detail.empty() ? "" : ": " + detail);
         return false;
     }
     return true;

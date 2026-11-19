@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "nlohmann/json.hpp"
+#include "redact.hpp"
 
 // Shared result shape and SSE helpers for every backend client (ollama,
 // openai, anthropic, gemini) that main.cpp's /ask and /ask/stream handlers
@@ -31,15 +32,17 @@ struct AskResult {
 // there crashes the whole process, not just one request (see main.cpp's
 // 4e2777c fix history for the ollama path this same class of bug hit
 // first). Never inspect an "error" field directly; always go through this.
+// The text has anything shaped like a key replaced (redact.hpp): it goes into /ask answers, the usage log and
+// the dashboard.
 inline std::string error_text(const nlohmann::json& error_value) {
     if (error_value.is_string()) {
-        return error_value.get<std::string>();
+        return redact_keys(error_value.get<std::string>());
     }
     if (error_value.is_object() && error_value.contains("message") &&
         error_value["message"].is_string()) {
-        return error_value["message"].get<std::string>();
+        return redact_keys(error_value["message"].get<std::string>());
     }
-    return error_value.dump();
+    return redact_keys(error_value.dump());
 }
 
 // Extract the payload from an SSE "data: ..." line, if it is one. Mirrors
