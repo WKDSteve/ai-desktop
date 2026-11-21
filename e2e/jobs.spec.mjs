@@ -184,7 +184,7 @@ test('a job of claude-code shows how it runs, and Stop ends it', async ({ page }
       { Authorization: `Bearer ${secret}` });
     await page.goto(await agentServer.dashboardUrl(`job=${json.job_id}`));
     await expect(page.locator('#job-runner')).toHaveText(
-      'Claude Code with the brief of the tasks family (brief 1, contract 1, tasks.nvim fake-0)');
+      'Claude Code with the brief of the tasks family (brief 2, contract 1, tasks.nvim fake-0)');
     await expect(page.locator('#job-output')).toContainText('Bash: tasks claim ai-desktop/auftrag-von-aussen');
     await expect(page.locator('#job-status')).toHaveText('Running...');
     await expect(page.locator('#job-stop')).toBeEnabled();
