@@ -299,6 +299,8 @@ std::string g_control_secret;
 std::filesystem::path g_secret_dir;
 
 void leave_family() {
+    // The agents' process trees end, the git worktrees of their runs go (a commit on no remote stays on its branch).
+    ai_desktop::jobs_api::shutdown();
     if (!g_family_dir.empty()) {
         ai_desktop::family::remove_record(g_family_dir, g_instance);
     }
@@ -865,6 +867,8 @@ int main(int argc, char** argv) {
         return 1;
     }
     announce_to_family(svr);
+    // What an earlier ai-desktop left behind (a crash, a killed process): only now that the port is this server's.
+    ai_desktop::jobs_api::sweep_worktrees();
 
     // Simulations-Agent in eigenem Thread starten
     std::thread sim(run_simulation_agent);

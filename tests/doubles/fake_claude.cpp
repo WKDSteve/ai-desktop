@@ -9,6 +9,8 @@
 //   $FAKE_CLAUDE_FAIL=1     ends with an error result
 //   $FAKE_CLAUDE_LEAVE_MS   before its result, starts `tasks sleep <ms>` in the background with stdout and stderr
 //                           inherited and does not wait for it (a descendant that keeps the output pipes open)
+//   $FAKE_CLAUDE_COMMIT=1   after the claim, writes agent.txt, stages everything (`git add -A`, as a careless agent
+//                           would) and commits; then `git push origin HEAD:main`, unless $FAKE_CLAUDE_NO_PUSH=1
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -158,6 +160,14 @@ int main(int argc, char** argv) {
     if (const std::string sleep = env("FAKE_CLAUDE_SLEEP_MS"); !sleep.empty()) {
         // A grandchild that waits as well: a cancel must end it too (the process tree).
         tool("tasks sleep " + sleep);
+    }
+    if (env("FAKE_CLAUDE_COMMIT") == "1") {
+        std::ofstream(std::filesystem::path("agent.txt")) << "the work of " << id << "\n";
+        tool("git add -A");
+        tool("git commit -q -m \"feat: the work of the agent\"");
+        if (env("FAKE_CLAUDE_NO_PUSH") != "1") {
+            tool("git push -q origin HEAD:main");
+        }
     }
     emit({{"type", "assistant"}, {"message", {{"content", json::array({{{"type", "text"}, {"text", "Did the work of " + id + "."}}})}}}});
     if (env("FAKE_CLAUDE_FAIL") == "1") {

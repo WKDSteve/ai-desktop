@@ -24,12 +24,11 @@ const TASK = {
   mode: "run",
 };
 
-// A throw-away world: a vault, the tasks stand-in as `tasks` in a bin folder, the logs, the config of the server.
-function world({ repo = false, claude = fakeClaude } = {}) {
+// A throw-away world (a repository of the area: agent-worktree.test.mjs): a vault, the tasks stand-in as `tasks` in a bin folder, the logs, the config of the server.
+function world({ claude = fakeClaude } = {}) {
   const root = mkdtempSync(path.join(os.tmpdir(), "ai-desktop-agent-"));
   const vault = path.join(root, "tasks-vault");
   mkdirSync(vault);
-  if (repo) mkdirSync(path.join(root, "demo", ".git"), { recursive: true });
   const bin = path.join(root, "bin");
   mkdirSync(bin);
   const tasks = path.join(bin, `tasks${exe}`);
@@ -144,21 +143,6 @@ describe("a job of the model claude-code", { skip: !existsSync(fakeClaude) && "b
     assert.equal(usage.events[0].provider, "claude-code");
     assert.equal(usage.events[0].prompt_tokens, 12);
     assert.equal(usage.events[0].completion_tokens, 34);
-  });
-
-  it("works in the repository of the area when the vault has one beside it", async () => {
-    const w2 = world({ repo: true });
-    const s2 = await serverFor(w2);
-    try {
-      const res = await s2.post("/jobs", { ...TASK, vault: w2.vault }, auth(s2));
-      assert.equal((await waitFor(s2, res.json.job_id, (j) => j.status !== "running")).status, "done");
-      const run = lines(w2.claudeLog).at(-1);
-      assert.equal(path.resolve(run.cwd), path.resolve(w2.root, "demo"));
-      assert.equal(path.resolve(run.args[run.args.indexOf("--add-dir") + 1]), path.resolve(w2.vault));
-    } finally {
-      await s2.stop();
-      w2.cleanup();
-    }
   });
 
   it("asks before a private area goes to Claude Code", async () => {

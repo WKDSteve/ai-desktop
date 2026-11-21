@@ -79,8 +79,10 @@ const std::string& tool_set();
 // agent a child of that session and send it to the host's sign-in. Otherwise nothing is removed.
 std::vector<std::pair<std::string, std::string>> session_env_removals(const std::vector<std::string>& names);
 
-// The prompt of a run: the task, its id, the claim name and what to do.
-std::string prompt(const jobs::Request& request, const std::string& by);
+// The prompt of a run: the task, its id, the claim name and what to do. `branch` names the branch of the run's own
+// git worktree (src/worktree.hpp; empty: the run works in the vault, there is no repository of the area): the
+// prompt then says where it works and how it pushes.
+std::string prompt(const jobs::Request& request, const std::string& by, const std::string& branch = "");
 
 // What one line of Claude Code's stream-json means for the job.
 struct Event {

@@ -34,6 +34,7 @@ add_library(ai_desktop_core STATIC
     src/secrets.cpp
     src/session.cpp
     src/usage.cpp
+    src/worktree.cpp
 )
 target_include_directories(ai_desktop_core PUBLIC src)
 target_link_libraries(ai_desktop_core PUBLIC third_party_headers)

@@ -249,11 +249,18 @@ std::vector<std::pair<std::string, std::string>> session_env_removals(const std:
     return out;
 }
 
-std::string prompt(const jobs::Request& request, const std::string& by) {
+std::string prompt(const jobs::Request& request, const std::string& by, const std::string& branch) {
     std::string text = "Work on the task " + request.task_id + " of the task vault " + request.vault + " (area " +
                        request.area + "), handed over by " + request.source + " (kind " + request.kind + "). ";
     if (request.kind != "handoff") {
         text += "This kind has no instructions of its own yet: treat it as a hand-over. ";
+    }
+    if (!branch.empty()) {
+        text += "You work in a git worktree of your own (the current folder, branch " + branch +
+                ", made from origin/main), not in the shared checkout of the repository, where other sessions keep "
+                "uncommitted work: change and commit only here. To deliver, `git pull --rebase` and then "
+                "`git push origin HEAD:main`. When the run ends the worktree is removed: uncommitted changes go with "
+                "it, commits that are on no remote stay on the branch " + branch + ". ";
     }
     text += "Follow the workflow of the tasks family in your system prompt with the name " + by +
             ": first `tasks claim " + request.task_id + " --by=" + by +

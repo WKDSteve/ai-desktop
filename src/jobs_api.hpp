@@ -41,4 +41,13 @@ bool is_own_host(const std::string& host, int port);
 
 void register_routes(httplib::Server& server, Hooks hooks);
 
+// At the end of ai-desktop: ends every running agent (its process tree) and removes the git worktrees of the runs
+// (src/worktree.hpp); a commit on no remote stays on its branch. What cannot go now, the next start removes.
+void shutdown();
+
+// Removes, on a thread of its own, the worktrees an earlier ai-desktop left behind (a crash, a killed process).
+// Called once the port is bound: a second start that finds the port taken must not touch the worktrees of the
+// server that holds it.
+void sweep_worktrees();
+
 }  // namespace ai_desktop::jobs_api

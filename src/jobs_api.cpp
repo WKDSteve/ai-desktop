@@ -22,6 +22,7 @@
 #include "process.hpp"
 #include "review.hpp"
 #include "session.hpp"
+#include "worktree.hpp"
 
 using json = nlohmann::json;
 
@@ -204,14 +205,53 @@ std::string run_claude(const HooksPtr& hooks, const std::string& id, std::uint64
     return "";
 }
 
+// The folder of the runs' git worktrees (src/worktree.hpp), beside the config.
+std::filesystem::path worktree_root() {
+    return std::filesystem::u8path(config::directory()) / "job-worktrees";
+}
+
 // A hand-over on Claude Code: the brief of the tasks family appended to its system prompt (from a file in the
 // person's config folder, not a shared temp folder where another user could plant a link), the tasks command first
-// on its PATH, the vault in TASKS_VAULT.
+// on its PATH, the vault in TASKS_VAULT. With a repository of the area (`cwd` is not the vault) the agent works in a
+// git worktree of its own, made from origin/main, never in the shared checkout; it goes when the run ends.
 std::string run_agent(const HooksPtr& hooks, const std::string& id, std::uint64_t run, const jobs::Request& request,
                       const std::filesystem::path& claude, const agent::TasksCommand& tasks,
                       const agent::Brief& brief, const std::filesystem::path& cwd, const std::string& model) {
     namespace fs = std::filesystem;
     std::error_code ec;
+    std::optional<worktree::Worktree> own;
+    if (cwd != fs::u8path(request.vault)) {
+        worktree::Worktree made;
+        std::string note;
+        std::string why;
+        if (!worktree::create(worktree_root(), cwd, worktree::name_of(id, run), made, &note, &why)) {
+            return "no worktree of its own for the agent, so it does not run: " + why;
+        }
+        own = std::move(made);
+        jobs::store().append(id, run, "▸ worktree " + own->dir.u8string() + " (branch " + own->branch + ")\n");
+        if (!note.empty()) {
+            jobs::store().append(id, run, "▸ " + note + "\n");
+        }
+    }
+    // Removes the worktree on every way out of this function (an exception too), after the agent's process tree.
+    struct Cleanup {
+        const std::optional<worktree::Worktree>& own;
+        const std::string& id;
+        std::uint64_t run;
+        ~Cleanup() {
+            if (!own) {
+                return;
+            }
+            try {
+                const worktree::Removal removal = worktree::remove(worktree_root(), *own);
+                if (removal.done) {
+                    jobs::store().append(id, run, worktree::describe(*own, removal));
+                }
+            } catch (...) {
+                // Never out of a destructor: the record stays, the end of ai-desktop or its next start removes it.
+            }
+        }
+    } cleanup{own, id, run};
     const fs::path dir = fs::u8path(config::directory()) / "job-briefs";
     fs::create_directories(dir, ec);
     // One file per run: a run cancelled before removes its own file at its end, never the one of a run started since.
@@ -232,10 +272,10 @@ std::string run_agent(const HooksPtr& hooks, const std::string& id, std::uint64_
     process::Spec spec;
     spec.program = claude;
     spec.args = agent::claude_args(brief_file, fs::u8path(request.vault), agent::submodel(model));
-    spec.cwd = cwd;
+    spec.cwd = own ? own->dir : cwd;
     spec.env = {{"PATH", tasks.bin_dir.u8string() + separator + (path ? path : "")},
                 {"TASKS_VAULT", request.vault}};
-    spec.stdin_text = agent::prompt(request, by_of(id));
+    spec.stdin_text = agent::prompt(request, by_of(id), own ? own->branch : "");
     const std::string error = run_claude(hooks, id, run, std::move(spec), model);
     fs::remove(brief_file, ec);
     return error;
@@ -666,6 +706,35 @@ void register_routes(httplib::Server& server, Hooks plain_hooks) {
         }
         api::send_json(res, 200, jobs::to_json(*job, true));
     });
+}
+
+void shutdown() {
+    {
+        std::lock_guard<std::mutex> lock(g_cancel_mutex);
+        for (auto& [id, cancel] : g_cancels) {
+            cancel.stop();
+        }
+    }
+    try {
+        for (const auto& line : worktree::sweep(worktree_root())) {
+            std::cout << "ai-desktop: " << line << "\n";
+        }
+    } catch (const std::exception& e) {
+        // The console handler calls this: nothing may escape. The next start sweeps again.
+        std::cerr << "ai-desktop: removing the worktrees of the jobs failed: " << e.what() << "\n";
+    }
+}
+
+void sweep_worktrees() {
+    std::thread([] {
+        try {
+            for (const auto& line : worktree::sweep(worktree_root())) {
+                std::cout << "ai-desktop: left by an earlier run: " << line << "\n";
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "ai-desktop: sweeping the worktrees of the jobs failed: " << e.what() << "\n";
+        }
+    }).detach();
 }
 
 }  // namespace ai_desktop::jobs_api
