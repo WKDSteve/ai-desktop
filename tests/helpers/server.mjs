@@ -108,6 +108,9 @@ export async function startServer({ env = {}, args = [], port, configDir, bin = 
       // exist (the job then answers once); tests/agent-jobs.test.mjs names its stand-in instead.
       AI_DESKTOP_CLAUDE_CLI: path.join(os.tmpdir(), "ai-desktop-tests-no-claude", "claude.exe"),
       AI_DESKTOP_TASKS_CLI: "",
+      // Nor the testing command of the machine (a review asks it for the hosted CI, which reaches GitHub): a path that
+      // does not exist (the review then says "not checked"); tests/review-jobs.test.mjs names its stand-in instead.
+      AI_DESKTOP_TESTING_CLI: path.join(os.tmpdir(), "ai-desktop-tests-no-testing", "testing.exe"),
       ...env,
     },
     stdio: ["ignore", "pipe", "pipe"],

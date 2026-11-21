@@ -143,6 +143,12 @@ describe("a job of the kind review-done", { skip: !existsSync(fakeClaude) && "bu
     assert.match(call.prompt, /No repository absent/, "a commit of a repository that is not here");
     assert.match(call.prompt, /change no file/);
     assert.equal(lines(path.join(root, "tasks.log")).length, 0, "no tasks command: nothing claimed or finished");
+    // No testing command here (the helper names none): the CI of the commits is said as not checked, not left out.
+    assert.match(call.prompt, /## The CI of the commits/);
+    assert.match(call.prompt, /The task has no `ci:` field/);
+    assert.match(call.prompt, new RegExp(`### demo@${sha}\\n\\n- local check \\(\`testing ci commit\`\\): not checked`));
+    assert.match(call.prompt, /- hosted CI: not checked \(testing_cli names no file/);
+    assert.match(call.prompt, /- hosted CI: not checked \(no repository absent beside the vault/);
   });
 
   it("prepare-decision reads the task's references and answers with the decision block, read only", async () => {
@@ -164,6 +170,7 @@ describe("a job of the kind review-done", { skip: !existsSync(fakeClaude) && "bu
     assert.match(call.prompt, /decide nothing/);
     assert.match(call.prompt, /\+the acceptance is met here/, "the diff of the commit its refs name");
     assert.match(call.prompt, /Which store\?/);
+    assert.doesNotMatch(call.prompt, /## The CI of the commits/, "a decision gets no CI section");
     const dirs = call.args.flatMap((a, i) => (a === "--add-dir" ? [path.resolve(call.args[i + 1])] : []));
     assert.ok(dirs.includes(path.resolve(repo)), "the repository of the area");
   });
@@ -202,5 +209,78 @@ describe("a job of the kind review-done", { skip: !existsSync(fakeClaude) && "bu
     const asked = mock.seen.at(-1).messages.map((m) => m.content).join("\n");
     assert.match(asked, /\+the acceptance is met here/);
     assert.match(asked, /careful reviewer/, "the review's system text");
+  });
+});
+
+// The CI of the commits from the testing command (a stand-in for `testing ci remote --json`): ai-desktop asks it, puts
+// the state into the prompt, and a red one is to become an open point of the block. The agent gets no tool for it.
+describe("a review with the CI of its commits", { skip: !existsSync(fakeClaude) && "build the test doubles first" }, () => {
+  it("names the hosted CI of a commit on origin/main, the task's ci: red, and asks for an open point", async () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), "ai-desktop-review-ci-"));
+    const vault = path.join(root, "tasks-vault");
+    const repo = path.join(root, "demo");
+    mkdirSync(vault);
+    mkdirSync(repo);
+    git(repo, ["init", "-q", "-b", "main"]);
+    writeFileSync(path.join(repo, "feature.txt"), "on main\n");
+    git(repo, ["add", "feature.txt"]);
+    git(repo, ["commit", "-q", "-m", "feat: on main"]);
+    const onMain = git(repo, ["rev-parse", "HEAD"]);
+    git(root, ["init", "-q", "--bare", "-b", "main", path.join(root, "origin.git")]);
+    git(repo, ["remote", "add", "origin", path.join(root, "origin.git")]);
+    git(repo, ["push", "-q", "origin", "main"]);
+    git(repo, ["fetch", "-q", "origin"]);
+    writeFileSync(path.join(repo, "later.txt"), "not pushed\n");
+    git(repo, ["add", "later.txt"]);
+    git(repo, ["commit", "-q", "-m", "feat: not pushed"]);
+    const local = git(repo, ["rev-parse", "HEAD"]);
+    // The document testing.nvim writes, with a red run of origin/main's head and a hostile url that must not pass.
+    const remote = path.join(root, "remote.json");
+    writeFileSync(remote, JSON.stringify({
+      schema: "testing-ci-remote/1",
+      repos: [{ branch: "main", dir: repo, overall: "failure", sha: onMain, workflow: "CI",
+        run: { id: 7, url: "https://github.com/o/demo/actions/runs/7", conclusion: "failure", status: "completed" } }],
+    }));
+    const testing = path.join(root, `testing${exe}`);
+    copyFileSync(fakeTasks, testing);
+    const server = await startServer({
+      env: {
+        AI_DESKTOP_CLAUDE_CLI: fakeClaude,
+        AI_DESKTOP_TESTING_CLI: testing,
+        FAKE_CLAUDE_LOG: path.join(root, "claude.log"),
+        FAKE_TESTING_REMOTE: remote,
+        FAKE_TESTING_REMOTE_EXIT: "1",
+        FAKE_TESTING_LOG: path.join(root, "testing.log"),
+      },
+    });
+    try {
+      const secret = readFileSync(path.join(server.configDir, "control.secret"), "utf8").trim();
+      const res = await server.post("/jobs", {
+        source: "tasks.nvim", task_id: "demo/finished", title: "Finished", vault, area: "demo", mode: "run",
+        kind: "review-done",
+        markdown: `---\ntitle: Finished\nstatus: done\nci: red\ncommits: [demo@${onMain.slice(0, 12)}, demo@${local.slice(0, 12)}]\n---\n\n## Akzeptanz\n\n- [x] it is done\n`,
+      }, { Authorization: `Bearer ${secret}` });
+      assert.equal(res.status, 201, res.text);
+      let job;
+      const deadline = Date.now() + 15000;
+      do {
+        await new Promise((r) => setTimeout(r, 100));
+        job = (await server.get(`/jobs/${res.json.job_id}`)).json;
+      } while (job.status === "running" && Date.now() < deadline);
+      assert.equal(job.status, "done", JSON.stringify(job));
+      const prompt = lines(path.join(root, "claude.log")).at(-1).prompt;
+      assert.match(prompt, /The task says `ci: red`\./);
+      assert.match(prompt, new RegExp(`### demo@${onMain.slice(0, 12)}\n\n- local check[^\n]*\n- hosted CI: origin/main is at ${onMain.slice(0, 12)}, its CI run: failure \\(https://github\\.com/o/demo/actions/runs/7\\); this commit is part of it`));
+      assert.match(prompt, new RegExp(`### demo@${local.slice(0, 12)}\n\n- local check[^\n]*\n- hosted CI: not checked \\(this commit is not on origin/main`));
+      assert.match(prompt, /`- \[ \] CI — offen: <what is red>` when something there is red/);
+      // Asked once per repository, read-only, for the repository beside the vault.
+      const calls = lines(path.join(root, "testing.log"));
+      assert.equal(calls.length, 1);
+      assert.deepEqual(calls[0].args, ["ci", "remote", "--json", calls[0].args[3]]);
+      assert.equal(path.resolve(calls[0].args[3]), path.resolve(repo));
+    } finally {
+      await server.stop();
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

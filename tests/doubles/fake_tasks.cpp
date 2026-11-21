@@ -4,6 +4,8 @@
 //                                                      a brief of the form tasks-agent-brief/1 (brief 2); with --repo
 //                                                      (a folder, else exit 2) its `checks`; each call is appended
 //                                                      as {args} to $FAKE_TASKS_BRIEF_LOG
+//   fake_tasks ci remote --json <dir>                  as testing.nvim's testing command: the file $FAKE_TESTING_REMOTE
+//                                                      (exit $FAKE_TESTING_REMOTE_EXIT), the call in $FAKE_TESTING_LOG
 //   fake_tasks echo-args <args...>                     each argument on a line of its own (the quoting test)
 //   fake_tasks echo-env <NAME>                         the value of a variable
 //   fake_tasks sleep <ms>                              waits (the timeout test)
@@ -91,6 +93,22 @@ int main(int argc, char** argv) {
         doc["schema"] = "tasks-agent-brief/1";
         std::cout << doc.dump() << "\n";
         return 0;
+    }
+    if (args[0] == "ci" && args.size() >= 2 && args[1] == "remote") {
+        // As the testing command of testing.nvim: the document of $FAKE_TESTING_REMOTE (a file), exit
+        // $FAKE_TESTING_REMOTE_EXIT (ci remote exits 1 for a red CI and prints the document all the same).
+        if (const std::string log = env("FAKE_TESTING_LOG"); !log.empty()) {
+            std::ofstream out(std::filesystem::u8path(log), std::ios::app | std::ios::binary);
+            out << nlohmann::json({{"args", args}}).dump() << "\n";
+        }
+        const std::string file = env("FAKE_TESTING_REMOTE");
+        std::ifstream in(std::filesystem::u8path(file), std::ios::binary);
+        if (file.empty() || !in) {
+            std::cerr << "testing: no CI adapter for this repository\n";
+            return 2;
+        }
+        std::cout << in.rdbuf();
+        return std::atoi(env("FAKE_TESTING_REMOTE_EXIT", "0").c_str());
     }
     if (args[0] == "claim" && env("FAKE_TASKS_FOREIGN_CLAIM") == "1") {
         std::cerr << args[1] << " is claimed by somebody since 2026-11-17T10:00:00Z until 2026-11-17T14:00:00Z\n";

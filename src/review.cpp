@@ -158,7 +158,8 @@ std::string diffs(const std::string& vault, const std::vector<Commit>& commits) 
     return out;
 }
 
-std::string prompt(const jobs::Request& request, const std::string& diff_text, const std::string& job_id) {
+std::string prompt(const jobs::Request& request, const std::string& diff_text, const std::string& job_id,
+                   const std::string& ci) {
     std::string text;
     text += "Check the finished task " + request.task_id + " of the task vault " + request.vault + " (area " +
             request.area + ") against its acceptance criteria. This is review job " + job_id +
@@ -168,6 +169,15 @@ std::string prompt(const jobs::Request& request, const std::string& diff_text, c
     text += "For every line of the task's acceptance checklist (the section `## Akzeptanz` or `## Acceptance`) decide "
             "whether it is met, open, or not checkable, each with evidence: a file and line (`path:line`) or a commit "
             "(`repo@sha`), or why it cannot be checked. A box ticked in the task is a claim, not evidence.\n\n";
+    if (!ci.empty()) {
+        text += "The section `## The CI of the commits` below is what ai-desktop found about the checks of the "
+                "commits (you cannot run them). Add one line about it to the checklist of the block: `- [ ] CI — "
+                "offen: <what is red>` when something there is red (the task says `ci: red`, or a run is failure, "
+                "rejected, cancelled or timed_out); `- [ ] CI — nicht prüfbar: <why>` when it says not checked or a "
+                "run has not ended; `- [x] CI — erfüllt: <evidence>` only when the hosted CI of every commit "
+                "succeeded and the task does not say `ci: red`. A red check is an open point even when the diffs "
+                "look right.\n\n";
+    }
     text += "Think it through in your answer, then end it with exactly one block from the line `" +
             std::string(kBegin) + "` to the line `" + std::string(kEnd) +
             "`, written in the language of the task, in this form (German labels for a German task):\n\n";
@@ -185,6 +195,9 @@ std::string prompt(const jobs::Request& request, const std::string& diff_text, c
             "met / open / not checkable, `### Follow-up task (proposal)`.\n\n";
     text += "## The task as it was finished\n\n" + request.markdown + "\n\n";
     text += "## The commits it names, as git shows them\n\n" + diff_text;
+    if (!ci.empty()) {
+        text += "\n## The CI of the commits\n\n" + ci;
+    }
     return text;
 }
 

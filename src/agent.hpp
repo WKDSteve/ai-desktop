@@ -39,6 +39,10 @@ struct TasksCommand {
 // any other file must be an executable (.exe on Windows).
 TasksCommand find_tasks();
 
+// The same for the testing command of testing.nvim (setting `testing_cli`, else `testing` on PATH): ai-desktop asks
+// it, read-only, for the state of the hosted CI of a review's commits (src/ci_status.hpp). The agent never gets it.
+TasksCommand find_testing();
+
 // The setting `claude_cli`, else `claude` on PATH (claude.exe on Windows: a .cmd would need a shell). Empty and
 // `error` when there is none.
 std::filesystem::path find_claude(std::string* error);

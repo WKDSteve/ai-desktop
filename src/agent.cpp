@@ -59,35 +59,40 @@ std::string submodel(const std::string& model) {
     return colon == std::string::npos ? "" : model.substr(colon + 1);
 }
 
-TasksCommand find_tasks() {
+namespace {
+
+// The command `name` of a Neovim plugin with a bin/ folder (tasks.nvim, testing.nvim): the setting `setting`, else
+// `name` on PATH; a checkout's bin/<name> beside ../scripts/<name>.lua runs through nvim, any other file must be a
+// program.
+TasksCommand find_nvim_command(const char* setting, const std::string& name) {
     TasksCommand out;
-    fs::path file = setting_path("tasks_cli");
+    fs::path file = setting_path(setting);
     std::error_code ec;
     if (file.empty()) {
 #ifdef _WIN32
-        file = process::find_on_path({"tasks.exe", "tasks.cmd", "tasks"});
+        file = process::find_on_path({name + ".exe", name + ".cmd", name});
 #else
-        file = process::find_on_path({"tasks"});
+        file = process::find_on_path({name});
 #endif
         if (file.empty()) {
-            out.error = "the tasks command is not on PATH (set tasks_cli in the settings)";
+            out.error = "the " + name + " command is not on PATH (set " + setting + " in the settings)";
             return out;
         }
     } else if (!fs::is_regular_file(file, ec)) {
-        out.error = "tasks_cli names no file: " + file.u8string();
+        out.error = std::string(setting) + " names no file: " + file.u8string();
         return out;
     }
     out.bin_dir = file.parent_path();
-    const fs::path script = out.bin_dir.parent_path() / "scripts" / "tasks.lua";
+    const fs::path script = out.bin_dir.parent_path() / "scripts" / fs::u8path(name + ".lua");
     if (fs::is_regular_file(script, ec)) {
-        // A tasks.nvim checkout: nvim runs the script, as bin/tasks does, without a shell in between.
+        // A checkout of the plugin: nvim runs the script, as bin/<name> does, without a shell in between.
 #ifdef _WIN32
         out.program = process::find_on_path({"nvim.exe"});
 #else
         out.program = process::find_on_path({"nvim"});
 #endif
         if (out.program.empty()) {
-            out.error = "nvim is not on PATH, and the tasks command of " + out.bin_dir.u8string() + " needs it";
+            out.error = "nvim is not on PATH, and the " + name + " command of " + out.bin_dir.u8string() + " needs it";
             return out;
         }
         out.prefix = {"-n", "-i", "NONE", "--headless", "-u", "NONE", "-l", script.u8string()};
@@ -95,12 +100,23 @@ TasksCommand find_tasks() {
     }
 #ifdef _WIN32
     if (lower(file.extension().u8string()) != ".exe") {
-        out.error = file.u8string() + " is no program (.exe) and no bin/ folder of a tasks.nvim checkout; it would need a shell";
+        out.error = file.u8string() + " is no program (.exe) and no bin/ folder of a " + name +
+                    ".nvim checkout; it would need a shell";
         return out;
     }
 #endif
     out.program = file;
     return out;
+}
+
+}  // namespace
+
+TasksCommand find_tasks() {
+    return find_nvim_command("tasks_cli", "tasks");
+}
+
+TasksCommand find_testing() {
+    return find_nvim_command("testing_cli", "testing");
 }
 
 fs::path find_claude(std::string* error) {

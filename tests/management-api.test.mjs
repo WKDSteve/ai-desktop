@@ -51,7 +51,7 @@ describe("/settings", () => {
   it("reports every setting with its source and the config directory", async () => {
     const res = await server.get("/settings");
     assert.equal(res.status, 200);
-    assert.deepEqual(Object.keys(res.json.settings).sort(), ["claude_cli", "default_model", "jobs", "jobs_model", "language", "ollama_host", "ollama_num_ctx", "private_areas", "tasks_cli", "theme"]);
+    assert.deepEqual(Object.keys(res.json.settings).sort(), ["claude_cli", "default_model", "jobs", "jobs_model", "language", "ollama_host", "ollama_num_ctx", "private_areas", "tasks_cli", "testing_cli", "theme"]);
     assert.equal(res.json.settings.theme.value, "system");
     assert.equal(res.json.settings.theme.source, "default");
     assert.equal(res.json.settings.theme.locked, false);

@@ -13,6 +13,7 @@
 
 #include "agent.hpp"
 #include "api.hpp"
+#include "ci_status.hpp"
 #include "config.hpp"
 #include "control_secret.hpp"
 #include "draft.hpp"
@@ -341,7 +342,15 @@ void run_review(const HooksPtr& hooks, const std::string& id, std::uint64_t run,
         what = "split";
     } else {
         const std::string diff_text = review::diffs(request.vault, commits);
-        prompt = decision ? review::decision_prompt(request, diff_text, id) : review::prompt(request, diff_text, id);
+        if (decision) {
+            prompt = review::decision_prompt(request, diff_text, id);
+        } else {
+            // The CI of the commits, read by ai-desktop (the agent has no tool for it): the task's `ci:` and the
+            // hosted CI through `testing ci remote`.
+            const std::string ci = ci_status::section(request.vault, commits, ci_status::task_ci(request.markdown),
+                                                      agent::find_testing());
+            prompt = review::prompt(request, diff_text, id, ci);
+        }
         system = decision ? review::decision_system() : review::system();
         what = decision ? "decision" : "review";
     }

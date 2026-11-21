@@ -44,9 +44,10 @@ constexpr SettingDef kSettings[] = {
     // The model of a job that names none: "claude-code" runs Claude Code headless with the brief of the tasks family
     // (src/agent.hpp); any other model answers once (default_model is one: name it here to answer once by default).
     {"jobs_model", "AI_DESKTOP_JOBS_MODEL", "claude-code"},
-    // Where Claude Code and the tasks command are (absolute paths); empty: looked up on PATH.
+    // Where Claude Code, the tasks command and the testing command are (absolute paths); empty: looked up on PATH.
     {"claude_cli", "AI_DESKTOP_CLAUDE_CLI", ""},
     {"tasks_cli", "AI_DESKTOP_TASKS_CLI", ""},
+    {"testing_cli", "AI_DESKTOP_TESTING_CLI", ""},
 };
 
 // Largest context window accepted; current models top out at about a million tokens.
@@ -291,7 +292,7 @@ Status validate(const std::string& key, std::string& value) {
         if (value != "de" && value != "en") {
             return {400, "language: must be one of de, en"};
         }
-    } else if (key == "claude_cli" || key == "tasks_cli") {
+    } else if (key == "claude_cli" || key == "tasks_cli" || key == "testing_cli") {
         // A program ai-desktop starts for a job: an absolute path of one line, checked again when a job runs.
         value = trimmed(value);
         if (value.size() > 1024) {

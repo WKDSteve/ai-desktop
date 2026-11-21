@@ -160,16 +160,26 @@ A finished task is checked against its acceptance (`src/review.cpp`). The caller
    `git -C <vault>/../<repo> show --stat --patch --no-color --no-ext-diff --no-textconv <sha>` for each (20 s, 48 KiB
    a diff, 160 KiB together, cut and said so). A repository that is not beside the vault, an unknown commit or a
    missing git is named in the prompt instead of a diff.
-2. The prompt: the task, the diffs, and the instruction to decide for every line of `## Akzeptanz`/`## Acceptance`
+2. The CI of the commits, read by ai-desktop itself (`src/ci_status.cpp`; the agent gets no tool for it): the task's
+   `ci:` (`pending`, `green`, `red`, written by tasks.nvim) and, per repository, `testing ci remote --json <repo>` of
+   testing.nvim (the setting `testing_cli`, else `testing` on `PATH`, 60 s; read-only, it asks GitHub with the
+   person's token): the state of the CI run of origin/main's head, and per commit whether it is part of that head
+   (`git merge-base --is-ancestor`). Only a state word and a link to github.com of that document reach the prompt.
+   The kept result of `testing ci commit` per commit is said as "not checked": testing.nvim has no read-only way to
+   ask for it yet. Whatever answers nothing (no testing command, no repository here, a commit not on origin/main) is
+   said as "not checked", never left out.
+3. The prompt: the task, the diffs, the CI of the commits (step 2) with the rule for one line about it in the block
+   (`- [ ] CI — offen: ...` when the task says `ci: red` or a run is red, `nicht prüfbar` when not checked, `erfüllt`
+   only when every commit's hosted CI succeeded), and the instruction to decide for every line of `## Akzeptanz`/`## Acceptance`
    whether it is met, open or not checkable, with evidence (`path:line` or `repo@sha`), and to end the answer with one
    block from `<!-- review:begin -->` to `<!-- review:end -->`: a section `## Prüfung` (`## Review` in English), one
    line per criterion, and, when something is open, `### Folgetask (Vorschlag)` with `- title:` and `- summary:`.
-3. On `claude-code`: the brief is not needed (a review claims nothing); `--tools Read,Glob,Grep` (the only built-in
+4. On `claude-code`: the brief is not needed (a review claims nothing); `--tools Read,Glob,Grep` (the only built-in
    tools of the session) and `--strict-mcp-config` (no MCP server), `--allowedTools Read Glob Grep`,
    `--disallowedTools Bash Edit Write MultiEdit NotebookEdit WebFetch WebSearch` (a denial wins over the person's own
    settings of Claude Code, so the run stays read-only whatever `~/.claude` allows), the vault and the repositories of
    the commits as `--add-dir`, the working folder as for a hand-over. Another model answers once with the same prompt.
-4. The block is a proposal. The caller shows it and adds it to the task as a section only after a yes (tasks.nvim:
+5. The block is a proposal. The caller shows it and adds it to the task as a section only after a yes (tasks.nvim:
    `:Tasks agent <id> kind=review-done`); a proposed follow-up task is created only after a second yes.
 
 ## Decisions (`kind: prepare-decision`)
@@ -331,6 +341,7 @@ against a program of the person that means harm.
 | `jobs_model` | `AI_DESKTOP_JOBS_MODEL` | `claude-code` | the model of a job that names none |
 | `claude_cli` | `AI_DESKTOP_CLAUDE_CLI` | (PATH) | absolute path of Claude Code |
 | `tasks_cli` | `AI_DESKTOP_TASKS_CLI` | (PATH) | absolute path of the tasks command (`bin/tasks` of tasks.nvim) |
+| `testing_cli` | `AI_DESKTOP_TESTING_CLI` | (PATH) | absolute path of the testing command (`bin/testing` of testing.nvim), asked by a review for the hosted CI |
 
 The first two are in the dashboard under "Settings of the jobs"; all are in `GET/PUT /settings`.
 
@@ -405,7 +416,7 @@ dashboard"); an `Origin` proves nothing. Open on purpose: the ai.nvim contract (
 | The agent (Claude Code) | it writes in the vault and the repository of the area, runs `tasks` and `git` (commit and push as the person) | it runs as the person, in the folders of the task (the file tools; see below for git): in the repository of the area only in a git worktree of its run (made from `origin/main`, removed at the end), so its file tools never reach the shared checkout and a careless `git add -A` cannot take another session's uncommitted work into its commit (it shares the repository's refs, config and hooks, so `git -C` still reaches the checkout), with the tools of its list (the shell tool only for `tasks`, `git` and the `ci commit` / `ci land` of the checks, no web tool, no MCP server; print mode refuses the rest) and the person's own Claude Code settings. **This is no sandbox:** `git` with `Write` can start any program as the person (and so can `scripts/test.sh ci commit`, since the agent can write that file of the repository), e.g. a hook it writes into `.git/hooks` and then triggers with `git commit`, `core.hooksPath`, `core.sshCommand` or an alias `!...` it sets with `git config` (`git -c` for one call and `git push --no-verify` are refused since 2026-11-21, which stops a mistake, not this), and git reaches any remote it is told to; so whatever such a program can do (network, files outside the task's folders), a steered agent can do too; it claims under its own name (`ai-desktop:<job>`), so a task it holds shows who; a claim of somebody else stops it (the brief says so). A run is started by a family app with the secret or by the person in the dashboard, never by a page. Stop ends it with its whole process tree (a job object on Windows, a process group elsewhere), and so does the end of ai-desktop. |
 | The checks of a repository (`CLAUDE.md`) | a `CLAUDE.md` of the repository (of a foreign or steered stand too) names commands, and the brief passes them on as the checks (`checks.source = claude-md`) | they stay text in the brief: the allowed tools are a fixed list in ai-desktop (`agent::allowed_tools()`), never taken from the brief or the repository, so a file in the repository cannot decide which shell commands run without a question. The agent may run such a command only where the person's own Claude Code settings already allow it (e.g. their linters); anything else is refused in print mode, as before. The only check commands ai-desktop allows are `ci commit` and `ci land` (no `ci:*`: `ci trust` stays the person's). |
 | A task steering the agent (prompt injection) | text in a task file tells the agent to do something else | the tool list bounds what it can do directly, but not what a program started through git can do (row above): a steered agent can in effect run any program as the person. What it did through its tools is in the job's output, and its commits are in git; what such a program did is not necessarily. A task from a vault the person does not trust must not be handed over. |
-| The settings `claude_cli` / `tasks_cli` | a program sets them to another executable | only an absolute path, set through `PUT /settings`, which wants the control secret or a session token: neither a page (Origin, Host) nor a program of another account gets there. |
+| The settings `claude_cli` / `tasks_cli` / `testing_cli` | a program sets them to another executable | only an absolute path, set through `PUT /settings`, which wants the control secret or a session token: neither a page (Origin, Host) nor a program of another account gets there. |
 
 **Not covered:** a program running as the person (it has the secret, the vault and the person's Claude Code
 anyway); another user account on this machine as far as the ai.nvim contract goes (see the trust boundary);

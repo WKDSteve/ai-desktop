@@ -54,8 +54,10 @@ std::filesystem::path repo_dir(const std::string& vault, const std::string& repo
 // the limits above (said so), or a line why there is none (no repository here, no git, an unknown commit).
 std::string diffs(const std::string& vault, const std::vector<Commit>& commits);
 
-// The prompt of a review: what to do, the answer's form (with the markers), the task, the diffs.
-std::string prompt(const jobs::Request& request, const std::string& diffs, const std::string& job_id);
+// The prompt of a review: what to do, the answer's form (with the markers), the task, the diffs and, when `ci` is
+// not empty, the CI state of the commits (src/ci_status.hpp) with the rule for the block's line about it.
+std::string prompt(const jobs::Request& request, const std::string& diffs, const std::string& job_id,
+                   const std::string& ci = "");
 
 // The system text of a one-answer review (a model without tools).
 std::string system();
