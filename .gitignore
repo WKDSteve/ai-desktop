@@ -82,3 +82,6 @@ Testing/
 e2e/node_modules/
 e2e/test-results/
 e2e/playwright-report/
+
+# Python bytecode the hygiene checks leave behind
+__pycache__/

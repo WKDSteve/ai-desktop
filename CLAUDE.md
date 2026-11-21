@@ -36,3 +36,4 @@ Conventional subjects (`feat(scope): ...`, `test(...)`, `fix(...)`), a body that
   `dashboard/style.css` (→ `scrollbar-color`/`scrollbar-width`) and Enter handling of the prompt field (IME-safe
   submit, `isComposing`).
 - Rules: rules-vault ruleset `web` (plus the app rules `WEB-*` in ruleset `native`).
+- `.claude/settings.json` turns the tool's telemetry off and allows only `npx -y modern-web-guidance@latest *`.
