@@ -38,8 +38,14 @@ struct Removal {
 // Serialised and idempotent: the run's own end and a sweep may meet.
 Removal remove(const std::filesystem::path& root, const Worktree& worktree);
 
-// Removes every worktree whose record is in `root` (what an earlier ai-desktop left behind, or, at the end of
-// this one, what its runs did not clean up yet). Returns one line per worktree for the log.
+// The records in `root` now (a snapshot: a run that starts later is not in it).
+std::vector<std::filesystem::path> records(const std::filesystem::path& root);
+
+// Removes the worktree of each of `records` (what an earlier ai-desktop left behind, or, at the end of this one,
+// what its runs did not clean up yet); no other. Returns one line per record for the log.
+std::vector<std::string> sweep(const std::filesystem::path& root, const std::vector<std::filesystem::path>& records);
+
+// sweep() of every record in `root` now.
 std::vector<std::string> sweep(const std::filesystem::path& root);
 
 // The text of a removal for the job's output (one line, ends with a line break).

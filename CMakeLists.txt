@@ -105,6 +105,7 @@ if(AI_DESKTOP_BUILD_TESTS)
         tests/unit/test_secrets.cpp
         tests/unit/test_session.cpp
         tests/unit/test_usage.cpp
+        tests/unit/test_worktree.cpp
     )
     target_link_libraries(ai_desktop_tests PRIVATE ai_desktop_core)
     add_test(NAME ai_desktop_unit COMMAND ai_desktop_tests)

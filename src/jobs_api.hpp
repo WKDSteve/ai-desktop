@@ -45,7 +45,8 @@ void register_routes(httplib::Server& server, Hooks hooks);
 // (src/worktree.hpp); a commit on no remote stays on its branch. What cannot go now, the next start removes.
 void shutdown();
 
-// Removes, on a thread of its own, the worktrees an earlier ai-desktop left behind (a crash, a killed process).
+// Removes, on a thread of its own, the worktrees an earlier ai-desktop left behind (a crash, a killed process):
+// the records listed at the call, so a job started while the thread works keeps its worktree.
 // Called once the port is bound: a second start that finds the port taken must not touch the worktrees of the
 // server that holds it.
 void sweep_worktrees();

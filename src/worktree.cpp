@@ -206,19 +206,31 @@ Removal remove(const fs::path& root, const Worktree& worktree) {
     return result;
 }
 
-std::vector<std::string> sweep(const fs::path& root) {
-    std::vector<std::string> lines;
+std::vector<fs::path> records(const fs::path& root) {
+    std::vector<fs::path> out;
     std::error_code ec;
     if (!fs::is_directory(root, ec)) {
-        return lines;
+        return out;
     }
-    std::vector<fs::path> records;
-    for (const auto& entry : fs::directory_iterator(root, ec)) {
-        if (entry.path().extension() == ".json") {
-            records.push_back(entry.path());
+    for (fs::directory_iterator it(root, ec), end; !ec && it != end; it.increment(ec)) {
+        if (it->path().extension() == ".json") {
+            out.push_back(it->path());
         }
     }
+    return out;
+}
+
+std::vector<std::string> sweep(const fs::path& root) {
+    return sweep(root, records(root));
+}
+
+std::vector<std::string> sweep(const fs::path& root, const std::vector<fs::path>& records) {
+    std::vector<std::string> lines;
     for (const auto& file : records) {
+        std::error_code ec;
+        if (!fs::exists(file, ec)) {
+            continue;  // its run removed it since the snapshot
+        }
         Worktree worktree;
         if (!read_record(file, worktree) || worktree.dir.filename().u8string() + ".json" != file.filename().u8string()) {
             lines.push_back("unreadable record " + file.u8string() + " left as it is");

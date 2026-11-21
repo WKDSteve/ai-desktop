@@ -726,9 +726,11 @@ void shutdown() {
 }
 
 void sweep_worktrees() {
-    std::thread([] {
+    // The list now, before the server takes a request: the worktree of a job started meanwhile is never in it.
+    std::vector<std::filesystem::path> left = worktree::records(worktree_root());
+    std::thread([left = std::move(left)] {
         try {
-            for (const auto& line : worktree::sweep(worktree_root())) {
+            for (const auto& line : worktree::sweep(worktree_root(), left)) {
                 std::cout << "ai-desktop: left by an earlier run: " << line << "\n";
             }
         } catch (const std::exception& e) {
