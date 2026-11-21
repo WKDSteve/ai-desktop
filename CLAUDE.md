@@ -26,7 +26,7 @@ Conventional subjects (`feat(scope): ...`, `test(...)`, `fix(...)`), a body that
 
 ## Web platform
 - Browser Support: Baseline Widely available (`.mwgrc`; no `browserslist`, the dashboard has no package.json or
-  build). Newer features only behind feature detection with a fallback; polyfills only via dynamic `import()`.
+  build). Newer features only behind feature detection with a fallback; polyfills where browsers still in use need them (rather one too many), run only after the check: dynamic `import()`, or bundled in a `file://` page (rules-vault `BASE-02`).
 - Before writing or changing HTML, CSS or client-side JS, use the `modern-web-guidance` skill (`search` → `retrieve` →
   verify). Not for C++, backend, CI or build config.
 - For open-ended modernisation: `npx -y modern-web-guidance@latest legacy-scan dashboard --json`, check each finding
