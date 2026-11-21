@@ -77,6 +77,11 @@ std::vector<std::string> claude_args(const std::filesystem::path& brief_file, co
 // commands of the checks of brief 2: `ci commit` (per commit, and before the push) and `ci land`, each through
 // `scripts/test.sh` of the repository or the `testing` command.
 const std::vector<std::string>& allowed_tools();
+// The commands refused although `Bash(git:*)` would allow them (--disallowedTools, which wins over the allowed list;
+// decision of 2026-11-21): `git push --no-verify` (past the repository's pre-push hook) and `git -c` (a config value
+// for one call, e.g. core.hooksPath or core.sshCommand). A barrier against a mistake, not against a steered agent:
+// the rules match the start of the command only (docs/JOBS.md, Threat model).
+const std::vector<std::string>& disallowed_tools();
 // The built-in tools the agent's session has at all (--tools, comma-separated): the ones of allowed_tools(), no other.
 const std::string& tool_set();
 

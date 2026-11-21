@@ -110,6 +110,12 @@ TEST(agent_claude_args_limit_the_tools) {
                                     "Bash(testing ci land)", "Read", "Edit", "Write", "Glob", "Grep"}));
     const auto list = std::find(args.begin(), args.end(), "--allowedTools");
     CHECK(list != args.end() && std::vector<std::string>(list + 1, args.end()) == agent::allowed_tools());
+    // Refused although Bash(git:*) allows git (decision of 2026-11-21): the pre-push hook skipped, a config value
+    // for one call. The list stands right before --allowedTools, which ends it.
+    CHECK((agent::disallowed_tools() == std::vector<std::string>{"Bash(git push --no-verify:*)", "Bash(git -c:*)"}));
+    const auto refused = std::find(args.begin(), args.end(), "--disallowedTools");
+    CHECK(refused != args.end() && list != args.end() && refused < list &&
+          std::vector<std::string>(refused + 1, list) == agent::disallowed_tools());
     CHECK(!has("--dangerously-skip-permissions"));
     CHECK(!has("bypassPermissions"));
     CHECK_EQ(args.back(), agent::allowed_tools().back());  // the tool list is last

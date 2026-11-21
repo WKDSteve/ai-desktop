@@ -224,6 +224,11 @@ const std::vector<std::string>& allowed_tools() {
     return tools;
 }
 
+const std::vector<std::string>& disallowed_tools() {
+    static const std::vector<std::string> tools = {"Bash(git push --no-verify:*)", "Bash(git -c:*)"};
+    return tools;
+}
+
 const std::string& tool_set() {
     static const std::string tools = "Bash,Read,Edit,Write,Glob,Grep";
     return tools;
@@ -239,6 +244,11 @@ std::vector<std::string> claude_args(const fs::path& brief_file, const fs::path&
                                      "--add-dir", vault.u8string()};
     if (!model.empty()) {
         args.insert(args.end(), {"--model", model});
+    }
+    // The refused commands before the allowed list; each list takes every word up to the next option.
+    args.push_back("--disallowedTools");
+    for (const auto& tool : disallowed_tools()) {
+        args.push_back(tool);
     }
     // Last: the list of --allowedTools takes every word up to the next option.
     args.push_back("--allowedTools");

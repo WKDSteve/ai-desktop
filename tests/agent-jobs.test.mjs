@@ -137,6 +137,8 @@ describe("a job of the model claude-code", { skip: !existsSync(fakeClaude) && "b
     assert.deepEqual(run.args.slice(run.args.indexOf("--allowedTools") + 1),
       ["Bash(tasks:*)", "Bash(git:*)", "Bash(scripts/test.sh ci commit:*)", "Bash(testing ci commit:*)",
         "Bash(scripts/test.sh ci land)", "Bash(testing ci land)", "Read", "Edit", "Write", "Glob", "Grep"]);
+    assert.deepEqual(run.args.slice(run.args.indexOf("--disallowedTools") + 1, run.args.indexOf("--allowedTools")),
+      ["Bash(git push --no-verify:*)", "Bash(git -c:*)"], "the pre-push hook and git -c are refused");
     const briefFile = run.args[run.args.indexOf("--append-system-prompt-file") + 1];
     assert.ok(!existsSync(briefFile), "the brief file is removed after the run");
     assert.match(run.prompt, /## Akzeptanz/);
