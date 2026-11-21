@@ -757,7 +757,7 @@ void shutdown() {
         }
     }
     try {
-        for (const auto& line : worktree::sweep(worktree_root())) {
+        for (const auto& line : worktree::sweep(worktree_root(), "the end of ai-desktop")) {
             std::cout << "ai-desktop: " << line << "\n";
         }
     } catch (const std::exception& e) {
@@ -771,7 +771,8 @@ void sweep_worktrees() {
     std::vector<std::filesystem::path> left = worktree::records(worktree_root());
     std::thread([left = std::move(left)] {
         try {
-            for (const auto& line : worktree::sweep(worktree_root(), left)) {
+            const std::string when = "the start of ai-desktop after an end without cleanup";
+            for (const auto& line : worktree::sweep(worktree_root(), left, when)) {
                 std::cout << "ai-desktop: left by an earlier run: " << line << "\n";
             }
         } catch (const std::exception& e) {

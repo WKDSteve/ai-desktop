@@ -94,14 +94,6 @@ bool read_record(const fs::path& file, Worktree& out) {
     return true;
 }
 
-long count_lines(const std::string& text) {
-    long lines = 0;
-    for (const char c : text) {
-        lines += c == '\n' ? 1 : 0;
-    }
-    return lines;
-}
-
 }  // namespace
 
 std::string name_of(const std::string& job_id, unsigned long long run) {
@@ -149,7 +141,88 @@ bool create(const fs::path& root, const fs::path& repo, const std::string& name,
     return true;
 }
 
-Removal remove(const fs::path& root, const Worktree& worktree) {
+namespace {
+
+// The paths of `git status --porcelain` (one per line, `XY path`; a rename's new path).
+std::vector<std::string> status_paths(const std::string& porcelain) {
+    std::vector<std::string> paths;
+    std::size_t pos = 0;
+    while (pos < porcelain.size()) {
+        const std::size_t eol = std::min(porcelain.find('\n', pos), porcelain.size());
+        std::string line = porcelain.substr(pos, eol - pos);
+        pos = eol + 1;
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.size() > 3) {
+            std::string path = line.substr(3);
+            if (const std::size_t arrow = path.find(" -> "); arrow != std::string::npos) path = path.substr(arrow + 4);
+            paths.push_back(path);
+        }
+    }
+    return paths;
+}
+
+// Saves what the agent left uncommitted as a commit on the job's branch (decision of 2026-11-21): staged inside the
+// worktree only, so .gitignore holds (no ignored file, no .env), committed the way every commit of the person is
+// (signed when their config says so, with the repository's hooks: no --no-gpg-sign, no --no-verify). Never pushed.
+// "" and `sha`/`count` (0 when there was nothing), or why it could not be saved.
+std::string save_leftovers(const fs::path& program, const Worktree& worktree, const std::string& when,
+                           std::string& sha, long& count) {
+    const Git status = git(program, worktree.dir, {"status", "--porcelain", "--untracked-files=all"},
+                           std::chrono::seconds(60));
+    if (!status.ok()) {
+        return "git status failed: " + first_line(status.error);
+    }
+    if (status_paths(status.out).empty()) {
+        return "";
+    }
+    const Git add = git(program, worktree.dir, {"add", "--all", "--", "."}, std::chrono::seconds(120));
+    if (!add.ok()) {
+        return "git add failed: " + first_line(add.error);
+    }
+    const Git staged = git(program, worktree.dir, {"diff", "--cached", "--name-only"}, std::chrono::seconds(60));
+    if (!staged.ok()) {
+        return "git diff --cached failed: " + first_line(staged.error);
+    }
+    std::vector<std::string> files;
+    {
+        std::size_t pos = 0;
+        while (pos < staged.out.size()) {
+            const std::size_t eol = std::min(staged.out.find('\n', pos), staged.out.size());
+            const std::string file = trimmed(staged.out.substr(pos, eol - pos));
+            pos = eol + 1;
+            if (!file.empty()) files.push_back(file);
+        }
+    }
+    if (files.empty()) {
+        return "";  // only what .gitignore keeps out
+    }
+    const std::string name = worktree.dir.filename().u8string();  // job-<id>-<run>
+    const std::string job = name.size() > 4 ? name.substr(4, name.rfind('-') - 4) : name;
+    std::string body = "Files:\n";
+    for (std::size_t i = 0; i < files.size() && i < 200; ++i) {
+        body += "- " + files[i] + "\n";
+    }
+    if (files.size() > 200) {
+        body += "- ... and " + std::to_string(files.size() - 200) + " more\n";
+    }
+    body += "\nNobody checked these changes: the agent left them uncommitted, and ai-desktop saved them as they were "
+            "at " + when + " so they are not lost. Not pushed; not on main.";
+    const Git commit = git(program, worktree.dir,
+                           {"commit", "--quiet", "-m", "wip(ai-desktop job " + job + "): uncommitted changes at " + when,
+                            "-m", body},
+                           std::chrono::seconds(300));
+    if (!commit.ok()) {
+        return "git commit failed: " + first_line(commit.error.empty() ? commit.out : commit.error);
+    }
+    const Git head = git(program, worktree.dir, {"rev-parse", "--short=12", "HEAD"}, std::chrono::seconds(20));
+    sha = trimmed(head.out);
+    count = static_cast<long>(files.size());
+    return "";
+}
+
+}  // namespace
+
+Removal remove(const fs::path& root, const Worktree& worktree, const std::string& when) {
     std::lock_guard<std::mutex> lock(g_mutex);
     Removal result;
     const fs::path record = record_of(root, worktree.dir.filename().u8string());
@@ -171,9 +244,11 @@ Removal remove(const fs::path& root, const Worktree& worktree) {
         return result;
     }
     if (fs::is_directory(worktree.dir, ec)) {
-        const Git status = git(program, worktree.dir, {"status", "--porcelain", "--untracked-files=all"},
-                               std::chrono::seconds(60));
-        result.dropped = status.ok() ? count_lines(status.out) : 0;
+        if (const std::string why = save_leftovers(program, worktree, when, result.wip, result.saved); !why.empty()) {
+            // Nothing is thrown away that could not be saved: the worktree stays for a look, and so does its record.
+            result.error = "the uncommitted changes could not be saved (" + why + "); the worktree stays";
+            return result;
+        }
         git(program, worktree.repo, {"worktree", "remove", "--force", "--force", worktree.dir.u8string()},
             std::chrono::seconds(120));
         if (fs::exists(worktree.dir, ec)) {
@@ -220,11 +295,11 @@ std::vector<fs::path> records(const fs::path& root) {
     return out;
 }
 
-std::vector<std::string> sweep(const fs::path& root) {
-    return sweep(root, records(root));
+std::vector<std::string> sweep(const fs::path& root, const std::string& when) {
+    return sweep(root, records(root), when);
 }
 
-std::vector<std::string> sweep(const fs::path& root, const std::vector<fs::path>& records) {
+std::vector<std::string> sweep(const fs::path& root, const std::vector<fs::path>& records, const std::string& when) {
     std::vector<std::string> lines;
     for (const auto& file : records) {
         std::error_code ec;
@@ -236,7 +311,7 @@ std::vector<std::string> sweep(const fs::path& root, const std::vector<fs::path>
             lines.push_back("unreadable record " + file.u8string() + " left as it is");
             continue;
         }
-        const Removal removal = remove(root, worktree);
+        const Removal removal = remove(root, worktree, when);
         if (removal.done) {
             lines.push_back(trimmed(describe(worktree, removal)));
         }
@@ -249,8 +324,9 @@ std::string describe(const Worktree& worktree, const Removal& removal) {
         return "▸ worktree " + worktree.dir.u8string() + ": " + removal.error + " (the next start tries again)\n";
     }
     std::string text = "▸ worktree " + worktree.dir.u8string() + " removed";
-    if (removal.dropped > 0) {
-        text += ", " + std::to_string(removal.dropped) + " uncommitted file(s) dropped with it";
+    if (!removal.wip.empty()) {
+        text += ", " + std::to_string(removal.saved) + " uncommitted file(s) saved first as the unchecked WIP commit " +
+                removal.wip;
     }
     if (removal.unpushed > 0) {
         text += "; " + std::to_string(removal.unpushed) + " commit(s) on no remote stay on the branch " +

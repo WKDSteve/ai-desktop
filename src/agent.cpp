@@ -303,9 +303,10 @@ std::string prompt(const jobs::Request& request, const std::string& by, const st
     if (!branch.empty()) {
         text += "You work in a git worktree of your own (the current folder, branch " + branch +
                 ", made from origin/main), not in the shared checkout of the repository, where other sessions keep "
-                "uncommitted work: change and commit only here. Check and deliver as the checks in your system prompt say "
-                "(without them: `git pull --rebase`, then `git push origin HEAD:main`). When the run ends the worktree is removed: uncommitted changes go with "
-                "it, commits that are on no remote stay on the branch " + branch + ". ";
+                "uncommitted work: change and commit only here. Check and deliver as the checks in your system "
+                "prompt say (without them: `git pull --rebase`, then `git push origin HEAD:main`). When the run ends "
+                "the worktree is removed: what you left uncommitted is kept as an unchecked WIP commit, and commits "
+                "that are on no remote stay on the branch " + branch + ". Commit your work yourself. ";
     }
     text += "Follow the workflow of the tasks family in your system prompt with the name " + by +
             ": first `tasks claim " + request.task_id + " --by=" + by +

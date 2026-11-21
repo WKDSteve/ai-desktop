@@ -30,23 +30,31 @@ bool create(const std::filesystem::path& root, const std::filesystem::path& repo
 struct Removal {
     bool done = false;              // there was something to remove (false: already removed, e.g. by the sweep)
     long unpushed = 0;              // commits of the branch that are on no remote: the branch is kept
-    long dropped = 0;               // files with uncommitted changes that went with the worktree
+    std::string wip;                // the WIP commit of what the agent left uncommitted (short sha), if there was any
+    long saved = 0;                 // the files in it
     std::string error;              // a step that failed (the record stays then, the next sweep tries again)
 };
 
-// Removes the worktree and its record; deletes the branch unless it has commits that are on no remote.
+// Removes the worktree and its record; deletes the branch unless it has commits that are on no remote. What the agent
+// left uncommitted is first saved as a commit on the job's branch (decision of 2026-11-21): staged inside the worktree
+// (.gitignore holds), with the subject `wip(ai-desktop job <id>): uncommitted changes at <when>`, the files and "nobody
+// checked these" in the body, signed and with the hooks like every commit of the person, never pushed; the branch then
+// stays. When that commit fails (a hook, the signature), nothing is removed: the worktree stays and `error` says why.
 // Serialised and idempotent: the run's own end and a sweep may meet.
-Removal remove(const std::filesystem::path& root, const Worktree& worktree);
+Removal remove(const std::filesystem::path& root, const Worktree& worktree,
+               const std::string& when = "the end of the run");
 
 // The records in `root` now (a snapshot: a run that starts later is not in it).
 std::vector<std::filesystem::path> records(const std::filesystem::path& root);
 
 // Removes the worktree of each of `records` (what an earlier ai-desktop left behind, or, at the end of this one,
 // what its runs did not clean up yet); no other. Returns one line per record for the log.
-std::vector<std::string> sweep(const std::filesystem::path& root, const std::vector<std::filesystem::path>& records);
+// `when` names the moment in the subject of a WIP commit.
+std::vector<std::string> sweep(const std::filesystem::path& root, const std::vector<std::filesystem::path>& records,
+                               const std::string& when = "a sweep of ai-desktop");
 
 // sweep() of every record in `root` now.
-std::vector<std::string> sweep(const std::filesystem::path& root);
+std::vector<std::string> sweep(const std::filesystem::path& root, const std::string& when = "a sweep of ai-desktop");
 
 // The text of a removal for the job's output (one line, ends with a line break).
 std::string describe(const Worktree& worktree, const Removal& removal);

@@ -38,7 +38,8 @@ function world({ origin = true } = {}) {
   mkdirSync(checkout);
   git(checkout, ["init", "-q", "-b", "main"]);
   writeFileSync(path.join(checkout, "README.md"), "the readme\n");
-  git(checkout, ["add", "README.md"]);
+  writeFileSync(path.join(checkout, ".gitignore"), ".env\n");
+  git(checkout, ["add", "README.md", ".gitignore"]);
   git(checkout, ["commit", "-q", "-m", "initial"]);
   const bare = path.join(root, "origin.git");
   if (origin) {
@@ -143,7 +144,7 @@ describe("the worktree of a hand-over", { skip: !existsSync(fakeClaude) && "buil
 
       // What reached origin: the agent's file, on top of the commit of main, and nothing of the other session.
       const files = w.git(w.bare, ["ls-tree", "-r", "--name-only", "main"]).split("\n").sort();
-      assert.deepEqual(files, ["README.md", "agent.txt"]);
+      assert.deepEqual(files, [".gitignore", "README.md", "agent.txt"]);
       assert.equal(w.git(w.bare, ["show", "main:README.md"]), "the readme");
       assert.equal(w.git(w.bare, ["log", "-1", "--format=%s", "main"]), "feat: the work of the agent");
       assertCheckoutUntouched(w, head);
@@ -172,7 +173,7 @@ describe("the worktree of a hand-over", { skip: !existsSync(fakeClaude) && "buil
       const branch = `ai-desktop/job-${id}-1`;
       assert.deepEqual(branches(w), [branch]);
       assert.equal(w.git(w.checkout, ["log", "-1", "--format=%s", branch]), "feat: the work of the agent");
-      assert.deepEqual(w.git(w.checkout, ["ls-tree", "-r", "--name-only", branch]).split("\n").sort(), ["README.md", "agent.txt"]);
+      assert.deepEqual(w.git(w.checkout, ["ls-tree", "-r", "--name-only", branch]).split("\n").sort(), [".gitignore", "README.md", "agent.txt"]);
       assert.ok(!existsSync(path.join(w.worktrees, `job-${id}-1`)), "the folder goes all the same");
       assert.match(job.output, new RegExp(`1 commit\\(s\\) on no remote stay on the branch ${branch}`));
       assert.equal(w.git(w.bare, ["log", "-1", "--format=%s", "main"]), "initial", "nothing pushed");
@@ -251,6 +252,68 @@ describe("the worktree of a hand-over", { skip: !existsSync(fakeClaude) && "buil
       w.cleanup();
     }
   });
+
+  it("what the agent left uncommitted is kept as an unchecked WIP commit on the job's branch, never on main", async () => {
+    const w = world();
+    const server = await serverFor(w, { FAKE_CLAUDE_DIRTY: "1" });
+    try {
+      const head = w.git(w.checkout, ["rev-parse", "HEAD"]);
+      const res = await server.post("/jobs", { ...TASK, vault: w.vault }, auth(server));
+      const id = res.json.job_id;
+      const job = await waitFor(server, id, (j) => j.status !== "running");
+      assert.equal(job.status, "done", JSON.stringify(job));
+      const branch = `ai-desktop/job-${id}-1`;
+      assert.deepEqual(branches(w), [branch], "the branch stays");
+      assert.equal(w.git(w.checkout, ["log", "-1", "--format=%s", branch]),
+        `wip(ai-desktop job ${id}): uncommitted changes at the end of the run`);
+      const bodyText = w.git(w.checkout, ["log", "-1", "--format=%b", branch]);
+      assert.match(bodyText, /- half\.txt/);
+      assert.match(bodyText, /Nobody checked these changes/);
+      // .gitignore holds: the secret is not in the commit.
+      assert.deepEqual(w.git(w.checkout, ["ls-tree", "-r", "--name-only", branch]).split("\n").sort(),
+        [".gitignore", "README.md", "half.txt"]);
+      assert.equal(w.git(w.bare, ["log", "-1", "--format=%s", "main"]), "initial", "nothing pushed, main untouched");
+      assert.ok(!existsSync(path.join(w.worktrees, `job-${id}-1`)), "the worktree is gone");
+      assert.match(job.output, /1 uncommitted file\(s\) saved first as the unchecked WIP commit [0-9a-f]{12}/);
+      assert.match(job.output, new RegExp(`1 commit\\(s\\) on no remote stay on the branch ${branch}`));
+      assertCheckoutUntouched(w, head);
+    } finally {
+      await server.stop();
+      w.cleanup();
+    }
+  });
+
+  for (const [name, setup, pattern] of [
+    ["a hook of the repository refuses it", (w) => {
+      writeFileSync(path.join(w.checkout, ".git", "hooks", "pre-commit"), "#!/bin/sh\necho refused by the hook >&2\nexit 1\n");
+    }, /could not be saved \(git commit failed: refused by the hook\); the worktree stays/],
+    ["the signature fails", (w) => {
+      // Signing on (after the world's own commits), with a gpg that is not there: never committed unsigned.
+      const noGpg = path.join(os.tmpdir(), "ai-desktop-no-gpg", "gpg.exe").replaceAll("\\", "/");
+      writeFileSync(w.gitEnv.GIT_CONFIG_GLOBAL,
+        `[user]\n\tname = Test\n\temail = test@example.invalid\n[commit]\n\tgpgsign = true\n[gpg]\n\tprogram = ${noGpg}\n`);
+    }, /could not be saved \(git commit failed: [^)]*\); the worktree stays/],
+  ]) {
+    it(`when the WIP commit fails (${name}), nothing is thrown away: the worktree stays`, async () => {
+      const w = world();
+      setup(w);
+      const server = await serverFor(w, { FAKE_CLAUDE_DIRTY: "1" });
+      try {
+        const res = await server.post("/jobs", { ...TASK, vault: w.vault }, auth(server));
+        const id = res.json.job_id;
+        const job = await waitFor(server, id, (j) => j.status !== "running");
+        const dir = path.join(w.worktrees, `job-${id}-1`);
+        assert.match(job.output, pattern);
+        assert.ok(existsSync(path.join(dir, "half.txt")), "the uncommitted work is still there");
+        assert.ok(existsSync(path.join(w.worktrees, `job-${id}-1.json`)), "its record stays");
+        assert.equal(w.git(w.checkout, ["log", "-1", "--format=%s", `ai-desktop/job-${id}-1`]), "initial", "no commit was made");
+        assert.equal(w.git(w.bare, ["log", "-1", "--format=%s", "main"]), "initial");
+      } finally {
+        await server.stop();
+        w.cleanup();
+      }
+    });
+  }
 
   it("a repository without origin/main: the agent does not run in the shared checkout", async () => {
     const w = world({ origin: false });
