@@ -716,13 +716,20 @@ int main(int argc, char** argv) {
     svr.Post("/decision", [](const httplib::Request& req,
                               httplib::Response& res) {
         auto body = json::parse(req.body, nullptr, false);
-        if (body.is_discarded()) {
+        if (body.is_discarded() || !body.is_object()) {
             res.status = 400;
             res.set_content("{\"error\":\"invalid json\"}", "application/json");
             return;
         }
-        std::string id  = body.value("id",     "unknown");
-        std::string ans = body.value("answer", "unknown");
+        // The id is the timestamp of the decision point, which the dashboard sends back as the number it got; a
+        // string is taken too. Anything else (or a missing field) is "unknown" instead of an exception (HTTP 500).
+        std::string id  = "unknown";
+        if (body.contains("id") && body["id"].is_string()) {
+            id = body["id"].get<std::string>();
+        } else if (body.contains("id") && body["id"].is_number()) {
+            id = body["id"].dump();
+        }
+        std::string ans = body.contains("answer") && body["answer"].is_string() ? body["answer"].get<std::string>() : "unknown";
         push_event("decision_answer", "human",
                    "Decision [" + id + "] -> " + ans);
         res.set_content("{\"ok\":true}", "application/json");
