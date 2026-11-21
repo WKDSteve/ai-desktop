@@ -15,8 +15,9 @@
 namespace ai_desktop::agent {
 
 constexpr const char* kModel = "claude-code";
-// The brief and contract this version of ai-desktop was written against (tasks-agent-brief/1).
-constexpr int kBriefVersion = 1;
+// The brief and contract this version of ai-desktop was written against (tasks-agent-brief/1). Brief 2 has the
+// checks of a repository (`agent-brief --repo=<dir>`, field `checks`), which the allowed tools are made for.
+constexpr int kBriefVersion = 2;
 constexpr int kContractSchema = 1;
 
 // `claude-code` or `claude-code:<model>`.
@@ -48,27 +49,33 @@ struct Brief {
     std::string engine_version;
     std::string markdown;
     std::string note;  // e.g. a newer brief than this ai-desktop knows
+    std::string checks_source;  // `checks.source` (testing, claude-md, none) of a brief for a repository; else empty
 };
 
 // Checks the JSON of `tasks agent-brief --format=json`: schema tasks-agent-brief/1, brief_version and
 // contract_schema at least the ones above (an older engine is refused), a Markdown text. 422 with the reason.
 config::Status parse_brief(const std::string& text, Brief& out);
 
-// Runs `tasks agent-brief --format=json --by=<by>` (30 s at most) and parses it.
-config::Status fetch_brief(const TasksCommand& tasks, const std::string& by, Brief& out);
+// Runs `tasks agent-brief --format=json --by=<by>` (30 s at most), with `--repo=<repo>` when one is given (the
+// run's worktree: the brief then has the checks of that repository), and parses it.
+config::Status fetch_brief(const TasksCommand& tasks, const std::string& by, Brief& out,
+                           const std::filesystem::path& repo = {});
 
 // The folder the agent works in: the repository of the area beside the vault (`<vault>/../<area>` with a `.git`),
 // else the vault. Empty and `error` when the vault is not an existing absolute folder.
 std::filesystem::path work_dir(const std::string& vault, const std::string& area, std::string* error);
 
 // The arguments of `claude`: print mode, stream-json, the brief appended to the system prompt from a file, only the
-// built-in tools of tool_set() and no MCP server, the allowed tools (the tasks command, git, read and edit; nothing
-// else is asked for, so in print mode nothing else runs), the vault as an extra folder, the model when one is named.
-// The prompt goes on stdin.
+// built-in tools of tool_set() and no MCP server, the allowed tools (the tasks command, git, the checks of the CI
+// rhythm, read and edit; nothing else is asked for, so in print mode nothing else runs), the vault as an extra
+// folder, the model when one is named. The prompt goes on stdin.
 std::vector<std::string> claude_args(const std::filesystem::path& brief_file, const std::filesystem::path& vault,
                                      const std::string& model);
 
-// The tools the agent may use (in --allowedTools).
+// The tools the agent may use (in --allowedTools): a fixed list, never taken from the brief or the repository (a
+// CLAUDE.md of a steered stand must not decide which commands run without a question). Beyond `tasks` and `git` the
+// commands of the checks of brief 2: `ci commit` (per commit, and before the push) and `ci land`, each through
+// `scripts/test.sh` of the repository or the `testing` command.
 const std::vector<std::string>& allowed_tools();
 // The built-in tools the agent's session has at all (--tools, comma-separated): the ones of allowed_tools(), no other.
 const std::string& tool_set();

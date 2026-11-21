@@ -117,7 +117,8 @@ describe("a job of the model claude-code", { skip: !existsSync(fakeClaude) && "b
     assert.equal(job.status, "done", JSON.stringify(job));
     assert.equal(job.model, "claude-code", "jobs_model is claude-code unless set");
     assert.equal(job.runner, "claude-code");
-    assert.deepEqual(job.brief, { brief_version: 1, contract_schema: 1, engine_version: "fake-0" });
+    assert.deepEqual(job.brief, { brief_version: 2, contract_schema: 1, engine_version: "fake-0" },
+      "no repository of the area: no --repo, no checks");
     assert.match(job.output, /Claude Code \(fake-model\)/);
     assert.match(job.output, /Bash: tasks claim demo\/first-task/);
     assert.match(job.output, /Did the work of demo\/first-task\./);
@@ -134,7 +135,8 @@ describe("a job of the model claude-code", { skip: !existsSync(fakeClaude) && "b
     assert.ok(run.args.includes("stream-json"));
     assert.ok(!run.args.includes("--dangerously-skip-permissions"));
     assert.deepEqual(run.args.slice(run.args.indexOf("--allowedTools") + 1),
-      ["Bash(tasks:*)", "Bash(git:*)", "Read", "Edit", "Write", "Glob", "Grep"]);
+      ["Bash(tasks:*)", "Bash(git:*)", "Bash(scripts/test.sh ci commit:*)", "Bash(testing ci commit:*)",
+        "Bash(scripts/test.sh ci land)", "Bash(testing ci land)", "Read", "Edit", "Write", "Glob", "Grep"]);
     const briefFile = run.args[run.args.indexOf("--append-system-prompt-file") + 1];
     assert.ok(!existsSync(briefFile), "the brief file is removed after the run");
     assert.match(run.prompt, /## Akzeptanz/);
@@ -242,6 +244,7 @@ describe("Claude Code runs that end otherwise", { skip: !existsSync(fakeClaude) 
   for (const [name, env, worldOptions, pattern] of [
     ["an engine without agent-brief", { FAKE_TASKS_NO_BRIEF: "1" }, {}, /agent-brief failed/],
     ["an older engine", { FAKE_TASKS_CONTRACT: "0" }, {}, /older than ai-desktop expects/],
+    ["a brief without checks (brief 1)", { FAKE_TASKS_BRIEF_VERSION: "1" }, {}, /older than ai-desktop expects/],
     ["no Claude Code", {}, { claude: path.join(os.tmpdir(), `no-such-claude${exe}`) }, /claude_cli names no file/],
   ]) {
     it(`with ${name} the job answers once and says why`, async () => {

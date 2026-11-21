@@ -1,6 +1,9 @@
 // A stand-in for the tasks command of tasks.nvim, for the tests of ai-desktop (never installed).
 //
-//   fake_tasks agent-brief --format=json --by=<name>   a brief of the form tasks-agent-brief/1
+//   fake_tasks agent-brief --format=json --by=<name> [--repo=<dir>]
+//                                                      a brief of the form tasks-agent-brief/1 (brief 2); with --repo
+//                                                      (a folder, else exit 2) its `checks`; each call is appended
+//                                                      as {args} to $FAKE_TASKS_BRIEF_LOG
 //   fake_tasks echo-args <args...>                     each argument on a line of its own (the quoting test)
 //   fake_tasks echo-env <NAME>                         the value of a variable
 //   fake_tasks sleep <ms>                              waits (the timeout test)
@@ -52,16 +55,38 @@ int main(int argc, char** argv) {
             return 2;
         }
         std::string by = "ai-desktop:<job>";
+        std::string repo;
         for (const auto& a : args) {
             if (a.rfind("--by=", 0) == 0) by = a.substr(5);
+            if (a.rfind("--repo=", 0) == 0) repo = a.substr(7);
+        }
+        if (const std::string log = env("FAKE_TASKS_BRIEF_LOG"); !log.empty()) {
+            std::ofstream out(std::filesystem::u8path(log), std::ios::app | std::ios::binary);
+            out << nlohmann::json({{"args", args}}).dump() << "\n";
+        }
+        std::error_code ec;
+        if (!repo.empty() && !std::filesystem::is_directory(std::filesystem::u8path(repo), ec)) {
+            std::cerr << "tasks: --repo is no folder: " << repo << "\n";
+            return 2;
         }
         nlohmann::ordered_json doc;
-        doc["brief_version"] = std::atoi(env("FAKE_TASKS_BRIEF_VERSION", "1").c_str());
+        doc["brief_version"] = std::atoi(env("FAKE_TASKS_BRIEF_VERSION", "2").c_str());
         doc["by"] = by;
+        if (!repo.empty()) {
+            // The checks section of brief 2 (tasks.nvim agent-brief --repo), for a repository with the testing tools.
+            doc["checks"] = {{"source", "testing"},
+                             {"land", false},
+                             {"per_commit", "testing ci commit <sha> --quick -- --cached"},
+                             {"before_push", "testing ci commit HEAD --base=origin/main -- --cached"},
+                             {"sync", "git pull --rebase origin main"},
+                             {"review", "git log origin/main..HEAD"},
+                             {"push", "git push origin HEAD:main"}};
+        }
         doc["contract_schema"] = std::atoi(env("FAKE_TASKS_CONTRACT", "1").c_str());
         doc["engine_version"] = "fake-0";
         doc["markdown"] = "# Tasks family (fake)\n\nClaim first: `tasks claim <id> --by=" + by +
-                          "`; finish: `tasks done <id> --by=" + by + "`.\n";
+                          "`; finish: `tasks done <id> --by=" + by + "`.\n" +
+                          (repo.empty() ? "" : "\n## Checks (--repo=" + repo + ")\n");
         doc["plugin"] = "tasks.nvim";
         doc["schema"] = "tasks-agent-brief/1";
         std::cout << doc.dump() << "\n";

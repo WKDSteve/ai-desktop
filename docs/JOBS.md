@@ -97,9 +97,13 @@ this ai-desktop) and the statuses `running`, `done`, `failed`, `cancelled`.
 **Claude Code (`claude-code`).** A job of the tasks family is worked on by Claude Code headless, started by
 ai-desktop (`src/agent.cpp`, `src/process.cpp`):
 
-1. The brief: `tasks agent-brief --format=json --by=ai-desktop:<job id>` (tasks.nvim, `docs/COMMANDS.md` there). Its
-   `schema` must be `tasks-agent-brief/1`, `brief_version` and `contract_schema` at least 1: an older engine is
-   recognised and refused (the job then answers once and says so); a newer one is used and named in `note`.
+1. The brief: `tasks agent-brief --format=json --by=ai-desktop:<job id>` (tasks.nvim, `docs/COMMANDS.md` there),
+   with `--repo=<worktree>` when the run has a worktree (4. below, made first): the brief then has a section on the
+   checks of that repository (`checks`: from testing.nvim's `ci commit` and `ci land`, from its `CLAUDE.md`, or
+   none), which the agent follows before it pushes. Its `schema` must be `tasks-agent-brief/1`, `brief_version` at
+   least 2 (the first with the checks) and `contract_schema` at least 1: an older engine is recognised and refused
+   (the job then answers once and says so); a newer one is used and named in `note`. The job's `brief` names the
+   `checks` source it got.
 2. The tasks command: the setting `tasks_cli` (an absolute path), else `tasks` on `PATH`. The `bin/tasks` or
    `bin/tasks.cmd` of a tasks.nvim checkout runs as `nvim -n -i NONE --headless -u NONE -l <checkout>/scripts/tasks.lua`
    (no `cmd.exe` or `sh` in between); any other file must be a program (`.exe` on Windows).
@@ -110,8 +114,8 @@ ai-desktop (`src/agent.cpp`, `src/process.cpp`):
    there, and two runs may work in the same repository at once): ai-desktop runs `git fetch origin main` (a failure
    is said in the output; the last known `origin/main` is used) and `git worktree add -b ai-desktop/job-<id>-<run>
    --track <config>/job-worktrees/job-<id>-<run> origin/main` (`src/worktree.cpp`; git never asks for anything:
-   `GIT_TERMINAL_PROMPT=0`). The prompt names the branch and says how to deliver: `git pull --rebase`, then
-   `git push origin HEAD:main`. A repository without `origin/main`, or a worktree git refuses, fails the job: the
+   `GIT_TERMINAL_PROMPT=0`). The prompt names the branch and says to deliver as the checks of the brief say
+   (without them: `git pull --rebase`, then `git push origin HEAD:main`). A repository without `origin/main`, or a worktree git refuses, fails the job: the
    agent never falls back to the shared checkout. When the run ends (done, failed, cancelled) the worktree goes
    (`git worktree remove --force`), its uncommitted changes with it (the output counts them); the branch is deleted
    when every commit of it is on a remote (a push updated `origin/main`), else it stays and the output names it.
@@ -121,8 +125,15 @@ ai-desktop (`src/agent.cpp`, `src/process.cpp`):
    `TASKS_VAULT`. Reviews, decisions and plan splits stay read-only in the checkout (below): they write nothing.
 5. The call: `claude -p --output-format stream-json --verbose --append-system-prompt-file <brief>
    --permission-mode default --tools Bash,Read,Edit,Write,Glob,Grep --strict-mcp-config --add-dir <vault>
-   [--model <m>] --allowedTools "Bash(tasks:*)" "Bash(git:*)" Read Edit Write Glob Grep`, the prompt (the task, its
-   id, the claim name `ai-desktop:<job id>`, what to do: claim, work, done or unclaim) on stdin. The folder of the tasks command comes first on the agent's `PATH`. No
+   [--model <m>] --allowedTools "Bash(tasks:*)" "Bash(git:*)" "Bash(scripts/test.sh ci commit:*)"
+   "Bash(testing ci commit:*)" "Bash(scripts/test.sh ci land)" "Bash(testing ci land)" Read Edit Write Glob Grep`,
+   the prompt (the task, its id, the claim name `ai-desktop:<job id>`, what to do: claim, work, done or unclaim) on
+   stdin. The four `ci` entries are the commands of the checks of brief 2, through the repository's
+   `scripts/test.sh` or the `testing` command: `ci commit <sha> --quick` after each commit, `ci commit HEAD
+   --base=origin/main` before the push, and `ci land` for a repository that lands through its hosted CI (it pushes
+   itself). Nothing wider (no `ci:*`, which would also allow `ci trust`), and the list is fixed in ai-desktop: it
+   never takes commands from the brief or the repository (Threat model). The folder of the tasks command comes
+   first on the agent's `PATH`. No
    `--dangerously-skip-permissions`, no `bypassPermissions`: in print mode a tool outside the list is refused, and the
    person's own settings of Claude Code (`~/.claude`) apply as in any session of theirs. `--tools` is the set of
    built-in tools the session has at all: without it Claude Code also brings Task, Workflow, Monitor, EnterWorktree,
@@ -389,7 +400,8 @@ dashboard"); an `Origin` proves nothing. Open on purpose: the ai.nvim contract (
 | A cloud provider | gets a private task | only after the person said yes in the dashboard; a local model needs no question. |
 | A review that writes | the review agent changes the task or the code it checks | the session has only Read, Glob and Grep (`--tools`) and no MCP server (`--strict-mcp-config`), the writing ones are refused explicitly as well (`--disallowedTools`), no shell; ai-desktop runs only `git show` itself; the result goes to the task only after the person's yes. |
 | Focus theft | a job steals the focus at a bad moment | ai-desktop never takes the focus on its own: only with the right the sending app granted at the person's click. |
-| The agent (Claude Code) | it writes in the vault and the repository of the area, runs `tasks` and `git` (commit and push as the person) | it runs as the person, in the folders of the task (the file tools; see below for git): in the repository of the area only in a git worktree of its run (made from `origin/main`, removed at the end), so its file tools never reach the shared checkout and a careless `git add -A` cannot take another session's uncommitted work into its commit (it shares the repository's refs, config and hooks, so `git -C` still reaches the checkout), with the tools of its list (the shell tool only for `tasks` and `git`, no web tool, no MCP server; print mode refuses the rest) and the person's own Claude Code settings. **This is no sandbox:** `git` with `Write` can start any program as the person, e.g. a hook it writes into `.git/hooks` and then triggers with `git commit`, `git -c core.hooksPath=...`, `git -c core.sshCommand=...` or an alias `!...` it sets with `git config`, and git reaches any remote it is told to; so whatever such a program can do (network, files outside the task's folders), a steered agent can do too; it claims under its own name (`ai-desktop:<job>`), so a task it holds shows who; a claim of somebody else stops it (the brief says so). A run is started by a family app with the secret or by the person in the dashboard, never by a page. Stop ends it with its whole process tree (a job object on Windows, a process group elsewhere), and so does the end of ai-desktop. |
+| The agent (Claude Code) | it writes in the vault and the repository of the area, runs `tasks` and `git` (commit and push as the person) | it runs as the person, in the folders of the task (the file tools; see below for git): in the repository of the area only in a git worktree of its run (made from `origin/main`, removed at the end), so its file tools never reach the shared checkout and a careless `git add -A` cannot take another session's uncommitted work into its commit (it shares the repository's refs, config and hooks, so `git -C` still reaches the checkout), with the tools of its list (the shell tool only for `tasks`, `git` and the `ci commit` / `ci land` of the checks, no web tool, no MCP server; print mode refuses the rest) and the person's own Claude Code settings. **This is no sandbox:** `git` with `Write` can start any program as the person (and so can `scripts/test.sh ci commit`, since the agent can write that file of the repository), e.g. a hook it writes into `.git/hooks` and then triggers with `git commit`, `git -c core.hooksPath=...`, `git -c core.sshCommand=...` or an alias `!...` it sets with `git config`, and git reaches any remote it is told to; so whatever such a program can do (network, files outside the task's folders), a steered agent can do too; it claims under its own name (`ai-desktop:<job>`), so a task it holds shows who; a claim of somebody else stops it (the brief says so). A run is started by a family app with the secret or by the person in the dashboard, never by a page. Stop ends it with its whole process tree (a job object on Windows, a process group elsewhere), and so does the end of ai-desktop. |
+| The checks of a repository (`CLAUDE.md`) | a `CLAUDE.md` of the repository (of a foreign or steered stand too) names commands, and the brief passes them on as the checks (`checks.source = claude-md`) | they stay text in the brief: the allowed tools are a fixed list in ai-desktop (`agent::allowed_tools()`), never taken from the brief or the repository, so a file in the repository cannot decide which shell commands run without a question. The agent may run such a command only where the person's own Claude Code settings already allow it (e.g. their linters); anything else is refused in print mode, as before. The only check commands ai-desktop allows are `ci commit` and `ci land` (no `ci:*`: `ci trust` stays the person's). |
 | A task steering the agent (prompt injection) | text in a task file tells the agent to do something else | the tool list bounds what it can do directly, but not what a program started through git can do (row above): a steered agent can in effect run any program as the person. What it did through its tools is in the job's output, and its commits are in git; what such a program did is not necessarily. A task from a vault the person does not trust must not be handed over. |
 | The settings `claude_cli` / `tasks_cli` | a program sets them to another executable | only an absolute path, set through `PUT /settings`, which wants the control secret or a session token: neither a page (Origin, Host) nor a program of another account gets there. |
 

@@ -75,8 +75,15 @@ TEST(process_the_brief_of_a_tasks_command_is_read) {
     tasks.program = fs::u8path(AI_DESKTOP_FAKE_TASKS);
     ai_desktop::agent::Brief brief;
     CHECK(ai_desktop::agent::fetch_brief(tasks, "ai-desktop:0123456789abcdef", brief).ok());
-    CHECK_EQ(brief.brief_version, 1);
+    CHECK_EQ(brief.brief_version, 2);
     CHECK(brief.markdown.find("--by=ai-desktop:0123456789abcdef") != std::string::npos);
+    CHECK(brief.checks_source.empty());  // without --repo the stand-in, like tasks.nvim, has no checks
+
+    // With the run's worktree the brief has the checks of that repository (the stand-in sees --repo).
+    ai_desktop::agent::Brief with_repo;
+    CHECK(ai_desktop::agent::fetch_brief(tasks, "ai-desktop:0123456789abcdef", with_repo, fs::temp_directory_path()).ok());
+    CHECK_EQ(with_repo.checks_source, std::string("testing"));
+    CHECK(with_repo.markdown.find("--repo=" + fs::temp_directory_path().u8string()) != std::string::npos);
 }
 
 #ifndef _WIN32

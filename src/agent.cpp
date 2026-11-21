@@ -149,6 +149,11 @@ config::Status parse_brief(const std::string& text, Brief& out) {
     brief.contract_schema = doc["contract_schema"].get<int>();
     brief.engine_version = doc.value("engine_version", "");
     brief.markdown = doc["markdown"].get<std::string>();
+    if (doc.contains("checks") && doc["checks"].is_object() && doc["checks"].contains("source") &&
+        doc["checks"]["source"].is_string()) {
+        // Only for the job's info: what the checks are is in the Markdown; the allowed tools never follow them.
+        brief.checks_source = jobs::sanitize(doc["checks"]["source"].get<std::string>()).substr(0, 32);
+    }
     if (brief.brief_version < kBriefVersion || brief.contract_schema < kContractSchema) {
         return {422, "the tasks engine is older than ai-desktop expects (brief " + std::to_string(brief.brief_version) +
                          ", contract " + std::to_string(brief.contract_schema) + "; needs " +
@@ -168,7 +173,7 @@ config::Status parse_brief(const std::string& text, Brief& out) {
     return {};
 }
 
-config::Status fetch_brief(const TasksCommand& tasks, const std::string& by, Brief& out) {
+config::Status fetch_brief(const TasksCommand& tasks, const std::string& by, Brief& out, const fs::path& repo) {
     if (!tasks.ok()) {
         return {422, tasks.error};
     }
@@ -176,6 +181,9 @@ config::Status fetch_brief(const TasksCommand& tasks, const std::string& by, Bri
     spec.program = tasks.program;
     spec.args = tasks.prefix;
     spec.args.insert(spec.args.end(), {"agent-brief", "--format=json", "--by=" + by});
+    if (!repo.empty()) {
+        spec.args.push_back("--repo=" + repo.u8string());
+    }
     std::string text;
     std::string error;
     const int code = process::run_capture(spec, std::chrono::seconds(30), kMaxBriefBytes, text, &error);
@@ -200,8 +208,19 @@ fs::path work_dir(const std::string& vault, const std::string& area, std::string
 }
 
 const std::vector<std::string>& allowed_tools() {
-    static const std::vector<std::string> tools = {"Bash(tasks:*)", "Bash(git:*)", "Read", "Edit",
-                                                   "Write",         "Glob",        "Grep"};
+    // The checks of the CI rhythm (brief 2, `checks`): `ci commit <sha> --quick` per commit and `ci commit HEAD
+    // --base=origin/main` before the push take arguments; `ci land` takes none. Not `ci:*`: no other ci command.
+    static const std::vector<std::string> tools = {"Bash(tasks:*)",
+                                                   "Bash(git:*)",
+                                                   "Bash(scripts/test.sh ci commit:*)",
+                                                   "Bash(testing ci commit:*)",
+                                                   "Bash(scripts/test.sh ci land)",
+                                                   "Bash(testing ci land)",
+                                                   "Read",
+                                                   "Edit",
+                                                   "Write",
+                                                   "Glob",
+                                                   "Grep"};
     return tools;
 }
 
@@ -258,8 +277,8 @@ std::string prompt(const jobs::Request& request, const std::string& by, const st
     if (!branch.empty()) {
         text += "You work in a git worktree of your own (the current folder, branch " + branch +
                 ", made from origin/main), not in the shared checkout of the repository, where other sessions keep "
-                "uncommitted work: change and commit only here. To deliver, `git pull --rebase` and then "
-                "`git push origin HEAD:main`. When the run ends the worktree is removed: uncommitted changes go with "
+                "uncommitted work: change and commit only here. Check and deliver as the checks in your system prompt say "
+                "(without them: `git pull --rebase`, then `git push origin HEAD:main`). When the run ends the worktree is removed: uncommitted changes go with "
                 "it, commits that are on no remote stay on the branch " + branch + ". ";
     }
     text += "Follow the workflow of the tasks family in your system prompt with the name " + by +

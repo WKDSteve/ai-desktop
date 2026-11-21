@@ -59,6 +59,7 @@ function world({ origin = true } = {}) {
     root, vault, checkout, bare, configDir, tasks, git, gitEnv,
     worktrees: path.join(configDir, "job-worktrees"),
     claudeLog: path.join(root, "claude.log"),
+    briefLog: path.join(root, "brief.log"),
     cleanup: () => rmSync(root, { recursive: true, force: true }),
   };
 }
@@ -76,6 +77,7 @@ async function serverFor(w, env = {}) {
       AI_DESKTOP_JOBS_PER_MINUTE: "1000",
       FAKE_TASKS_LOG: path.join(w.root, "tasks.log"),
       FAKE_CLAUDE_LOG: w.claudeLog,
+      FAKE_TASKS_BRIEF_LOG: w.briefLog,
       GIT_CONFIG_GLOBAL: w.gitEnv.GIT_CONFIG_GLOBAL,
       GIT_CONFIG_NOSYSTEM: "1",
       ...env,
@@ -134,6 +136,10 @@ describe("the worktree of a hand-over", { skip: !existsSync(fakeClaude) && "buil
       assert.equal(path.resolve(run.args[run.args.indexOf("--add-dir") + 1]), path.resolve(w.vault));
       assert.match(run.prompt, new RegExp(`branch ai-desktop/job-${id}-1`));
       assert.match(run.prompt, /`git push origin HEAD:main`/);
+      // The brief is for the worktree: its checks (brief 2), never those of the shared checkout.
+      const briefCall = lines(w.briefLog).at(-1).args;
+      assert.ok(briefCall.includes(`--repo=${dir}`), JSON.stringify(briefCall));
+      assert.deepEqual(job.brief, { brief_version: 2, contract_schema: 1, engine_version: "fake-0", checks: "testing" });
 
       // What reached origin: the agent's file, on top of the commit of main, and nothing of the other session.
       const files = w.git(w.bare, ["ls-tree", "-r", "--name-only", "main"]).split("\n").sort();

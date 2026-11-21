@@ -15,7 +15,7 @@ namespace {
 
 json brief_doc() {
     return {{"schema", "tasks-agent-brief/1"},
-            {"brief_version", 1},
+            {"brief_version", 2},
             {"contract_schema", 1},
             {"engine_version", "0.1.0"},
             {"markdown", "# Tasks family\n\nclaim first\n"}};
@@ -36,14 +36,25 @@ TEST(agent_model_names) {
 TEST(agent_brief_is_checked) {
     agent::Brief brief;
     CHECK(agent::parse_brief(brief_doc().dump(), brief).ok());
-    CHECK_EQ(brief.brief_version, 1);
+    CHECK_EQ(brief.brief_version, 2);
     CHECK_EQ(brief.engine_version, std::string("0.1.0"));
     CHECK(brief.note.empty());
+    CHECK(brief.checks_source.empty());
 
     json newer = brief_doc();
-    newer["brief_version"] = 2;
+    newer["brief_version"] = 3;
     CHECK(agent::parse_brief(newer.dump(), brief).ok());
     CHECK(!brief.note.empty());
+
+    // Brief 1 has no checks of a repository: refused like an older contract.
+    json first = brief_doc();
+    first["brief_version"] = 1;
+    CHECK_EQ(agent::parse_brief(first.dump(), brief).http, 422);
+
+    json checks = brief_doc();
+    checks["checks"] = {{"source", "testing"}, {"land", false}, {"per_commit", "testing ci commit <sha> --quick -- --cached"}};
+    CHECK(agent::parse_brief(checks.dump(), brief).ok());
+    CHECK_EQ(brief.checks_source, std::string("testing"));
 
     json older = brief_doc();
     older["contract_schema"] = 0;
@@ -92,6 +103,13 @@ TEST(agent_claude_args_limit_the_tools) {
     CHECK(has("--append-system-prompt-file"));
     CHECK(has("--model"));
     CHECK(has("Bash(tasks:*)"));
+    // Exactly the commands of the checks, nothing wider (no `ci:*`, no command a CLAUDE.md of the repository names).
+    CHECK((agent::allowed_tools() ==
+           std::vector<std::string>{"Bash(tasks:*)", "Bash(git:*)", "Bash(scripts/test.sh ci commit:*)",
+                                    "Bash(testing ci commit:*)", "Bash(scripts/test.sh ci land)",
+                                    "Bash(testing ci land)", "Read", "Edit", "Write", "Glob", "Grep"}));
+    const auto list = std::find(args.begin(), args.end(), "--allowedTools");
+    CHECK(list != args.end() && std::vector<std::string>(list + 1, args.end()) == agent::allowed_tools());
     CHECK(!has("--dangerously-skip-permissions"));
     CHECK(!has("bypassPermissions"));
     CHECK_EQ(args.back(), agent::allowed_tools().back());  // the tool list is last

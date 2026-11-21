@@ -55,7 +55,7 @@ describe("a job of claude-code with the real tasks command", { skip }, () => {
       } while (job.status === "running" && Date.now() < deadline);
       assert.equal(job.status, "done", JSON.stringify(job, null, 2));
       assert.equal(job.runner, "claude-code");
-      assert.ok(job.brief.brief_version >= 1);
+      assert.ok(job.brief.brief_version >= 2);
       assert.ok(!/✗/.test(job.output), job.output);
       const slug = id.split("/")[1];
       const finished = readdirSync(path.join(vault, "demo", "Backlog", "TASKS")).find((f) => f.endsWith(`_${slug}.md`));

@@ -210,48 +210,63 @@ std::filesystem::path worktree_root() {
     return std::filesystem::u8path(config::directory()) / "job-worktrees";
 }
 
-// A hand-over on Claude Code: the brief of the tasks family appended to its system prompt (from a file in the
-// person's config folder, not a shared temp folder where another user could plant a link), the tasks command first
-// on its PATH, the vault in TASKS_VAULT. With a repository of the area (`cwd` is not the vault) the agent works in a
-// git worktree of its own, made from origin/main, never in the shared checkout; it goes when the run ends.
-std::string run_agent(const HooksPtr& hooks, const std::string& id, std::uint64_t run, const jobs::Request& request,
-                      const std::filesystem::path& claude, const agent::TasksCommand& tasks,
-                      const agent::Brief& brief, const std::filesystem::path& cwd, const std::string& model) {
-    namespace fs = std::filesystem;
-    std::error_code ec;
-    std::optional<worktree::Worktree> own;
-    if (cwd != fs::u8path(request.vault)) {
+// The git worktree of a hand-over in a repository (src/worktree.hpp): made before the brief (which reads the checks
+// of the worktree), removed on every way out of run_job() (an exception too), after the agent's process tree.
+class RunWorktree {
+public:
+    RunWorktree(const std::string& id, std::uint64_t run) : id_(id), run_(run) {}
+    RunWorktree(const RunWorktree&) = delete;
+    RunWorktree& operator=(const RunWorktree&) = delete;
+    ~RunWorktree() { remove_now(); }
+    // Removes it now (once): before the job is finished, so the line of the removal still reaches its output.
+    void remove_now() {
+        if (!own_ || removed_) {
+            return;
+        }
+        removed_ = true;
+        try {
+            const worktree::Removal removal = worktree::remove(worktree_root(), *own_);
+            if (removal.done) {
+                jobs::store().append(id_, run_, worktree::describe(*own_, removal));
+            }
+        } catch (...) {
+            // Never out of a destructor: the record stays, the end of ai-desktop or its next start removes it.
+        }
+    }
+    // Makes the worktree of `repo`; "" or why there is none.
+    std::string make(const std::filesystem::path& repo) {
         worktree::Worktree made;
         std::string note;
         std::string why;
-        if (!worktree::create(worktree_root(), cwd, worktree::name_of(id, run), made, &note, &why)) {
-            return "no worktree of its own for the agent, so it does not run: " + why;
+        if (!worktree::create(worktree_root(), repo, worktree::name_of(id_, run_), made, &note, &why)) {
+            return why;
         }
-        own = std::move(made);
-        jobs::store().append(id, run, "▸ worktree " + own->dir.u8string() + " (branch " + own->branch + ")\n");
+        own_ = std::move(made);
+        jobs::store().append(id_, run_, "▸ worktree " + own_->dir.u8string() + " (branch " + own_->branch + ")\n");
         if (!note.empty()) {
-            jobs::store().append(id, run, "▸ " + note + "\n");
+            jobs::store().append(id_, run_, "▸ " + note + "\n");
         }
+        return "";
     }
-    // Removes the worktree on every way out of this function (an exception too), after the agent's process tree.
-    struct Cleanup {
-        const std::optional<worktree::Worktree>& own;
-        const std::string& id;
-        std::uint64_t run;
-        ~Cleanup() {
-            if (!own) {
-                return;
-            }
-            try {
-                const worktree::Removal removal = worktree::remove(worktree_root(), *own);
-                if (removal.done) {
-                    jobs::store().append(id, run, worktree::describe(*own, removal));
-                }
-            } catch (...) {
-                // Never out of a destructor: the record stays, the end of ai-desktop or its next start removes it.
-            }
-        }
-    } cleanup{own, id, run};
+    const std::optional<worktree::Worktree>& get() const { return own_; }
+
+private:
+    std::string id_;
+    std::uint64_t run_;
+    std::optional<worktree::Worktree> own_;
+    bool removed_ = false;
+};
+
+// A hand-over on Claude Code: the brief of the tasks family appended to its system prompt (from a file in the
+// person's config folder, not a shared temp folder where another user could plant a link), the tasks command first
+// on its PATH, the vault in TASKS_VAULT. With a repository of the area the agent works in `own`, a git worktree of
+// its own made from origin/main, never in the shared checkout `cwd`.
+std::string run_agent(const HooksPtr& hooks, const std::string& id, std::uint64_t run, const jobs::Request& request,
+                      const std::filesystem::path& claude, const agent::TasksCommand& tasks,
+                      const agent::Brief& brief, const std::filesystem::path& cwd,
+                      const std::optional<worktree::Worktree>& own, const std::string& model) {
+    namespace fs = std::filesystem;
+    std::error_code ec;
     const fs::path dir = fs::u8path(config::directory()) / "job-briefs";
     fs::create_directories(dir, ec);
     // One file per run: a run cancelled before removes its own file at its end, never the one of a run started since.
@@ -438,25 +453,42 @@ void run_job(const HooksPtr& hooks, const std::string& id, std::uint64_t run) {
     agent::TasksCommand tasks;
     agent::Brief brief;
     std::filesystem::path cwd;
+    RunWorktree own(id, run);
     if (!claude.empty()) {
         tasks = agent::find_tasks();
-        if (const auto st = agent::fetch_brief(tasks, by_of(id), brief); !st.ok()) {
-            why = st.message;
-        } else {
-            cwd = agent::work_dir(request.vault, request.area, &why);
+        cwd = agent::work_dir(request.vault, request.area, &why);
+        if (why.empty() && tasks.ok() && cwd != std::filesystem::u8path(request.vault)) {
+            // A repository of the area: the worktree first, so the brief names the checks of the stand the agent
+            // works on. Without one the agent does not run at all, never in the shared checkout.
+            if (const std::string error = own.make(cwd); !error.empty()) {
+                jobs::store().finish(id, run, "no worktree of its own for the agent, so it does not run: " + error);
+                return;
+            }
+        }
+        if (why.empty()) {
+            const std::filesystem::path repo = own.get() ? own.get()->dir : std::filesystem::path();
+            if (const auto st = agent::fetch_brief(tasks, by_of(id), brief, repo); !st.ok()) {
+                why = st.message;
+            }
         }
     }
     if (!still_running(id, run)) {
-        return;  // cancelled while the brief was fetched
+        return;  // cancelled while the worktree was made or the brief fetched
     }
     if (why.empty()) {
-        const nlohmann::json info = {{"brief_version", brief.brief_version},
-                                     {"contract_schema", brief.contract_schema},
-                                     {"engine_version", brief.engine_version}};
+        nlohmann::json info = {{"brief_version", brief.brief_version},
+                               {"contract_schema", brief.contract_schema},
+                               {"engine_version", brief.engine_version}};
+        if (!brief.checks_source.empty()) {
+            info["checks"] = brief.checks_source;
+        }
         jobs::store().describe(id, run, agent::kModel, brief.note, info);
-        jobs::store().finish(id, run, run_agent(hooks, id, run, request, claude, tasks, brief, cwd, model));
+        const std::string error = run_agent(hooks, id, run, request, claude, tasks, brief, cwd, own.get(), model);
+        own.remove_now();
+        jobs::store().finish(id, run, error);
         return;
     }
+    own.remove_now();
     answer_once_instead(hooks, id, run, *job, why, jobs::run_prompt(request), jobs::run_system());
 }
 
