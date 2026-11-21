@@ -745,6 +745,14 @@ int main(int argc, char** argv) {
         // A key that is present is not yet a key that works: the last model listing's failures (a 401 for a
         // revoked key, an Ollama that is down), from the cache only, so this check stays cheap.
         body["catalog_errors"] = ai_desktop::catalog::cached_errors();
+        // The model a request without "model" goes to, and whether Ollama has it (null: Ollama not reachable).
+        // Not installed means every such request ends in an Ollama error, which is worth seeing before asking.
+        {
+            const auto model = ai_desktop::ollama::default_model_info();
+            body["default_model"] = {{"name", model.name},
+                                     {"source", model.source},
+                                     {"installed", model.installed < 0 ? json(nullptr) : json(model.installed == 1)}};
+        }
         // Who answers: the same app, version and instance as hub.json, so a client of the family can tell
         // that the server on this port is the one the file names.
         body["app"] = ai_desktop::family::kApp;

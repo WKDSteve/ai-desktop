@@ -20,6 +20,7 @@
 #include "jobs.hpp"
 #include "legacy.hpp"
 #include "models.hpp"
+#include "ollama_client.hpp"
 #include "process.hpp"
 #include "review.hpp"
 #include "session.hpp"
@@ -89,7 +90,7 @@ std::string model_or_default(const std::string& model) {
         return model;
     }
     const std::string jobs_model = config::effective("jobs_model");
-    return jobs_model.empty() ? config::effective("default_model") : jobs_model;
+    return jobs_model.empty() ? ollama::default_model() : jobs_model;
 }
 
 // The way to stop a running agent (its process tree), by job id; registered while the child lives.
@@ -308,7 +309,7 @@ std::string run_once(const HooksPtr& hooks, const std::string& id, std::uint64_t
 // fallback model is not local sends nothing.
 void answer_once_instead(const HooksPtr& hooks, const std::string& id, std::uint64_t run, const jobs::Job& job,
                          const std::string& why, const std::string& prompt, const std::string& system) {
-    const std::string fallback = config::effective("default_model");
+    const std::string fallback = ollama::default_model();
     jobs::store().describe(id, run, "model", why + "; one answer of " + fallback + " instead", nullptr);
     if (job.is_private && !models::resolve(fallback).local) {
         jobs::store().finish(id, run, "the area is private and " + fallback + " is not local: nothing was sent");
@@ -417,7 +418,7 @@ void run_draft(const HooksPtr& hooks, const std::string& id, std::uint64_t run, 
             spec.stdin_text = prompt;
             error = run_claude(hooks, id, run, std::move(spec), model);
         } else {
-            model = config::effective("default_model");
+            model = ollama::default_model();
             jobs::store().describe(id, run, "model", why + "; one answer of " + model + " instead", nullptr);
             // A draft counts as private (its area is not known yet): the fallback must run locally.
             if (!models::resolve(model).local) {

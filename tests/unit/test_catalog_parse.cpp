@@ -174,3 +174,27 @@ TEST(error_text_of_every_client_replaces_a_key_the_provider_echoed) {
     CHECK_EQ(ai_desktop::error_text(json{{"code", "AIzaSyZZZ"}}), std::string("{\"code\":\"<key>\"}"));
     CHECK_EQ(ai_desktop::error_text(json{{"message", "invalid x-api-key"}}), std::string("invalid x-api-key"));
 }
+
+TEST(default_model_is_the_preferred_one_if_installed_else_the_last_changed) {
+    json tags = json::parse(R"({"models":[
+      {"name":"mistral:7b","modified_at":"2025-09-01T10:00:00Z"},
+      {"name":"qwen3:8b","modified_at":"2026-03-02T09:00:00Z"},
+      {"name":"llama3.1:8b-q5_K_M","modified_at":"2024-01-01T00:00:00Z"},
+      {"model":"gemma3:4b","modified_at":"2026-01-01T00:00:00Z"}
+    ]})");
+    CHECK_EQ(catalog::pick_installed_model(tags, "llama3.1:8b-q5_K_M"), std::string("llama3.1:8b-q5_K_M"));
+    CHECK_EQ(catalog::pick_installed_model(tags, "not-installed:1b"), std::string("qwen3:8b"));
+    CHECK(catalog::is_installed_model(tags, "gemma3:4b"));  // the "model" field counts as the name
+    CHECK(!catalog::is_installed_model(tags, "not-installed:1b"));
+    CHECK(!catalog::is_installed_model(tags, ""));
+}
+
+TEST(default_model_picks_nothing_without_installed_models) {
+    CHECK_EQ(catalog::pick_installed_model(json::parse(R"({"models":[]})"), "a:1"), std::string(""));
+    CHECK_EQ(catalog::pick_installed_model(json::parse(R"({"models":[{"size":1}]})"), "a:1"), std::string(""));
+    CHECK_EQ(catalog::pick_installed_model(json::parse(R"({"error":"x"})"), "a:1"), std::string(""));
+    CHECK_EQ(catalog::pick_installed_model(json(nullptr), "a:1"), std::string(""));
+    // Without a date the smaller name wins, so the pick does not depend on the order Ollama lists them in.
+    json same = json::parse(R"({"models":[{"name":"b:1"},{"name":"a:1"}]})");
+    CHECK_EQ(catalog::pick_installed_model(same, "x:1"), std::string("a:1"));
+}

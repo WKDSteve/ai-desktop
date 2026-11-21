@@ -23,9 +23,18 @@ namespace ai_desktop::ollama {
 // which is a different thing from "address a client should connect to".
 std::string host();
 
-// Model used when the caller doesn't specify one. Reads
-// AI_DESKTOP_DEFAULT_MODEL, falls back to a small local model.
+// Model used when the caller doesn't specify one: AI_DESKTOP_DEFAULT_MODEL, else the setting, else (nobody chose
+// one) the built-in llama3.1:8b-q5_K_M if Ollama has it, otherwise the installed model changed last. With no model
+// installed, or Ollama unreachable, it stays the built-in name and Ollama's own error says what is missing.
+// Asks GET /api/tags, kept for 15 s.
 std::string default_model();
+
+struct DefaultModel {
+    std::string name;
+    std::string source;  // "env" | "config" (chosen), "installed" (picked from Ollama), "builtin"
+    int installed = -1;  // 1 Ollama has it, 0 it does not, -1 unknown (Ollama unreachable)
+};
+DefaultModel default_model_info();
 
 // Blocking, non-streaming call to /api/generate.
 ai_desktop::AskResult ask(const std::string& prompt,

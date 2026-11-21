@@ -1,7 +1,10 @@
 #include "ollama_client.hpp"
 
+#include <chrono>
 #include <cstdlib>
+#include <mutex>
 
+#include "catalog_parse.hpp"
 #include "config.hpp"
 #include "http_pool.hpp"
 #include "httplib.h"
@@ -61,8 +64,73 @@ std::string host() {
     return raw;
 }
 
+namespace {
+
+constexpr int kTagsTimeoutMs = 1500;
+constexpr auto kTagsTtl = std::chrono::seconds(15);
+
+// The installed models, from GET /api/tags, kept for kTagsTtl (a failure too, so a dead Ollama costs one short
+// timeout per window, not one per request). Keyed by host: another host in the settings is read afresh.
+struct Tags {
+    std::string host;
+    std::chrono::steady_clock::time_point at;
+    bool valid = false;      // the cache holds an answer for `host`
+    bool reachable = false;  // Ollama answered with a model list
+    json body;
+};
+
+Tags installed_tags() {
+    static std::mutex mutex;
+    static Tags cache;
+    const std::string current = host();
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (cache.valid && cache.host == current && std::chrono::steady_clock::now() - cache.at < kTagsTtl) {
+            return cache;
+        }
+    }
+    Tags fresh;
+    fresh.host = current;
+    httplib::Client client(current);
+    client.set_connection_timeout(std::chrono::milliseconds(kTagsTimeoutMs));
+    client.set_read_timeout(std::chrono::milliseconds(kTagsTimeoutMs));
+    if (auto res = client.Get("/api/tags"); res && res->status == 200) {
+        fresh.body = json::parse(res->body, nullptr, false);
+        fresh.reachable = fresh.body.is_object() && fresh.body.contains("models") && fresh.body["models"].is_array();
+    }
+    fresh.at = std::chrono::steady_clock::now();
+    fresh.valid = true;
+    std::lock_guard<std::mutex> lock(mutex);
+    cache = fresh;
+    return fresh;
+}
+
+}  // namespace
+
+DefaultModel default_model_info() {
+    DefaultModel info;
+    const std::string configured = config::effective("default_model");
+    const std::string source = config::settings_json()["default_model"].value("source", "default");
+    info.name = configured;
+    info.source = source == "default" ? "builtin" : source;
+    const Tags tags = installed_tags();
+    if (!tags.reachable) {
+        return info;  // installed stays unknown: Ollama is down or not an Ollama
+    }
+    if (source == "default") {
+        // Nobody chose a model: the built-in one if it is there, else whatever is installed.
+        const std::string picked = catalog::pick_installed_model(tags.body, configured);
+        if (!picked.empty()) {
+            info.name = picked;
+            info.source = picked == configured ? "builtin" : "installed";
+        }
+    }
+    info.installed = catalog::is_installed_model(tags.body, info.name) ? 1 : 0;
+    return info;
+}
+
 std::string default_model() {
-    return config::effective("default_model");
+    return default_model_info().name;
 }
 
 AskResult ask(const std::string& prompt,

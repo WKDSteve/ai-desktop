@@ -36,6 +36,14 @@ nlohmann::json parse_ollama_show(const nlohmann::json& response);
 // details.preset=true. "openai" | "anthropic" | "gemini".
 nlohmann::json presets(const std::string& provider);
 
+// The model an unset default_model should become, from GET <ollama>/api/tags: `preferred` if it is installed,
+// else the installed model changed last (modified_at; a tie goes to the smaller name), "" if none is installed or the
+// response is not a model list.
+std::string pick_installed_model(const nlohmann::json& tags, const std::string& preferred);
+
+// Whether `name` is one of the models in GET <ollama>/api/tags.
+bool is_installed_model(const nlohmann::json& tags, const std::string& name);
+
 // "YYYY-MM-DD" for a Unix timestamp (UTC), "" for non-positive input.
 std::string iso_date(long long epoch_seconds);
 

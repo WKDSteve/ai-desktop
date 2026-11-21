@@ -222,7 +222,7 @@ json list(bool refresh) {
         models.push_back(item);
     }
 
-    return {{"default", config::effective("default_model")}, {"models", models}, {"errors", errors}};
+    return {{"default", ollama::default_model()}, {"models", models}, {"errors", errors}};
 }
 
 json cached_errors() {

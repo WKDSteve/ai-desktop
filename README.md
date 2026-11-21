@@ -220,7 +220,11 @@ must be running (default: `http://127.0.0.1:11434`). A different host can
 be set via `AI_DESKTOP_OLLAMA_HOST` (**not** `OLLAMA_HOST` -- that's already
 taken by Ollama itself as the Ollama *server's* own bind address, e.g.
 `0.0.0.0:11434`, and thus not a valid client target). Default model via
-`AI_DESKTOP_DEFAULT_MODEL`, otherwise `llama3.1:8b-q5_K_M`.
+`AI_DESKTOP_DEFAULT_MODEL` (or the setting `default_model`). If neither is set,
+ai-desktop asks Ollama (`GET /api/tags`, kept for 15 s): it takes
+`llama3.1:8b-q5_K_M` if that is installed, otherwise the installed model that
+was changed last. With no model installed (or Ollama down) it stays
+`llama3.1:8b-q5_K_M` and Ollama's own error says what is missing.
 
 Every Ollama request asks for a context window of 32768 tokens
 (`options.num_ctx`). Without one, Ollama uses a default that depends on the
@@ -254,7 +258,12 @@ rejected: `catalog_errors` names what the last model listing (`GET /models`)
 failed with per backend, from the cache only, so `/health` itself never asks a
 provider (empty until something listed the models). Anything shaped like a key
 in a provider's message is replaced by `<key>`. The dashboard shows such a
-backend with a warning and the reason instead of a tick.
+backend with a warning and the reason instead of a tick. `default_model` names
+the model a request without `model` goes to (`name`, `source`: `env`,
+`config`, `installed` or `builtin`) and whether Ollama has it (`installed`:
+`true`, `false`, or `null` if Ollama is not reachable); `false` means every such
+request ends in an Ollama error. This is the one thing `/health` asks Ollama
+(a local call with a 1.5 s limit, kept for 15 s).
 
 ## Found by the other apps (the family)
 

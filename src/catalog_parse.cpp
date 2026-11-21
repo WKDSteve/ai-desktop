@@ -134,6 +134,50 @@ json parse_ollama_tags(const json& response) {
     return out;
 }
 
+namespace {
+
+std::string tag_name(const json& model) {
+    std::string id = string_field(model, "name");
+    return id.empty() ? string_field(model, "model") : id;
+}
+
+}  // namespace
+
+bool is_installed_model(const json& tags, const std::string& name) {
+    if (name.empty() || !tags.is_object() || !tags.contains("models") || !tags["models"].is_array()) {
+        return false;
+    }
+    for (const auto& model : tags["models"]) {
+        if (tag_name(model) == name) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string pick_installed_model(const json& tags, const std::string& preferred) {
+    if (is_installed_model(tags, preferred)) {
+        return preferred;
+    }
+    if (!tags.is_object() || !tags.contains("models") || !tags["models"].is_array()) {
+        return "";
+    }
+    std::string best;
+    std::string best_modified;
+    for (const auto& model : tags["models"]) {
+        const std::string name = tag_name(model);
+        if (name.empty()) {
+            continue;
+        }
+        const std::string modified = string_field(model, "modified_at");
+        if (best.empty() || modified > best_modified || (modified == best_modified && name < best)) {
+            best = name;
+            best_modified = modified;
+        }
+    }
+    return best;
+}
+
 json parse_openai_models(const json& response) {
     json out = json::array();
     if (!response.is_object() || !response.contains("data") || !response["data"].is_array()) {

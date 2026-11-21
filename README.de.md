@@ -198,7 +198,11 @@ laufen (Standard: `http://127.0.0.1:11434`). Abweichender Host via
 `AI_DESKTOP_OLLAMA_HOST` (**nicht** `OLLAMA_HOST` — das ist bereits durch Ollama
 selbst als Bind-Adresse des Ollama-*Servers* belegt, z. B. `0.0.0.0:11434`,
 und damit kein gültiges Client-Ziel). Standardmodell via
-`AI_DESKTOP_DEFAULT_MODEL`, sonst `llama3.1:8b-q5_K_M`.
+`AI_DESKTOP_DEFAULT_MODEL` (oder die Einstellung `default_model`). Ist keins von
+beiden gesetzt, fragt ai-desktop Ollama (`GET /api/tags`, 15 s gemerkt): es nimmt
+`llama3.1:8b-q5_K_M`, wenn das installiert ist, sonst das zuletzt geänderte
+installierte Modell. Ist keins installiert (oder Ollama aus), bleibt es bei
+`llama3.1:8b-q5_K_M`, und Ollamas eigener Fehler sagt, was fehlt.
 
 Jede Ollama-Anfrage fordert ein Kontextfenster von 32768 Tokens an
 (`options.num_ctx`). Ohne diese Angabe nimmt Ollama einen Standard, der von der
@@ -233,7 +237,12 @@ Modellliste (`GET /models`) gescheitert ist, nur aus dem Cache, `/health`
 fragt selbst nie einen Provider (leer, bis etwas die Modelle gelistet hat).
 Was in der Meldung eines Providers wie ein Key aussieht, wird durch `<key>`
 ersetzt. Das Dashboard zeigt so ein Backend mit Warnzeichen und Grund statt
-mit Haken.
+mit Haken. `default_model` nennt das Modell, an das eine Anfrage ohne `model`
+geht (`name`, `source`: `env`, `config`, `installed` oder `builtin`), und ob
+Ollama es hat (`installed`: `true`, `false` oder `null`, wenn Ollama nicht
+erreichbar ist); `false` heißt, jede solche Anfrage endet mit einem
+Ollama-Fehler. Das ist das Einzige, was `/health` bei Ollama erfragt (lokaler
+Aufruf mit 1,5 s Limit, 15 s gemerkt).
 
 ## Von den anderen Apps gefunden (die Familie)
 
