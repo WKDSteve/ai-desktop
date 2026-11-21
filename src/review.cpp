@@ -172,11 +172,12 @@ std::string prompt(const jobs::Request& request, const std::string& diff_text, c
     if (!ci.empty()) {
         text += "The section `## The CI of the commits` below is what ai-desktop found about the checks of the "
                 "commits (you cannot run them). Add one line about it to the checklist of the block: `- [ ] CI — "
-                "offen: <what is red>` when something there is red (the task says `ci: red`, or a run is failure, "
-                "rejected, cancelled or timed_out); `- [ ] CI — nicht prüfbar: <why>` when it says not checked or a "
-                "run has not ended; `- [x] CI — erfüllt: <evidence>` only when the hosted CI of every commit "
-                "succeeded and the task does not say `ci: red`. A red check is an open point even when the diffs "
-                "look right.\n\n";
+                "offen: <what is red>` when something there is red (the task says `ci: red`, a local check is "
+                "marked (red), or a hosted run is failure, rejected, cancelled or timed_out); `- [ ] CI — nicht "
+                "prüfbar: <why>` when it says not checked or a run has not ended; `- [x] CI — erfüllt: <evidence>` "
+                "only when every commit has a full local check that is not red or a local proof, its hosted CI "
+                "succeeded, and the task does not say `ci: red`. A quick local check is no proof of the tree. A red "
+                "check is an open point even when the diffs look right.\n\n";
     }
     text += "Think it through in your answer, then end it with exactly one block from the line `" +
             std::string(kBegin) + "` to the line `" + std::string(kEnd) +

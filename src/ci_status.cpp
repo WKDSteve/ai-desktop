@@ -3,6 +3,9 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <fstream>
+#include <initializer_list>
+#include <iterator>
 
 #include "jobs.hpp"
 #include "nlohmann/json.hpp"
@@ -156,8 +159,114 @@ bool ask_remote(const agent::TasksCommand& testing, const std::string& dir, Remo
     return parse_remote(text, out, error);
 }
 
+namespace {
+
+bool one_of(const std::string& value, std::initializer_list<const char*> words) {
+    return std::any_of(words.begin(), words.end(), [&](const char* w) { return value == w; });
+}
+
+// A profile name of `.testing.lua`: letters, digits, `.`, `_`, `-`.
+bool is_word(const std::string& text) {
+    return !text.empty() && text.size() <= 32 && std::all_of(text.begin(), text.end(), [](unsigned char c) {
+        return std::isalnum(c) || c == '.' || c == '_' || c == '-';
+    });
+}
+
+std::string str(const json& doc, const char* key) {
+    return doc.contains(key) && doc[key].is_string() ? doc[key].get<std::string>() : "";
+}
+
+std::string on_system(const json& item) {
+    const std::string system = str(item, "system");
+    std::string text = one_of(system, {"windows", "linux", "macos"}) ? " on " + system : "";
+    if (item.contains("from_wsl") && item["from_wsl"].is_boolean() && item["from_wsl"].get<bool>()) {
+        text += " (in WSL2)";
+    }
+    return text;
+}
+
+}  // namespace
+
+bool parse_recall(const std::string& text, std::map<std::string, std::vector<std::string>>& out, std::string* error) {
+    const json doc = json::parse(text, nullptr, false);
+    if (doc.is_discarded() || !doc.is_object() || str(doc, "schema") != "testing-ci-commit/1" ||
+        !doc.contains("recall") || !doc["recall"].is_boolean() || !doc["recall"].get<bool>()) {
+        if (error) *error = "no testing-ci-commit/1 document of --recall";
+        return false;
+    }
+    std::map<std::string, std::vector<std::string>> lines;
+    if (doc.contains("commits") && doc["commits"].is_array()) {
+        for (const auto& item : doc["commits"]) {
+            if (!item.is_object()) continue;
+            const std::string sha = str(item, "sha");
+            const std::string verdict = str(item, "verdict");
+            if (sha.size() != 40 || !is_hex(sha) ||
+                !one_of(verdict, {"clean", "known-red", "flaky", "regression", "unclassified", "docs-only", "empty",
+                                  "nothing-affected", "error", "infra"})) {
+                continue;
+            }
+            const bool quick = item.contains("quick") && item["quick"].is_boolean() && item["quick"].get<bool>();
+            const bool red = one_of(verdict, {"regression", "unclassified", "error", "infra"});
+            std::string line = "local check (`testing ci commit`): " + verdict + (red ? " (red)" : "");
+            line += quick ? ", quick (only what the diff reaches: no proof of the tree)" : ", full";
+            const std::string base = str(item, "base");
+            if (base.size() >= 7 && base.size() <= 40 && is_hex(base)) {
+                line += ", against " + base.substr(0, 12);
+            }
+            if (const std::string profile = str(item, "profile"); is_word(profile)) {
+                line += ", profile " + profile;
+            }
+            lines[sha].push_back(line + on_system(item));
+        }
+    }
+    if (doc.contains("proofs") && doc["proofs"].is_array()) {
+        for (const auto& item : doc["proofs"]) {
+            if (!item.is_object()) continue;
+            const std::string sha = str(item, "sha");
+            const std::string tree = str(item, "tree");
+            const std::string profile = str(item, "profile");
+            if (sha.size() != 40 || !is_hex(sha) || tree.size() < 12 || !is_hex(tree) || !is_word(profile)) {
+                continue;
+            }
+            lines[sha].push_back("local proof: its tree " + tree.substr(0, 12) + " was green in profile " + profile +
+                                 on_system(item));
+        }
+    }
+    out = std::move(lines);
+    return true;
+}
+
+bool ask_recall(const agent::TasksCommand& testing, const std::string& dir, const std::vector<std::string>& shas,
+                const fs::path& json_file, std::map<std::string, std::vector<std::string>>& out, std::string* error) {
+    if (!testing.ok()) {
+        if (error) *error = testing.error;
+        return false;
+    }
+    std::error_code ec;
+    fs::create_directories(json_file.parent_path(), ec);
+    fs::remove(json_file, ec);
+    process::Spec spec;
+    spec.program = testing.program;
+    spec.args = testing.prefix;
+    spec.args.insert(spec.args.end(), {"ci", "commit"});
+    spec.args.insert(spec.args.end(), shas.begin(), shas.end());
+    spec.args.insert(spec.args.end(), {"--recall", "--root=" + dir, "--json=" + json_file.u8string()});
+    std::string printed;
+    std::string run_error;
+    const int code = process::run_capture(spec, std::chrono::seconds(60), kMaxRemoteBytes, printed, &run_error);
+    std::ifstream in(json_file, std::ios::binary);
+    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    in.close();
+    fs::remove(json_file, ec);
+    if (code != 0 || text.empty()) {
+        if (error) *error = "testing ci commit --recall failed (" + std::to_string(code) + "): " + first_line(run_error);
+        return false;
+    }
+    return parse_recall(text, out, error);
+}
+
 std::string section(const std::string& vault, const std::vector<review::Commit>& commits, const std::string& task_ci,
-                    const agent::TasksCommand& testing) {
+                    const agent::TasksCommand& testing, const fs::path& scratch) {
     std::string text;
     text += task_ci.empty() ? "The task has no `ci:` field (not checked by tasks.nvim).\n\n"
                             : "The task says `ci: " + task_ci + "`.\n\n";
@@ -166,13 +275,42 @@ std::string section(const std::string& vault, const std::vector<review::Commit>&
     }
     std::map<std::string, std::pair<bool, Remote>> asked;  // per repository: answered, the state
     std::map<std::string, std::string> why_not;
+    // The kept results of `testing ci commit` per repository (--recall: read, never run), by full sha.
+    std::map<std::string, std::pair<bool, std::map<std::string, std::vector<std::string>>>> recalled;
+    std::map<std::string, std::string> recall_why;
     for (const auto& commit : commits) {
         text += "### " + commit.repo + "@" + commit.sha + "\n\n";
-        text += "- local check (`testing ci commit`): not checked (ai-desktop reads no kept result of it)\n";
         const fs::path dir = review::repo_dir(vault, commit.repo);
         if (dir.empty()) {
+            text += "- local check (`testing ci commit`): not checked (no repository here)\n";
             text += "- hosted CI: not checked (no repository " + commit.repo + " beside the vault on this machine)\n\n";
             continue;
+        }
+        if (recalled.find(commit.repo) == recalled.end()) {
+            std::vector<std::string> shas;
+            for (const auto& other : commits) {
+                if (other.repo == commit.repo) shas.push_back(other.sha);
+            }
+            std::map<std::string, std::vector<std::string>> kept;
+            std::string error = "no folder for the answer";
+            const bool ok = !scratch.empty() &&
+                            ask_recall(testing, dir.u8string(), shas, scratch / fs::u8path(commit.repo + ".json"), kept,
+                                       &error);
+            recalled[commit.repo] = {ok, std::move(kept)};
+            recall_why[commit.repo] = error;
+        }
+        const auto& [recall_ok, kept] = recalled[commit.repo];
+        std::vector<std::string> local;
+        for (const auto& [sha, lines] : kept) {
+            if (sha.rfind(commit.sha, 0) == 0) local.insert(local.end(), lines.begin(), lines.end());
+        }
+        if (!recall_ok) {
+            text += "- local check (`testing ci commit`): not checked (" + jobs::sanitize(recall_why[commit.repo]) + ")\n";
+        } else if (local.empty()) {
+            text += "- local check (`testing ci commit`): not checked (nothing kept for this commit)\n";
+        }
+        for (const auto& line : local) {
+            text += "- " + line + "\n";
         }
         if (asked.find(commit.repo) == asked.end()) {
             Remote remote;

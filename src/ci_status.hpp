@@ -31,9 +31,21 @@ bool parse_remote(const std::string& text, Remote& out, std::string* error);
 // Asks `testing ci remote --json <dir>` (60 s at most).
 bool ask_remote(const agent::TasksCommand& testing, const std::string& dir, Remote& out, std::string* error);
 
-// The Markdown section of the prompt: the task's `ci:` and, per commit, its hosted CI (`### repo@sha` and one line
-// each) or "not checked" with the reason. `testing` is the testing command (with `error` when there is none).
+// The kept results of `testing ci commit <sha>... --recall` (testing-ci-commit/1 with `recall: true`): per full sha
+// one line per kept result (verdict, "(red)" for regression/unclassified/error/infra, quick or full, base, profile,
+// system, WSL2) and per green proof of its tree. Only values of the schema's lists and checked words reach a line.
+bool parse_recall(const std::string& text, std::map<std::string, std::vector<std::string>>& out, std::string* error);
+
+// Asks `testing ci commit <sha>... --recall --root=<dir> --json=<json_file>` (60 s; it never runs a check and takes
+// no turn in the queue) and parses the file, which it removes afterwards.
+bool ask_recall(const agent::TasksCommand& testing, const std::string& dir, const std::vector<std::string>& shas,
+                const std::filesystem::path& json_file, std::map<std::string, std::vector<std::string>>& out,
+                std::string* error);
+
+// The Markdown section of the prompt: the task's `ci:` and, per commit (`### repo@sha`), its kept local results and
+// proofs (one --recall per repository, its answer written below `scratch`) and its hosted CI, or "not checked" with
+// the reason. `testing` is the testing command (with `error` when there is none).
 std::string section(const std::string& vault, const std::vector<review::Commit>& commits, const std::string& task_ci,
-                    const agent::TasksCommand& testing);
+                    const agent::TasksCommand& testing, const std::filesystem::path& scratch);
 
 }  // namespace ai_desktop::ci_status

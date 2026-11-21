@@ -345,10 +345,15 @@ void run_review(const HooksPtr& hooks, const std::string& id, std::uint64_t run,
         if (decision) {
             prompt = review::decision_prompt(request, diff_text, id);
         } else {
-            // The CI of the commits, read by ai-desktop (the agent has no tool for it): the task's `ci:` and the
-            // hosted CI through `testing ci remote`.
+            // The CI of the commits, read by ai-desktop (the agent has no tool for it): the task's `ci:`, the kept
+            // results of `testing ci commit --recall` and the hosted CI through `testing ci remote`. The answer of
+            // --recall goes to a folder of this job in the person's config folder, not a shared temp folder.
+            const std::filesystem::path scratch =
+                std::filesystem::u8path(config::directory()) / "review-ci" / (id + "-" + std::to_string(run));
             const std::string ci = ci_status::section(request.vault, commits, ci_status::task_ci(request.markdown),
-                                                      agent::find_testing());
+                                                      agent::find_testing(), scratch);
+            std::error_code ignored;
+            std::filesystem::remove_all(scratch, ignored);
             prompt = review::prompt(request, diff_text, id, ci);
         }
         system = decision ? review::decision_system() : review::system();

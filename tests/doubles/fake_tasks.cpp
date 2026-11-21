@@ -4,7 +4,9 @@
 //                                                      a brief of the form tasks-agent-brief/1 (brief 2); with --repo
 //                                                      (a folder, else exit 2) its `checks`; each call is appended
 //                                                      as {args} to $FAKE_TASKS_BRIEF_LOG
-//   fake_tasks ci remote --json <dir>                  as testing.nvim's testing command: the file $FAKE_TESTING_REMOTE
+//   fake_tasks ci commit <sha>... --recall --root=<dir> --json=<file>
+//                                                      as testing.nvim: copies $FAKE_TESTING_RECALL to <file>
+//   fake_tasks ci remote --json <dir>                 as testing.nvim's testing command: the file $FAKE_TESTING_REMOTE
 //                                                      (exit $FAKE_TESTING_REMOTE_EXIT), the call in $FAKE_TESTING_LOG
 //   fake_tasks echo-args <args...>                     each argument on a line of its own (the quoting test)
 //   fake_tasks echo-env <NAME>                         the value of a variable
@@ -92,6 +94,27 @@ int main(int argc, char** argv) {
         doc["plugin"] = "tasks.nvim";
         doc["schema"] = "tasks-agent-brief/1";
         std::cout << doc.dump() << "\n";
+        return 0;
+    }
+    if (args[0] == "ci" && args.size() >= 2 && args[1] == "commit") {
+        // As `testing ci commit <sha>... --recall --root=<dir> --json=<file>`: copies $FAKE_TESTING_RECALL there.
+        if (const std::string log = env("FAKE_TESTING_LOG"); !log.empty()) {
+            std::ofstream out(std::filesystem::u8path(log), std::ios::app | std::ios::binary);
+            out << nlohmann::json({{"args", args}}).dump() << "\n";
+        }
+        std::string json_file;
+        bool recall = false;
+        for (const auto& a : args) {
+            if (a.rfind("--json=", 0) == 0) json_file = a.substr(7);
+            recall = recall || a == "--recall";
+        }
+        const std::string file = env("FAKE_TESTING_RECALL");
+        std::ifstream in(std::filesystem::u8path(file), std::ios::binary);
+        if (!recall || json_file.empty() || file.empty() || !in) {
+            std::cerr << "testing: ci commit is only a stand-in for --recall here\n";
+            return 2;
+        }
+        std::ofstream(std::filesystem::u8path(json_file), std::ios::binary) << in.rdbuf();
         return 0;
     }
     if (args[0] == "ci" && args.size() >= 2 && args[1] == "remote") {

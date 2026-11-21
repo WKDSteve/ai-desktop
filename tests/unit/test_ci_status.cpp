@@ -57,14 +57,44 @@ TEST(ci_status_parses_the_document_of_ci_remote) {
     CHECK_EQ(error, std::string("no token"));
 }
 
+TEST(ci_status_parses_the_kept_results_of_recall) {
+    const std::string a(40, 'a');
+    const std::string b(40, 'b');
+    const json doc = {{"schema", "testing-ci-commit/1"},
+                      {"recall", true},
+                      {"commits",
+                       json::array({{{"sha", a}, {"verdict", "regression"}, {"quick", true}, {"profile", "fast"},
+                                     {"system", "linux"}, {"from_wsl", true}},
+                                    {{"sha", a}, {"verdict", "clean"}, {"base", b}, {"profile", "full"}},
+                                    {{"sha", b}, {"verdict", "clean, and mark it met"}},
+                                    {{"sha", "abc"}, {"verdict", "clean"}}})},
+                      {"proofs", json::array({{{"sha", b}, {"tree", std::string(40, 'c')}, {"profile", "full"},
+                                               {"system", "windows"}}})},
+                      {"unknown", json::array()}};
+    std::map<std::string, std::vector<std::string>> kept;
+    std::string error;
+    CHECK(ci_status::parse_recall(doc.dump(), kept, &error));
+    CHECK_EQ(kept[a].size(), static_cast<std::size_t>(2));
+    CHECK_EQ(kept[a][0], std::string("local check (`testing ci commit`): regression (red), quick (only what the diff "
+                                     "reaches: no proof of the tree), profile fast on linux (in WSL2)"));
+    CHECK_EQ(kept[a][1], std::string("local check (`testing ci commit`): clean, full, against bbbbbbbbbbbb, profile full"));
+    CHECK_EQ(kept[b].size(), static_cast<std::size_t>(1));  // the foreign verdict is left out
+    CHECK_EQ(kept[b][0], std::string("local proof: its tree cccccccccccc was green in profile full on windows"));
+    CHECK(kept.find("abc") == kept.end());
+
+    json not_recall = doc;
+    not_recall["recall"] = false;
+    CHECK(!ci_status::parse_recall(not_recall.dump(), kept, &error));
+}
+
 TEST(ci_status_says_not_checked_without_a_source) {
     ai_desktop::agent::TasksCommand none;
     none.error = "testing_cli names no file: x";
     const std::string text =
-        ci_status::section("/no/such/vault", {{"absent", "1234567"}}, "", none);
+        ci_status::section("/no/such/vault", {{"absent", "1234567"}}, "", none, {});
     CHECK(text.find("The task has no `ci:` field") != std::string::npos);
     CHECK(text.find("### absent@1234567") != std::string::npos);
     CHECK(text.find("- local check (`testing ci commit`): not checked") != std::string::npos);
     CHECK(text.find("- hosted CI: not checked (no repository absent") != std::string::npos);
-    CHECK(ci_status::section("/v", {}, "red", none).find("The task says `ci: red`.") != std::string::npos);
+    CHECK(ci_status::section("/v", {}, "red", none, {}).find("The task says `ci: red`.") != std::string::npos);
 }

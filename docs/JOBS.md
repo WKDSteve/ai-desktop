@@ -166,14 +166,17 @@ A finished task is checked against its acceptance (`src/review.cpp`). The caller
    `git -C <vault>/../<repo> show --stat --patch --no-color --no-ext-diff --no-textconv <sha>` for each (20 s, 48 KiB
    a diff, 160 KiB together, cut and said so). A repository that is not beside the vault, an unknown commit or a
    missing git is named in the prompt instead of a diff.
-2. The CI of the commits, read by ai-desktop itself (`src/ci_status.cpp`; the agent gets no tool for it): the task's
-   `ci:` (`pending`, `green`, `red`, written by tasks.nvim) and, per repository, `testing ci remote --json <repo>` of
-   testing.nvim (the setting `testing_cli`, else `testing` on `PATH`, 60 s; read-only, it asks GitHub with the
-   person's token): the state of the CI run of origin/main's head, and per commit whether it is part of that head
-   (`git merge-base --is-ancestor`). Only a state word and a link to github.com of that document reach the prompt.
-   The kept result of `testing ci commit` per commit is said as "not checked": testing.nvim has no read-only way to
-   ask for it yet. Whatever answers nothing (no testing command, no repository here, a commit not on origin/main) is
-   said as "not checked", never left out.
+2. The CI of the commits, read by ai-desktop itself (`src/ci_status.cpp`; the agent gets no tool for it), with the
+   testing command of testing.nvim (the setting `testing_cli`, else `testing` on `PATH`): the task's `ci:`
+   (`pending`, `green`, `red`, written by tasks.nvim); per repository the kept results of `testing ci commit <sha>...
+   --recall --root=<repo> --json=<file>` (`testing-ci-commit/1`, 60 s; it never runs a check and takes no turn in the
+   queue; the file lies in `<config>/review-ci/<job>-<run>/` and goes afterwards): per commit each kept result
+   (verdict, "(red)" for regression/unclassified/error/infra, quick or full, base, profile, system, WSL2; a quick
+   result is named as no proof of the tree) and each green proof of its tree; and per repository `testing ci remote
+   --json <repo>` (60 s; read-only, it asks GitHub with the person's token): the state of the CI run of origin/main's
+   head, and per commit whether it is part of that head (`git merge-base --is-ancestor`). Only values of the schemas'
+   lists, checked words and a link to github.com reach the prompt. Whatever answers nothing (no testing command,
+   nothing kept, no repository here, a commit not on origin/main) is said as "not checked", never left out.
 3. The prompt: the task, the diffs, the CI of the commits (step 2) with the rule for one line about it in the block
    (`- [ ] CI — offen: ...` when the task says `ci: red` or a run is red, `nicht prüfbar` when not checked, `erfüllt`
    only when every commit's hosted CI succeeded), and the instruction to decide for every line of `## Akzeptanz`/`## Acceptance`
