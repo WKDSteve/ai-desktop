@@ -492,3 +492,10 @@ body, Gemini builds the path directly from the model name
 - [docmap-desktop](https://github.com/WKDSteve/docmap-desktop): The agent of docmap-desktop asks a local ai-desktop server (`GET /health`, `POST /ask`). ([picture](assets/graphs/pair/docmap-desktop--ai-desktop.png))
 - [hub-desktop](https://github.com/WKDSteve/hub-desktop): hub-desktop shows ai-desktop as a tile and starts it. ([picture](assets/graphs/pair/hub-desktop--ai-desktop.png))
 <!-- connections:end -->
+
+## Release channels
+
+The rolling build has one channel, `latest`: the newest commit of `main` whose CI is green, rebuilt after every
+green CI run and only ever moving forward. Releases are separate (`vX.Y.Z`). The channels an app has switched on
+are the `channels:` line of the prepare step in `.github/workflows/rolling.yml`; `nightly` (the tip of `main`) and
+`stable` (a `latest` that has stayed up for 14 days) are not switched on.
