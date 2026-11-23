@@ -37,13 +37,21 @@ bool heading_from(const std::string& text, const std::string& heading, std::size
 }  // namespace
 
 std::string clean(const std::string& block) {
-    std::string text = jobs::sanitize(block);
+    std::string text = block;
+    if (text.size() > kMaxRawBytes) {
+        std::size_t cut = kMaxRawBytes;
+        while (cut > 0 && (static_cast<unsigned char>(text[cut]) & 0xC0) == 0x80) {
+            --cut;
+        }
+        text.resize(cut);
+    }
+    text = jobs::sanitize(text);
     // A path where a person's machine shows: the drive, the share or a folder at the root of a Unix system. The
     // character before it must not be part of a word, so `ai-desktop/x` and a URL stay as they are.
     static const std::regex windows(R"((^|[^A-Za-z0-9])[A-Za-z]:[\\/][^\s`'"<>)\],;]*)");
     static const std::regex unc(R"((^|[^A-Za-z0-9])\\\\[^\s`'"<>)\],;]+)");
     static const std::regex unix(
-        R"((^|[\s`'"(\[=])/(home|Users|tmp|var|etc|opt|usr|mnt|root|private|Volumes|srv|proc|workspace)(/[^\s`'"<>)\],;]*)?)");
+        R"((^|[\s`'"(\[=])/((home|Users|tmp|var|etc|opt|usr|mnt|root|private|Volumes|srv|proc|workspace)(/[^\s`'"<>)\],;]*)?|[A-Za-z]/[^\s`'"<>)\],;]*))");
     text = std::regex_replace(text, windows, "$1<path>");
     text = std::regex_replace(text, unc, "$1<path>");
     text = std::regex_replace(text, unix, "$1<path>");
@@ -61,6 +69,12 @@ Result extract(const std::string& output, const std::string& job_id, const std::
     const std::size_t end = output.find(kEnd, start);
     if (end == std::string::npos) {
         result.error = "the summary block of the answer does not end";
+        return result;
+    }
+    // Before cleaning: a block of hundreds of KiB (tool output between the markers) is refused at once.
+    if (end - start > kMaxRawBytes) {
+        result.error = "the summary block has " + std::to_string(end - start) + " bytes; at most " +
+                       std::to_string(kMaxBytes) + " are kept";
         return result;
     }
     const std::string text = trimmed(clean(output.substr(start, end - start)));

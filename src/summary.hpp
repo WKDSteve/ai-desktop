@@ -18,6 +18,9 @@ constexpr const char* kEnd = "<!-- summary:end -->";
 constexpr const char* kSchema = "handoff-summary/1";
 // What the block may hold at most, after cleaning ("about 4 KiB").
 constexpr std::size_t kMaxBytes = 4096;
+// What clean() looks at at most, and the raw block extract() takes at most (cleaning only shortens, and std::regex
+// is recursive or quadratic on long text: the output of a run can be 512 KiB).
+constexpr std::size_t kMaxRawBytes = 2 * kMaxBytes;
 
 // The headings the block must have, in this order.
 constexpr const char* kHeadings[] = {"## Getan", "## Commits", "## Prüfungen", "## Offen"};

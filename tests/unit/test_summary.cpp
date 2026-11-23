@@ -98,3 +98,24 @@ TEST(summary_is_asked_for_in_the_prompt_of_a_hand_over) {
     }
     CHECK(text.rfind("the task") > text.find(summary::kBegin));
 }
+
+TEST(summary_clean_replaces_git_bash_drive_paths) {
+    const std::string cleaned = summary::clean("see /e/repos/x/a.cpp and (/c/Users/bob/y) and `/d/work`");
+    CHECK(cleaned.find("repos") == std::string::npos);
+    CHECK(cleaned.find("bob") == std::string::npos);
+    CHECK_EQ(cleaned, std::string("see <path> and (<path>) and `<path>`"));
+}
+
+TEST(summary_extract_refuses_a_huge_block_without_cleaning_it) {
+    std::string filler;
+    while (filler.size() < 300 * 1024) {
+        filler += "/home/bob/x C:/y/z tool output line\n";
+    }
+    const std::string text = std::string(summary::kBegin) + "\n## Getan\n" + filler +
+                             "\n## Commits\n\n## Prüfungen\n\n## Offen\n" + summary::kEnd;
+    const auto result = summary::extract(text, "x", "d");
+    CHECK(result.summary.is_null());
+    CHECK(result.error.find("bytes") != std::string::npos);
+    // clean() itself looks at the first kMaxRawBytes only.
+    CHECK(summary::clean(filler).size() <= summary::kMaxRawBytes);
+}

@@ -165,7 +165,7 @@ an error, ai-desktop takes the **last** block of the output and
 1. cleans it: the character rule above (what it refuses becomes U+FFFD) and no absolute path (a drive path such as
    `C:\work\x`, a share such as `\\host\share` and a folder at the root of a Unix system such as `/home/...` or
    `/tmp/...` become `<path>`; a relative path, a task id and a URL stay);
-2. checks it: all four headings, each alone on its line and in this order, and at most 4096 bytes after cleaning
+2. checks it: all four headings, each alone on its line and in this order, and at most 4096 bytes after cleaning (a raw block over 8192 bytes is refused before it is cleaned; a Git Bash path such as `/e/repos/x` is replaced as well)
    (longer is refused, not cut, so no heading is lost).
 
 `GET /jobs/<id>` then carries, next to `output` (the list leaves both out):
