@@ -306,6 +306,30 @@ function setFieldError(fieldId, errorId, message) {
 
 document.getElementById('ask-prompt').addEventListener('input', () => setFieldError('ask-prompt', 'ask-prompt-error', ''));
 
+// The draft of the prompt: what is typed in the field and not sent survives a reload. Only this text is kept,
+// in localStorage (this origin and port alone, as the token); never an answer, and it is dropped when the request
+// ended well. The text of a job is not copied here, it may come from a private area: a reload with an edited job text
+// asks first instead (beforeunload, below).
+const ASK_DRAFT_KEY = 'ai-desktop.draft.ask';
+function saveAskDraft(text) {
+  try {
+    if (text) localStorage.setItem(ASK_DRAFT_KEY, text);
+    else localStorage.removeItem(ASK_DRAFT_KEY);
+  } catch (_) {
+    // no storage: the draft lives in the field only
+  }
+}
+(function restoreAskDraft() {
+  const field = document.getElementById('ask-prompt');
+  try {
+    const draft = localStorage.getItem(ASK_DRAFT_KEY);
+    if (draft && !field.value) field.value = draft;
+  } catch (_) {
+    // no storage
+  }
+  field.addEventListener('input', () => saveAskDraft(field.value));
+})();
+
 async function sendAsk() {
   const field = document.getElementById('ask-prompt');
   const prompt = field.value.trim();
@@ -403,6 +427,7 @@ async function sendAsk() {
     }
 
     if (!gotError) {
+      saveAskDraft('');  // sent and answered: no draft any more
       status.textContent = t('done');
       status.style.color = 'var(--ok)';
     }
@@ -836,6 +861,16 @@ async function dismissJob() {
   if (location.hash) history.replaceState(null, '', location.pathname);
   loadJobs();
 }
+
+// A reload (or closing the tab) with an edited job text asks first: the edit exists only in the field. The text of a job
+// that runs is read-only, and one sent is the job's text again, so neither counts.
+window.addEventListener('beforeunload', (event) => {
+  const field = document.getElementById('job-markdown');
+  if (selectedJobData && !field.readOnly && field.value !== selectedJobData.markdown) {
+    event.preventDefault();
+    event.returnValue = '';
+  }
+});
 
 // The two settings of the jobs; a setting an environment variable locks cannot be changed here.
 async function loadJobSettings() {
