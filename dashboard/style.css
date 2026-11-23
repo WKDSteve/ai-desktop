@@ -153,7 +153,8 @@ h1, .card h2 { text-wrap: balance; }
 }
 #job-output:empty { display: none; }
 #job-settings { margin-top: .6rem; font-size: .75rem; }
-#job-settings summary { cursor: pointer; color: var(--muted); }
+/* The padding makes the line a target of 24 px at least. */
+#job-settings summary { cursor: pointer; color: var(--muted); padding-block: .4rem; }
 #job-settings label { margin-top: .5rem; }
 
 /* Usage panel */
@@ -166,11 +167,12 @@ h1, .card h2 { text-wrap: balance; }
 /* The x of a choice sits inside its border, before the arrow of the browser. */
 .clear-select { position: relative; display: inline-flex; align-items: center; max-width: 100%; }
 .usage-filters select { max-width: 100%; min-width: 0; }
-.usage-filters .clear-select > select.clearable { padding-right: 2.6rem; }
+.usage-filters .clear-select > select.clearable { padding-right: 3rem; }
 .clear-select .clear {
   position: absolute; top: 50%; right: 1.4rem; transform: translateY(-50%);
   display: inline-flex; align-items: center; justify-content: center;
-  width: 1.2rem; height: 1.2rem; padding: 0; border: none; border-radius: 4px;
+  /* 24 px at least: the x is a target of its own */
+  width: 1.5rem; height: 1.5rem; min-width: 24px; min-height: 24px; padding: 0; border: none; border-radius: 4px;
   background: none; color: var(--muted); cursor: pointer; line-height: 1;
 }
 .clear-select .clear[hidden] { display: none; }
