@@ -81,6 +81,31 @@ const COLORS = {
   SYSTEM:   'var(--muted)',
 };
 
+// Names, identifiers and paths are not translated by a browser's page translation: `ident` marks one inside a
+// text, `identNodes` fills the {placeholders} of a text of i18n.js with such marked values (the text itself stays
+// translatable).
+function ident(text) {
+  const span = document.createElement('span');
+  span.translate = false;
+  span.textContent = String(text);
+  return span;
+}
+
+function identNodes(key, values) {
+  const nodes = [];
+  t(key).split(/(\{\w+\})/).forEach((part) => {
+    const name = /^\{(\w+)\}$/.exec(part);
+    if (!name) {
+      if (part) nodes.push(part);
+    } else if (name[1] in values) {
+      nodes.push(ident(values[name[1]]));
+    } else {
+      nodes.push(part);
+    }
+  });
+  return nodes;
+}
+
 function ts() {
   return new Date().toLocaleTimeString(LOCALE, { hour12: false });
 }
@@ -184,6 +209,7 @@ function renderBackends() {
     const present = !!knownBackends[id];
     const failed = failures.includes(id);
     const part = document.createElement('span');
+    part.translate = false;
     part.style.color = failed ? 'var(--warn)' : present ? 'var(--ok)' : 'var(--muted)';
     part.textContent = `${BACKEND_NAMES[id]} ${failed ? '⚠' : present ? '✓' : '✗'}`;
     if (i > 0) status.append('  ');
@@ -193,6 +219,7 @@ function renderBackends() {
   const detail = document.getElementById('backends-errors');
   detail.replaceChildren(...failures.map((id) => {
     const line = document.createElement('div');
+    line.translate = false;  // a backend's name and the server's own text
     line.textContent = backendErrorText(id, backendErrors[id]);
     return line;
   }));
@@ -383,9 +410,10 @@ function fmtCost(group) {
   return Number(group.cost_usd).toLocaleString(LOCALE, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 }
 
-function cell(row, text, numeric) {
+function cell(row, text, numeric, isName) {
   const td = document.createElement('td');
   if (numeric) td.className = 'num';
+  if (isName) td.translate = false;
   td.textContent = text;
   row.appendChild(td);
   return td;
@@ -399,6 +427,7 @@ function renderProviderSelect(byProvider) {
   [...knownProviders].sort().forEach((p) => {
     const opt = document.createElement('option');
     opt.value = p;
+    opt.translate = false;
     opt.textContent = p;
     select.appendChild(opt);
   });
@@ -478,7 +507,7 @@ async function loadUsage() {
   providers.forEach((p) => {
     const g = data.by_provider[p];
     const row = document.createElement('tr');
-    cell(row, p, false);
+    cell(row, p, false, true);
     cell(row, fmtInt(g.requests), true);
     cell(row, fmtInt(g.prompt_tokens), true);
     cell(row, fmtInt(g.completion_tokens), true);
@@ -499,10 +528,11 @@ async function loadUsage() {
     state.textContent = ev.ok ? '✓' : '✗ ' + (ev.error_kind || t('error_short'));
     const what = document.createElement('span');
     what.className = 'log-msg';
-    what.textContent =
-      ev.provider + ' · ' + (ev.model || t('default_model')) + (ev.stream ? ' · stream' : '') +
+    what.append(
+      ident(ev.provider), ' · ', ev.model ? ident(ev.model) : t('default_model'), ev.stream ? ' · stream' : '',
       ' · ' + fmtInt(ev.prompt_tokens) + '/' + fmtInt(ev.completion_tokens) + ' ' + t('tokens') + ' · ' +
-      fmtInt(ev.duration_ms) + ' ms · ' + ev.source;
+      fmtInt(ev.duration_ms) + ' ms · ', ident(ev.source),
+    );
     line.appendChild(ts);
     line.appendChild(state);
     line.appendChild(what);
@@ -564,7 +594,7 @@ function renderJobList(jobs) {
     title.textContent = job.title;
     const state = document.createElement('span');
     state.className = 'job-state muted';
-    state.textContent = `${job.source} · ${job.kind} · ${t('status_' + job.status)}`;
+    state.replaceChildren(ident(job.source), ' · ', ident(job.kind), ` · ${t('status_' + job.status)}`);
     button.append(title, state);
     button.addEventListener('click', () => selectJob(job.id));
     item.append(button);
@@ -595,21 +625,21 @@ function showJobStatus(job) {
   document.getElementById('job-stop').disabled = !busy;
   document.getElementById('job-markdown').readOnly = busy;
   // How it runs: Claude Code with the brief (its versions), or one answer of a model; and why, when it fell back.
-  let runner = '';
+  const runner = [];
   if (job.runner === 'claude-code' && job.brief) {
-    runner = t('job_runner_agent', {
+    runner.push(...identNodes('job_runner_agent', {
       brief: job.brief.brief_version, contract: job.brief.contract_schema, engine: job.brief.engine_version || '?',
-    });
+    }));
   } else if (job.runner === 'model') {
-    runner = t('job_runner_model', { model: job.model });
+    runner.push(...identNodes('job_runner_model', { model: job.model }));
   }
-  if (job.note) runner += (runner ? ' · ' : '') + job.note;
-  document.getElementById('job-runner').textContent = runner;
+  if (job.note) runner.push((runner.length ? ' · ' : '') + job.note);
+  document.getElementById('job-runner').replaceChildren(...runner);
   const confirm = document.getElementById('job-confirm');
   confirm.hidden = job.status !== 'needs_confirmation';
   if (!confirm.hidden) {
-    document.getElementById('job-confirm-text').textContent =
-      t('job_private_question', { area: job.area, model: job.model || defaultModel });
+    document.getElementById('job-confirm-text').replaceChildren(
+      ...identNodes('job_private_question', { area: job.area, model: job.model || defaultModel }));
   }
 }
 
@@ -639,9 +669,9 @@ async function refreshJob(id, fillText) {
   const job = await res.json();
   selectedJobData = job;
   document.getElementById('job-detail').hidden = false;
-  document.getElementById('job-meta').textContent =
-    t('job_meta', { task_id: job.task_id, area: job.area, source: job.source, kind: job.kind }) +
-    (job.private ? t('job_private') : '');
+  document.getElementById('job-meta').replaceChildren(
+    ...identNodes('job_meta', { task_id: job.task_id, area: job.area, source: job.source, kind: job.kind }),
+    job.private ? t('job_private') : '');
   if (fillText) {
     document.getElementById('job-markdown').value = job.markdown;
     document.getElementById('job-model').value = job.model || '';

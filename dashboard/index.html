@@ -71,11 +71,11 @@
     <h2>System</h2>
     <!-- Only what the page checks; a badge turns green when its check passed (app.js). -->
     <div class="status-row">
-      <span class="badge badge-idle" id="sse-badge">SSE</span>
+      <span class="badge badge-idle" id="sse-badge" translate="no">SSE</span>
       <span id="sse-status" class="muted" data-i18n="connecting"></span>
     </div>
     <div class="status-row">
-      <span class="badge badge-idle" id="backends-badge">Backends</span>
+      <span class="badge badge-idle" id="backends-badge" translate="no">Backends</span>
       <span id="backends-status" class="muted" data-i18n="loading"></span>
     </div>
     <!-- A backend whose model listing failed (a rejected key, Ollama down): the reason, one line each (app.js). -->
@@ -131,8 +131,8 @@
     <button class="btn btn-teal" id="ask-send" data-on-click="sendAsk" data-i18n="send"></button>
     <button class="btn btn-muted" id="ask-stop" data-on-click="stopAsk" disabled data-i18n="stop"></button>
   </div>
-  <div id="ask-hint"><span data-i18n="ask_hint_before"></span><code>gpt-</code>/<code>o1-</code>/<code>o3-</code>
-    → OpenAI, <code>claude-</code> → Anthropic, <code>gemini-</code> → Gemini<span data-i18n="ask_hint_after"></span></div>
+  <div id="ask-hint"><span data-i18n="ask_hint_before"></span><code translate="no">gpt-</code>/<code translate="no">o1-</code>/<code translate="no">o3-</code>
+    → <span translate="no">OpenAI</span>, <code translate="no">claude-</code> → <span translate="no">Anthropic</span>, <code translate="no">gemini-</code> → <span translate="no">Gemini</span><span data-i18n="ask_hint_after"></span></div>
   <!-- Filled with the errors of GET /models: the list then holds only the built-in suggestions of that backend. -->
   <div id="ask-model-errors" class="backend-errors" role="status" hidden></div>
   <div id="ask-status"></div>
