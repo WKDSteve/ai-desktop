@@ -162,7 +162,8 @@ h1 { color: var(--accent); font-size: 1.1rem;
   border-radius: 6px; padding: .4rem .6rem; font-family: inherit; font-size: 1rem;
 }
 /* The x of a choice sits inside its border, before the arrow of the browser. */
-.clear-select { position: relative; display: inline-flex; align-items: center; }
+.clear-select { position: relative; display: inline-flex; align-items: center; max-width: 100%; }
+.usage-filters select { max-width: 100%; min-width: 0; }
 .usage-filters .clear-select > select.clearable { padding-right: 2.6rem; }
 .clear-select .clear {
   position: absolute; top: 50%; right: 1.4rem; transform: translateY(-50%);
@@ -205,6 +206,12 @@ h1 { color: var(--accent); font-size: 1.1rem;
 .log-agent { flex-shrink: 0; min-width: 72px; font-weight: 600;
              font-size: .74rem; }
 .log-msg   { color: var(--text); }
+
+/* Text that comes from outside (an agent's message, a model id, a path, a provider name) has no break opportunity of its
+   own and must not widen the page: it breaks anywhere, and a flex item holding it may shrink below its content. */
+.log-msg, .usage-event, .agent-msg, #decision-text, #job-meta, #job-runner, #job-status, #job-confirm-text,
+.usage-table th, .usage-table td { overflow-wrap: anywhere; min-width: 0; }
+.agent > div:last-child { min-width: 0; }
 
 /* Layout helpers that were inline styles (the CSP allows no style attribute). */
 .row     { display: flex; gap: .5rem; align-items: center; }
