@@ -41,6 +41,9 @@ std::filesystem::path record_path(const std::filesystem::path& dir);
 // when it cannot.
 bool write_record(const std::filesystem::path& dir, const HubRecord& record, std::string* error);
 
+// Reads `hub.json` of `dir`; false when it is not there or not a record of this app.
+bool read_record(const std::filesystem::path& dir, HubRecord* record);
+
 // Removes `hub.json` from `dir` -- but only when it is still the file of `instance`, so an ending server never
 // takes away the file of another one that started meanwhile.
 void remove_record(const std::filesystem::path& dir, const std::string& instance);

@@ -103,6 +103,24 @@ bool write_record(const fs::path& dir, const HubRecord& record, std::string* err
     return true;
 }
 
+bool read_record(const fs::path& dir, HubRecord* record) {
+    std::ifstream in(record_path(dir), std::ios::binary);
+    if (!in) {
+        return false;
+    }
+    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    const auto doc = nlohmann::json::parse(text, nullptr, false);
+    if (doc.is_discarded() || !doc.is_object() || doc.value("app", "") != kApp || !doc.contains("port") ||
+        !doc["port"].is_number_integer() || !doc.contains("pid") || !doc["pid"].is_number_unsigned()) {
+        return false;
+    }
+    record->port = doc["port"].get<int>();
+    record->pid = doc["pid"].get<std::uint32_t>();
+    record->version = doc.value("version", "");
+    record->instance = doc.value("instance", "");
+    return true;
+}
+
 void remove_record(const fs::path& dir, const std::string& instance) {
     const fs::path path = record_path(dir);
     std::string text;

@@ -403,6 +403,8 @@ token (`Authorization: Bearer <token>`), which it gets for a ticket:
 | `POST /session` | anybody with a ticket | `{ "ticket": "<hex>" }` → `{ "token": "<hex>" }`; a one-time ticket is used up. With the control secret and no ticket it gives a token too. `401` for an unknown, used or expired ticket |
 | `POST /session/ticket` | the control secret | `{ "ticket": "<hex>", "expires_in": 120 }`: a one-time ticket for a program that opens the dashboard at `http://127.0.0.1:<port>/#ticket=<ticket>` (the hub's tile, the dashboard link of a family app) |
 
+| `POST /shutdown` | the control secret | `{ "ok": true }`, then the server ends (its jobs and its `hub.json` go as at Ctrl+C): what `ai-desktop stop` sends |
+
 Where the page gets its ticket:
 
 - the **console** of ai-desktop shows `Dashboard: http://127.0.0.1:<port>/#ticket=<hex>`, a ticket good while the server

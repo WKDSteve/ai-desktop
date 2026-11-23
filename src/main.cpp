@@ -27,6 +27,8 @@
 #include "anthropic_client.hpp"
 #include "api.hpp"
 #include "catalog.hpp"
+#include "cli.hpp"
+#include "cli_run.hpp"
 #include "control_secret.hpp"
 #include "family.hpp"
 #include "foreground.hpp"
@@ -447,27 +449,36 @@ void use_utf8_console() {
 void run_simulation_agent() {
     using namespace std::chrono_literals;
 
-    std::this_thread::sleep_for(1s);
+    // A sleep that ends when the server does: `ai-desktop stop` must not wait for the rest of the story.
+    const auto nap = [](std::chrono::seconds length) {
+        const auto until = std::chrono::steady_clock::now() + length;
+        while (running && std::chrono::steady_clock::now() < until) {
+            std::this_thread::sleep_for(100ms);
+        }
+        return running.load();
+    };
+
+    if (!nap(1s)) return;
     push_event("agent_status", "Planner",
                "ai-desktop started — looking at the project structure...");
 
-    std::this_thread::sleep_for(3s);
+    if (!nap(3s)) return;
     push_event("agent_status", "Planner",
                "Project structure found: src/, agents/, containers/");
 
-    std::this_thread::sleep_for(2s);
+    if (!nap(2s)) return;
     push_event("agent_status", "Executor",
                "Checking for a container runtime (Podman)...");
 
-    std::this_thread::sleep_for(2s);
+    if (!nap(2s)) return;
     push_event("agent_status", "Executor",
                "Podman rootless available — ready for a sandbox");
 
-    std::this_thread::sleep_for(2s);
+    if (!nap(2s)) return;
     push_event("decision_point", "Planner",
                "Shall I start the first agent container now?");
 
-    std::this_thread::sleep_for(6s);
+    if (!nap(6s)) return;
     push_event("agent_status", "Executor",
                "Waiting for the human's decision...");
 }
@@ -508,6 +519,18 @@ static bool dashboard_not_modified(const httplib::Request& req, httplib::Respons
 }
 
 int main(int argc, char** argv) {
+    {
+        // `ai-desktop start|stop|status|open|--version|--help ...` (src/cli.hpp); no command or only --port is the server.
+        const std::vector<std::string> args(argv + 1, argv + argc);
+        const ai_desktop::cli::Parsed parsed = ai_desktop::cli::parse(args);
+        if (parsed.command == ai_desktop::cli::Command::Invalid) {
+            std::cerr << "ai-desktop: " << parsed.error << " (ai-desktop --help)\n";
+            return ai_desktop::cli::kExitUsage;
+        }
+        if (parsed.command != ai_desktop::cli::Command::Serve) {
+            return ai_desktop::cli::run(parsed, ai_desktop::cli::own_executable(argv[0]), AI_DESKTOP_VERSION);
+        }
+    }
     use_utf8_console();
 
     // Port: --port N wins over AI_DESKTOP_PORT, default 8080 (what ai.nvim expects).
@@ -715,6 +738,20 @@ int main(int argc, char** argv) {
                              {"expires_in", static_cast<long>(ai_desktop::session::kTicketLifetime.count())}}
                             .dump(),
                         "application/json");
+    });
+
+    // The end of the server for `ai-desktop stop`: the control secret only, like a job. The answer goes out first.
+    svr.Post("/shutdown", [&svr](const httplib::Request& req, httplib::Response& res) {
+        if (!ai_desktop::control_secret::matches(req.get_header_value("Authorization"), g_control_secret)) {
+            send_json_error(res, 401, "the control secret of ai-desktop is required");
+            return;
+        }
+        res.set_content("{\"ok\":true}", "application/json");
+        std::thread([&svr]() {
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            leave_family();
+            svr.stop();
+        }).detach();
     });
 
     // SSE-Endpoint: Browser verbindet sich hier und empfängt live Events

@@ -21,6 +21,7 @@ target_include_directories(third_party_headers INTERFACE third_party)
 add_library(ai_desktop_core STATIC
     src/agent.cpp
     src/catalog_parse.cpp
+    src/cli.cpp
     src/ci_status.cpp
     src/config.cpp
     src/control_secret.cpp
@@ -53,6 +54,7 @@ add_executable(ai-desktop
     src/main.cpp
     src/api.cpp
     src/catalog.cpp
+    src/cli_run.cpp
     src/foreground.cpp
     src/jobs_api.cpp
     src/ollama_client.cpp
@@ -94,6 +96,7 @@ if(AI_DESKTOP_BUILD_TESTS)
         tests/unit/test_main.cpp
         tests/unit/test_agent.cpp
         tests/unit/test_catalog_parse.cpp
+        tests/unit/test_cli.cpp
         tests/unit/test_ci_status.cpp
         tests/unit/test_config.cpp
         tests/unit/test_control_secret.cpp
