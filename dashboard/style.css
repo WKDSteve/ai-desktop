@@ -17,6 +17,8 @@ header {
 }
 h1 { color: var(--accent); font-size: 1.1rem;
      letter-spacing: .08em; text-transform: uppercase; }
+/* A heading that wraps breaks evenly; a browser that does not know the property wraps as it always did. */
+h1, .card h2 { text-wrap: balance; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
         margin-bottom: 1rem; }
 .card { background: var(--surface); border: 1px solid var(--line);
@@ -206,6 +208,9 @@ h1 { color: var(--accent); font-size: 1.1rem;
 .log-agent { flex-shrink: 0; min-width: 72px; font-weight: 600;
              font-size: .74rem; }
 .log-msg   { color: var(--text); }
+
+/* Digits that change or stand in a column keep one width (a number that updates does not shift its neighbours). */
+.kpi-value, td.num, .log-ts, .tnum { font-variant-numeric: tabular-nums; }
 
 /* Text that comes from outside (an agent's message, a model id, a path, a provider name) has no break opportunity of its
    own and must not widen the page: it breaks anywhere, and a flex item holding it may shrink below its content. */
