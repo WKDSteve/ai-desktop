@@ -92,6 +92,7 @@ test('an empty usage list and an empty log say so', async ({ page }) => {
 test('the log hides its empty note with the first line', async ({ page }) => {
   await mockPage(page, { events: [{ type: 'agent_status', agent: 'Planner', message: 'hello' }], providers: {}, usageEvents: [], jobs: [] });
   await page.goto(await server.dashboardUrl());
+  await expect(page.locator('#log-empty')).toHaveCount(1); // the note exists (a missing element would be "hidden" too)
   await expect(page.locator('#log .log-line')).not.toHaveCount(0);
   await expect(page.locator('#log-empty')).toBeHidden();
 });
