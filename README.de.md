@@ -32,8 +32,9 @@ gehosteten Runnern geprüft ([`pr.yml`](.github/workflows/pr.yml)), ebenso alles
 [**Neuestes Release herunterladen**](https://github.com/WKDSteve/ai-desktop/releases/latest)
 -- `ai-desktop-setup-<version>-x64.exe`, ein Windows-Installer, ohne Compiler oder
 MSYS2. Er installiert für den aktuellen Benutzer (keine Administratorrechte),
-legt einen Startmenü-Eintrag an und kann optional den Befehl `ai-desktop` in den
-`PATH` aufnehmen. Start über das Startmenü oder mit `ai-desktop`; das Dashboard
+legt einen Startmenü-Eintrag an und macht `ai-desktop` zum Befehl in neuen Terminals (ein
+Starter in `%LOCALAPPDATA%\appkit-family\bin`, dem Ordner, den alle Apps der Familie teilen; siehe „Der Befehl im
+Terminal“ unten). Start über das Startmenü oder mit `ai-desktop start --open`; das Dashboard
 läuft dann auf `http://127.0.0.1:8080/`. Deinstallation über *Einstellungen ->
 Apps*.
 
@@ -66,10 +67,9 @@ Das Skript eines Releases installiert genau dieses Release, das von `latest`
 den Rolling-Build ([`rolling.yml`](.github/workflows/rolling.yml), nach jedem
 grünen CI-Lauf auf `main` neu gebaut und durch Installieren, Starten,
 Aktualisieren und Deinstallieren geprüft, zum Ausprobieren des Neuesten). Die
-Zeile oben installiert ohne den Schritt „zum PATH hinzufügen", der Befehl
-`ai-desktop` steht also nicht in neuen Terminals; ai-desktop über das Startmenü
-starten. Für den Schritt oder ein anderes Argument das Skript erst speichern und
-die Argumente mitgeben:
+Zeile oben installiert ohne den Schritt „zum PATH hinzufügen“ (der auch den Installationsordner selbst auf den
+`PATH` legt); der Befehl `ai-desktop` steht in neuen Terminals trotzdem bereit, über seinen Starter. Für den Schritt
+oder ein anderes Argument das Skript erst speichern und die Argumente mitgeben:
 
 ```powershell
 irm https://github.com/WKDSteve/ai-desktop/releases/download/latest/install.ps1 -OutFile "$env:TEMP\install.ps1"
@@ -182,6 +182,31 @@ Englisch, wenn er keine davon nennt, wie die übrigen Apps der Familie. Ihre Tex
 
 ## Starten
 
+### Der Befehl im Terminal
+
+Jede Installation (Setup, Installationszeile, `scripts/build-install.ps1`) macht `ai-desktop` zum Befehl in jedem neuen
+Terminal (PowerShell, cmd, Git Bash): Setup und `build-install.ps1` schreiben zwei kleine Starter,
+`ai-desktop.cmd` und `ai-desktop`, nach `%LOCALAPPDATA%\appkit-family\bin` und nehmen diesen Ordner einmal in den
+Benutzer-`PATH` auf (derselbe Ordner und dieselben Starter wie bei den anderen Apps der Familie; die Deinstallation
+nimmt sie zurück, mit dem letzten auch den Ordner und seinen `PATH`-Eintrag). Ein Terminal, das bei der Installation
+offen war, sieht den neuen `PATH` nicht: ein neues öffnen.
+
+```text
+ai-desktop                    den Server in diesem Terminal laufen lassen (Strg+C beendet ihn); --port <n> wie bisher
+ai-desktop start [--open]     in einem eigenen Konsolenfenster starten (Schließen beendet ihn); --open öffnet das Dashboard
+ai-desktop stop               den laufenden Server beenden (auch: quit)
+ai-desktop status [--json]    läuft er? Port, PID, Version; Exit 0 läuft, 1 läuft nicht
+ai-desktop open               das Dashboard im Browser öffnen, den Server bei Bedarf starten
+ai-desktop --version | --help
+```
+
+Exit-Codes: `0` erledigt, `1` fehlgeschlagen (bei `status`: läuft nicht), `2` falsche Nutzung; ein Starter, dessen
+Programm fehlt, endet mit `3`. `stop` fragt den Server auf seinem Port mit dem Control-Secret (`POST /shutdown`, die
+Datei `control.secret` im Config-Ordner), also kann nur ein Programm desselben Benutzers ihn beenden. Ein Start mit
+belegtem Port endet mit 1. `ai-desktop cli-install` / `cli-uninstall` ruft das Setup, um die
+Starter zu schreiben und zu entfernen (`APPKIT_FAMILY_DIR` verlegt den Ordner). Nicht für die Tricentis-Workstation,
+auf der ai-desktop nie installiert wird.
+
 ```bash
 ./build/ai-desktop      # bzw. build/ai-desktop.exe unter Windows
 ```
@@ -280,6 +305,7 @@ Person lesbar, beim Beenden entfernt): eine App der Familie schickt es als `Auth
 | `/jobs/<id>/run`, `/jobs/<id>` | POST, DELETE | Einen Auftrag ausführen oder wegräumen (das Dashboard) |
 | `/session` | POST | Das Dashboard tauscht das Ticket seiner Adresse gegen ein Sitzungs-Token |
 | `/session/ticket` | POST | Ein Einmal-Ticket für ein Programm mit dem Kontroll-Geheimnis, das das Dashboard öffnet |
+| `/shutdown` | POST | Beendet den Server (`ai-desktop stop`); nur mit dem Kontroll-Geheimnis |
 
 Die Routen mit Wirkung und die, die Aufträge oder Einstellungen lesen (`/events`, `/decision`, `/usage`, `/settings`,
 `/keys`, `/models/custom`, `/jobs` außer `POST /jobs`), verlangen `Authorization: Bearer` mit dem

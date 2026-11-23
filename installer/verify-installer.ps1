@@ -151,6 +151,33 @@ function Assert-FamilyManifest {
     Write-Ok "registered in the family ($FamilyManifest, version $($manifest.version))"
 }
 
+# The command in the terminal (appkit's docs/FAMILY.md): the starters of the setup in <family>\bin, on the user PATH
+# once, and the command runs the installed program.
+$FamilyBin = Join-Path $(if ($env:APPKIT_FAMILY_DIR) { $env:APPKIT_FAMILY_DIR } else { Join-Path $env:LOCALAPPDATA 'appkit-family' }) 'bin'
+
+function Invoke-Command-Starter([string[]]$Arguments) {
+    $starter = Join-Path $FamilyBin 'ai-desktop.cmd'
+    $output = & "$env:SystemRoot\System32\cmd.exe" /d /c "`"$starter`" $($Arguments -join ' ') 2>&1"
+    return [pscustomobject]@{ Code = $LASTEXITCODE; Output = ($output -join "`n") }
+}
+
+function Assert-CommandInstalled {
+    foreach ($name in @('ai-desktop.cmd', 'ai-desktop')) {
+        Assert-That (Test-Path -LiteralPath (Join-Path $FamilyBin $name)) "the setup did not write the starter $name into $FamilyBin"
+    }
+    $cmdText = Get-Content -LiteralPath (Join-Path $FamilyBin 'ai-desktop.cmd') -Raw
+    Assert-That ($cmdText.Contains('appkit starter')) 'the .cmd starter does not carry the mark of appkit'
+    Assert-That (-not $cmdText.Contains('\\?\')) 'the .cmd starter holds a verbatim path (cmd cannot run it)'
+    $rawEntries = @((Get-RawUserPath) -split ';' | Where-Object { $_ })
+    $expanded = @($rawEntries | ForEach-Object { [Environment]::ExpandEnvironmentVariables($_).TrimEnd('\') })
+    Assert-That (@($expanded | Where-Object { $_ -ieq $FamilyBin.TrimEnd('\') }).Count -eq 1) "$FamilyBin is not on the user PATH exactly once"
+    $version = Invoke-Command-Starter @('--version')
+    Assert-That ($version.Code -eq 0 -and $version.Output -match '^ai-desktop \d') "ai-desktop --version through the starter: exit $($version.Code), '$($version.Output)'"
+    $wrong = Invoke-Command-Starter @('frobnicate')
+    Assert-That ($wrong.Code -eq 2) "a wrong command through the starter should exit 2, got $($wrong.Code)"
+    Write-Ok "command ai-desktop: starters in $FamilyBin, on the user PATH once, --version and exit codes through the starter"
+}
+
 function Assert-InstalledLayout {
     foreach ($rel in @('app\ai-desktop.exe', 'app\dashboard\index.html', 'ai-desktop.cmd', 'unins000.exe')) {
         Assert-That (Test-Path (Join-Path $InstallDir $rel)) "missing $rel"
@@ -182,6 +209,16 @@ function Start-InstalledServer {
     $dashboard = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$Port/" -TimeoutSec 5
     Assert-That ($dashboard.StatusCode -eq 200) "dashboard answered $($dashboard.StatusCode)"
     Write-Ok 'dashboard served (the launcher started the server from the right directory)'
+    # The command sees the server the launcher started, and ends it again (stop is the end of its process).
+    $status = Invoke-Command-Starter @('status', '--json')
+    Assert-That ($status.Code -eq 0 -and ($status.Output | ConvertFrom-Json).running) "ai-desktop status through the starter: exit $($status.Code), '$($status.Output)'"
+    $stop = Invoke-Command-Starter @('stop')
+    Assert-That ($stop.Code -eq 0) "ai-desktop stop through the starter: exit $($stop.Code), '$($stop.Output)'"
+    Assert-That ((Invoke-Command-Starter @('status')).Code -eq 1) 'ai-desktop status after stop should exit 1'
+    $start = Invoke-Command-Starter @('start')
+    Assert-That ($start.Code -eq 0) "ai-desktop start through the starter: exit $($start.Code), '$($start.Output)'"
+    Assert-That ($null -ne (Wait-ForHealth)) 'the server started by the command did not answer /health'
+    Write-Ok 'status, stop and start through the starter'
 }
 
 function Get-InstalledServer {
@@ -216,6 +253,7 @@ try {
     Write-Host "`n==> Checking the installed files"
     Assert-InstalledLayout
     Assert-FamilyManifest
+    Assert-CommandInstalled
 
     Write-Host "`n==> Checking the user PATH (task addtopath)"
     $pathInstalled = Get-RawUserPath
@@ -285,6 +323,8 @@ if ($installed) {
     Write-Ok 'files removed'
     Assert-That (-not (Test-Path -LiteralPath $FamilyManifest)) 'the uninstaller left the family manifest behind'
     Write-Ok 'taken out of the family'
+    Assert-That (-not (Test-Path -LiteralPath (Join-Path $FamilyBin 'ai-desktop.cmd'))) 'the uninstaller left the starter behind'
+    Write-Ok 'starters removed'
     # Compare entry lists, not raw text: removing our entry may drop an empty
     # trailing ';' that was there before, which changes nothing for Windows.
     $deadline = [DateTime]::UtcNow.AddSeconds(10)

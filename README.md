@@ -33,8 +33,10 @@ and the install line of the rolling build), on throw-away VMs.
 [**Download the latest release**](https://github.com/WKDSteve/ai-desktop/releases/latest)
 -- `ai-desktop-setup-<version>-x64.exe`, a Windows installer, no compiler or MSYS2
 needed. It installs for the current user (no administrator rights), adds a
-Start-menu entry, and can optionally put the `ai-desktop` command on your `PATH`.
-Start it from the Start menu or with `ai-desktop`; it serves the dashboard on
+Start-menu entry, and puts the `ai-desktop` command into new terminals (a starter in
+`%LOCALAPPDATA%\appkit-family\bin`, the folder every app of the family shares; see
+"The command in the terminal" below).
+Start it from the Start menu or with `ai-desktop start --open`; it serves the dashboard on
 `http://127.0.0.1:8080/`. Uninstall via *Settings -> Apps*.
 
 The installer is not code-signed, so Windows SmartScreen may warn ("More info",
@@ -65,8 +67,8 @@ The script of a release installs exactly that release, the script of `latest`
 the rolling build ([`rolling.yml`](.github/workflows/rolling.yml), rebuilt
 after every green CI run on `main` and proven by installing, starting,
 updating and uninstalling it, for trying what is new). The line above installs
-without the "add to PATH" step, so the `ai-desktop` command is not in new
-terminals; start ai-desktop from the Start menu (add `/TASKS=desktopicon` to `-InstallArgs` for a shortcut on the desktop as well). For the step, or any other
+without the "add to PATH" step (which would also put the install directory itself on the
+`PATH`); the command `ai-desktop` is there in new terminals all the same, through its starter. Add `/TASKS=desktopicon` to `-InstallArgs` for a shortcut on the desktop as well). For the step, or any other
 argument of the script, save the script first and pass the arguments:
 
 ```powershell
@@ -198,6 +200,31 @@ English when it names neither, as the other apps of the family. Its texts live i
 
 ## Running
 
+### The command in the terminal
+
+Installing (the setup, the install line, `scripts/build-install.ps1`) makes `ai-desktop` a command in any new
+terminal (PowerShell, cmd, Git Bash); the setup and `build-install.ps1` write two small starters,
+`ai-desktop.cmd` and `ai-desktop`, into `%LOCALAPPDATA%\appkit-family\bin` and put that folder on the user `PATH`
+once (the same folder and the same starters the other apps of the family use; the uninstall takes them back, the
+folder and its `PATH` entry with the last one). A terminal that was open during the install does not see the new
+`PATH`: open a new one.
+
+```text
+ai-desktop                    run the server in this terminal (Ctrl+C ends it); --port <n> as before
+ai-desktop start [--open]     start it in a console window of its own (closing the window ends it); --open opens the dashboard
+ai-desktop stop               end the running server (also: quit)
+ai-desktop status [--json]    is it running? port, pid, version; exit 0 running, 1 not running
+ai-desktop open               open the dashboard in the browser, starting the server when needed
+ai-desktop --version | --help
+```
+
+Exit codes: `0` done, `1` failed (or, for `status`, not running), `2` wrong use; a starter whose program is gone
+ends with `3`. `stop` asks the server on its port with the control secret (`POST /shutdown`, the file
+`control.secret` of the config folder), so only a program of the same user can end it. A start whose port is taken
+exits 1. `ai-desktop cli-install` / `cli-uninstall` are what the setup calls to write and remove
+the starters (`APPKIT_FAMILY_DIR` moves the folder). Not for the Tricentis workstation, where ai-desktop is never
+installed.
+
 ai-desktop starts no other program; how it is started and why its console stays visible:
 [docs/PROCESSES.md](docs/PROCESSES.md).
 
@@ -301,6 +328,7 @@ task, see [docs/JOBS.md](docs/JOBS.md).
 | `/jobs/<id>/run`, `/jobs/<id>` | POST, DELETE | Run a job or put it away (the dashboard) |
 | `/session` | POST | The dashboard trades the ticket of its address for a session token |
 | `/session/ticket` | POST | A one-time ticket for a program with the control secret that opens the dashboard |
+| `/shutdown` | POST | Ends the server (`ai-desktop stop`); the control secret only |
 
 The routes with an effect, and those that read jobs or settings (`/events`, `/decision`, `/usage`, `/settings`,
 `/keys`, `/models/custom`, `/jobs` but `POST /jobs`), want `Authorization: Bearer` with the

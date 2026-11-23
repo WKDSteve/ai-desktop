@@ -54,12 +54,15 @@
     Do not start the installed server for the final /health check.
 
 .PARAMETER AddToPath
-    Add <Prefix> to the user PATH (idempotent; every other entry is kept
-    verbatim, %VAR% references included).
+    Add <Prefix> and the folder of the command starters (%LOCALAPPDATA%\appkit-family\bin) to the user PATH
+    (idempotent; every other entry is kept verbatim, %VAR% references included). The starters themselves,
+    ai-desktop.cmd and ai-desktop for Git Bash, are always written (`ai-desktop cli-install`); with the PATH
+    entry the command `ai-desktop start|stop|status|open` works in any new terminal.
 
 .PARAMETER Uninstall
     Remove <Prefix>\app and <Prefix>\ai-desktop.cmd (and <Prefix> itself if that
-    leaves it empty) and drop <Prefix> from the user PATH.
+    leaves it empty), take the command starters away (`ai-desktop cli-uninstall`) and drop <Prefix>, and the
+    starter folder once it is empty, from the user PATH.
 
 .EXAMPLE
     .\scripts\setup.ps1 -InstallDeps -AddToPath
@@ -101,6 +104,10 @@ $Port = 8080 # hardcoded in src/main.cpp
 # Where the server says that it runs (src/family.cpp): AI_DESKTOP_CONFIG_DIR, else %APPDATA%\ai-desktop.
 $HubRecord = Join-Path $(if ($env:AI_DESKTOP_CONFIG_DIR) { $env:AI_DESKTOP_CONFIG_DIR } else { Join-Path $env:APPDATA 'ai-desktop' }) 'hub.json'
 $EnvRegPath = 'Environment' # HKCU subkey that holds the user PATH
+# The folder of the command starters (appkit's docs/FAMILY.md): <family folder>\bin, one PATH entry for every app of
+# the family. APPKIT_FAMILY_DIR moves it (the tests do), and then the PATH entry is the whole path.
+$FamilyBin = Join-Path $(if ($env:APPKIT_FAMILY_DIR) { $env:APPKIT_FAMILY_DIR } else { Join-Path $env:LOCALAPPDATA 'appkit-family' }) 'bin'
+$FamilyBinEntry = if ($env:APPKIT_FAMILY_DIR) { $FamilyBin } else { '%LOCALAPPDATA%\appkit-family\bin' }
 
 # Keep in sync with the README's "Building" section. The hashes pin the exact
 # upstream release files, so a tampered download is rejected.
@@ -292,6 +299,12 @@ try {
         }
         if (Get-RunningInstall) {
             throw 'ai-desktop.exe from this installation is still running. Stop it first (Ctrl+C in its console).'
+        }
+        # The program takes its own starters away (and the folder when it is the last one), so before it goes.
+        & (Join-Path $AppDir 'ai-desktop.exe') cli-uninstall | Out-Null
+        if ($LASTEXITCODE -ne 0) { Write-Warn "ai-desktop cli-uninstall exited with $LASTEXITCODE" }
+        if (-not (Test-Path -LiteralPath $FamilyBin)) {
+            if (Remove-UserPathEntry $FamilyBinEntry -Confirm:$false) { Write-Ok "removed $FamilyBinEntry from user PATH" }
         }
         Remove-Item -LiteralPath $AppDir -Recurse -Force
         Write-Ok "removed $AppDir"
@@ -524,11 +537,19 @@ try {
     Set-Content -LiteralPath $Launcher -Value $launcherText -Encoding ASCII
     Write-Ok "launcher $Launcher"
 
+    # The command in the terminal: the program writes its starters (ai-desktop.cmd and ai-desktop) into <family>\bin.
+    & (Join-Path $AppDir 'ai-desktop.exe') cli-install | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "ai-desktop cli-install failed (exit code $LASTEXITCODE)" }
+    Write-Ok "command starters in $FamilyBin"
+
     if ($AddToPath) {
         if (Add-UserPathEntry $Prefix) {
             Write-Ok "added $Prefix to the user PATH (restart open terminals)"
         } else {
             Write-Ok 'already on the user PATH'
+        }
+        if (Add-UserPathEntry $FamilyBinEntry) {
+            Write-Ok "added $FamilyBinEntry to the user PATH (the command ai-desktop works in a new terminal)"
         }
     }
 
@@ -603,6 +624,7 @@ try {
 ai-desktop is installed.
 
   Start:      $Launcher         (binds 127.0.0.1:$Port, Ctrl+C stops it)
+  Command:    ai-desktop start|stop|status|open   (new terminals; the starters are in $FamilyBin)
   Dashboard:  http://127.0.0.1:$Port/
   Uninstall:  $uninstallHint
 
