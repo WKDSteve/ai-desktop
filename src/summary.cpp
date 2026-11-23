@@ -50,11 +50,11 @@ std::string clean(const std::string& block) {
     // character before it must not be part of a word, so `ai-desktop/x` and a URL stay as they are.
     static const std::regex windows(R"((^|[^A-Za-z0-9])[A-Za-z]:[\\/][^\s`'"<>)\],;]*)");
     static const std::regex unc(R"((^|[^A-Za-z0-9])\\\\[^\s`'"<>)\],;]+)");
-    static const std::regex unix(
+    static const std::regex unix_path(
         R"((^|[\s`'"(\[=])/((home|Users|tmp|var|etc|opt|usr|mnt|root|private|Volumes|srv|proc|workspace)(/[^\s`'"<>)\],;]*)?|[A-Za-z]/[^\s`'"<>)\],;]*))");
     text = std::regex_replace(text, windows, "$1<path>");
     text = std::regex_replace(text, unc, "$1<path>");
-    text = std::regex_replace(text, unix, "$1<path>");
+    text = std::regex_replace(text, unix_path, "$1<path>");
     return text;
 }
 
