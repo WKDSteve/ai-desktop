@@ -3,7 +3,7 @@
 // runs `tasks claim` and `tasks done` through the `tasks` on its PATH, writes stream-json), fake_tasks answers
 // `agent-brief` and logs every other call. Nothing here starts the real Claude Code.
 import assert from "node:assert/strict";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -122,6 +122,17 @@ describe("a job of the model claude-code", { skip: !existsSync(fakeClaude) && "b
     assert.match(job.output, /Claude Code \(fake-model\)/);
     assert.match(job.output, /Bash: tasks claim demo\/first-task/);
     assert.match(job.output, /Did the work of demo\/first-task\./);
+    assert.equal(job.summary.schema, "handoff-summary/1");
+    assert.equal(job.summary.job_id, id);
+    assert.match(job.summary.date, /^\d{4}-\d\d-\d\d$/);
+    assert.match(job.summary.markdown, /^## Getan\n/);
+    assert.match(job.summary.markdown, /## Commits\n\n- demo@0123456789ab/);
+    assert.match(job.summary.markdown, /## Prüfungen\n\n- `ci commit` CLEAN/);
+    assert.ok(!job.summary.markdown.includes("summary:begin"), "the markers are not part of it");
+    assert.equal(job.summary_error, undefined);
+    assert.ok(!("summary" in (await server.get("/jobs")).json.jobs[0]), "the list leaves it out");
+    assert.match(lines(w.claudeLog).at(-1).prompt, /<!-- summary:begin -->[\s\S]*## Offen[\s\S]*<!-- summary:end -->/,
+      "the prompt asks for the block");
 
     const calls = lines(w.tasksLog).map((c) => c.args);
     assert.deepEqual(calls[0], ["claim", "demo/first-task", `--by=ai-desktop:${id}`]);
@@ -277,5 +288,74 @@ describe("Claude Code runs that end otherwise", { skip: !existsSync(fakeClaude) 
       await server.stop();
       w.cleanup();
     }
+  });
+});
+
+// The summary of a hand-over (docs/JOBS.md "Summary of a hand-over"): extracted from the agent's last message,
+// cleaned and checked; a run that gives none still ends done, and says why.
+describe("the summary at the end of a hand-over", { skip: !existsSync(fakeClaude) && "build the test doubles first" }, () => {
+  async function run(mode, extra = {}) {
+    const w = world();
+    const server = await serverFor(w, { FAKE_CLAUDE_SUMMARY: mode, ...extra });
+    try {
+      const res = await server.post("/jobs", { ...TASK, vault: w.vault }, auth(server));
+      const job = await waitFor(server, res.json.job_id, (j) => j.status !== "running");
+      const again = (await server.get(`/jobs/${job.id}`)).json;
+      return { job, again, configDir: w.configDir, root: w.root };
+    } finally {
+      await server.stop();
+      w.cleanup();
+    }
+  }
+
+  it("is cleaned of absolute paths", async () => {
+    const { job } = await run("paths");
+    assert.equal(job.status, "done", JSON.stringify(job));
+    const text = job.summary.markdown;
+    assert.ok(!/bob|host\share/.test(text), text);
+    assert.match(text, /Edited <path> and <path> and <path>,/);
+    assert.match(text, /ai-desktop\/src and https:\/\/example\.org\/home\/x/, "a relative path and a URL stay");
+  });
+
+  for (const [mode, pattern] of [
+    ["none", /no summary block/],
+    ["open", /does not end/],
+    ["partial", /lacks the heading '## Prüfungen'/],
+    ["long", /bytes; at most 4096/],
+  ]) {
+    it(`gives summary_error and no summary when the block is ${mode}`, async () => {
+      const { job } = await run(mode);
+      assert.equal(job.status, "done", "the run itself succeeded");
+      assert.equal(job.summary, undefined);
+      assert.match(job.summary_error, pattern);
+    });
+  }
+
+  it("is kept in memory only", async () => {
+    const w = world();
+    const server = await serverFor(w);
+    try {
+      const res = await server.post("/jobs", { ...TASK, vault: w.vault }, auth(server));
+      const id = res.json.job_id;
+      const job = await waitFor(server, id, (j) => j.status !== "running");
+      assert.ok(job.summary);
+      const files = readdirSync(w.root, { recursive: true }).map(String);
+      for (const file of files) {
+        const full = path.join(w.root, file);
+        if (statSync(full).isFile()) {
+          assert.ok(!readFileSync(full, "utf8").includes("handoff-summary/1"), `${file} holds the summary`);
+        }
+      }
+    } finally {
+      await server.stop();
+      w.cleanup();
+    }
+  });
+
+  it("is none for a failed run", async () => {
+    const { job } = await run("ok", { FAKE_CLAUDE_FAIL: "1" });
+    assert.equal(job.status, "failed");
+    assert.equal(job.summary, undefined);
+    assert.equal(job.summary_error, undefined);
   });
 });

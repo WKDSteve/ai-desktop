@@ -4,6 +4,7 @@
 #include <cctype>
 
 #include "process.hpp"
+#include "summary.hpp"
 
 using json = nlohmann::json;
 
@@ -312,7 +313,8 @@ std::string prompt(const jobs::Request& request, const std::string& by, const st
             ": first `tasks claim " + request.task_id + " --by=" + by +
             "` (a claim of somebody else: stop and say so), then do what its acceptance asks, and at the end `tasks done " +
             request.task_id + " ... --by=" + by + "` (or give it back with `tasks unclaim " + request.task_id +
-            " --by=" + by + "` and say why). The task as it is now:\n\n" + request.markdown;
+            " --by=" + by + "` and say why)." + summary::instructions() +
+            "\n\nThe task as it is now:\n\n" + request.markdown;
     return text;
 }
 

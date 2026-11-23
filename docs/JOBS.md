@@ -155,6 +155,36 @@ Without Claude Code, the tasks command, its brief or the vault folder, the job a
 inside a Claude Code session (`CLAUDECODE` is set), that session's variables (`CLAUDE_CODE_*`, `CLAUDE_AGENT_SDK_*`,
 `ANTHROPIC_BASE_URL`, ...) are not passed on, so the agent signs in as the person's own `claude` does.
 
+**Summary of a hand-over.** The agent writes into the task through the tasks command, but what it tried and what is
+left would be nowhere once the job is gone (jobs live in memory only). So the prompt of a hand-over
+(`src/summary.cpp`) asks it to end its last message with one block between `<!-- summary:begin -->` and
+`<!-- summary:end -->`, in German, at most 3500 bytes, with the headings `## Getan`, `## Commits` (one line `repo@sha`
+each), `## Prüfungen` (each check with its verdict, e.g. `ci commit` CLEAN) and `## Offen`. When the run ends without
+an error, ai-desktop takes the **last** block of the output and
+
+1. cleans it: the character rule above (what it refuses becomes U+FFFD) and no absolute path (a drive path such as
+   `C:\work\x`, a share such as `\\host\share` and a folder at the root of a Unix system such as `/home/...` or
+   `/tmp/...` become `<path>`; a relative path, a task id and a URL stay);
+2. checks it: all four headings, each alone on its line and in this order, and at most 4096 bytes after cleaning
+   (longer is refused, not cut, so no heading is lost).
+
+`GET /jobs/<id>` then carries, next to `output` (the list leaves both out):
+
+```json
+"summary": {
+  "schema": "handoff-summary/1",
+  "job_id": "0123456789abcdef",
+  "date": "2026-11-23",
+  "markdown": "## Getan ... ## Commits ... ## Prüfungen ... ## Offen ..."
+}
+```
+
+or `summary_error` (no block, a block that does not end, a missing heading, too long) and no `summary`; the run itself
+stays `done` either way. A failed or cancelled run has neither. The summary lives in the job in memory like the rest:
+nothing is written to disk, and a new run of the job drops it. ai-desktop adds nothing to the task: the caller
+(tasks-desktop, tasks.nvim) shows the summary like a review answer and writes it as a section, with the job id and the
+date, only after the person's yes; the full stream never goes into the task.
+
 **One answer (any other model).** The task goes to the model through the ModelRouter, as `/ask/stream`; no tools.
 
 ## Reviews (`kind: review-done`)

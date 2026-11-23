@@ -24,6 +24,8 @@
 #include "process.hpp"
 #include "review.hpp"
 #include "session.hpp"
+#include "summary.hpp"
+#include "usage.hpp"
 #include "worktree.hpp"
 
 using json = nlohmann::json;
@@ -500,6 +502,13 @@ void run_job(const HooksPtr& hooks, const std::string& id, std::uint64_t run) {
         jobs::store().describe(id, run, agent::kModel, brief.note, info);
         const std::string error = run_agent(hooks, id, run, request, claude, tasks, brief, cwd, own.get(), model);
         own.remove_now();
+        if (error.empty()) {
+            // The summary of the run, taken from its output, checked and kept in memory only (src/summary.hpp).
+            if (const auto now = jobs::store().get(id)) {
+                const summary::Result result = summary::extract(now->output, id, usage::now_iso8601().substr(0, 10));
+                jobs::store().set_summary(id, run, result.summary, result.error);
+            }
+        }
         jobs::store().finish(id, run, error);
         return;
     }

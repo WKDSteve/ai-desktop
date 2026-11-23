@@ -365,6 +365,12 @@ json to_json(const Job& job, bool with_text) {
     if (with_text && !job.draft_error.empty()) {
         out["draft_error"] = job.draft_error;
     }
+    if (with_text && !job.summary.is_null()) {
+        out["summary"] = job.summary;
+    }
+    if (with_text && !job.summary_error.empty()) {
+        out["summary_error"] = job.summary_error;
+    }
     if (with_text) {
         out["markdown"] = job.request.markdown;
         out["output"] = job.output;
@@ -472,6 +478,8 @@ config::Status Store::start(const std::string& id, const std::string& model,
     job->note.clear();
     job->draft = nullptr;
     job->draft_error.clear();
+    job->summary = nullptr;
+    job->summary_error.clear();
     job->brief = nullptr;
     job->updated = usage::now_iso8601();
     return {};
@@ -535,6 +543,16 @@ void Store::set_draft(const std::string& id, std::uint64_t run, const json& draf
     }
     job->draft = draft;
     job->draft_error = error;
+}
+
+void Store::set_summary(const std::string& id, std::uint64_t run, const json& summary, const std::string& error) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    Job* job = find_locked(id);
+    if (!job || job->status != Status::Running || job->run != run) {
+        return;
+    }
+    job->summary = summary;
+    job->summary_error = error;
 }
 
 void Store::describe(const std::string& id, std::uint64_t run, const std::string& runner, const std::string& note,

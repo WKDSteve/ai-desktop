@@ -10,6 +10,8 @@
 //   $FAKE_CLAUDE_LEAVE_MS   before its result, starts `tasks sleep <ms>` in the background with stdout and stderr
 //                           inherited and does not wait for it (a descendant that keeps the output pipes open)
 //   $FAKE_CLAUDE_DIRTY=1    after the claim, leaves half.txt and .env uncommitted in its folder
+//   $FAKE_CLAUDE_SUMMARY    the summary block of the last message: unset = a good one; none, paths, long, partial,
+//                           open = one that is missing, unclean, too long, lacks a heading or has no end marker
 //   $FAKE_CLAUDE_COMMIT=1   after the claim, writes agent.txt, stages everything (`git add -A`, as a careless agent
 //                           would) and commits; then `git push origin HEAD:main`, unless $FAKE_CLAUDE_NO_PUSH=1
 #include <chrono>
@@ -65,6 +67,36 @@ void leave_behind(const std::string& ms) {
     char* argv[] = {a0.data(), a1.data(), a2.data(), nullptr};
     posix_spawnp(&pid, "tasks", nullptr, nullptr, argv, environ);
 #endif
+}
+
+// The summary block the prompt asks for (docs/JOBS.md "Summary of a hand-over"), as $FAKE_CLAUDE_SUMMARY says:
+// unset = a good one, "none" = no block, "paths" = a good one with absolute paths, "long" = over the limit,
+// "partial" = a heading missing, "open" = no end marker.
+std::string summary_block(const std::string& id) {
+    const std::string mode = env("FAKE_CLAUDE_SUMMARY");
+    if (mode == "none") {
+        return "";
+    }
+    std::string text = "<!-- summary:begin -->\n## Getan\n\nDid the work of " + id + ".\n\n";
+    if (mode == "paths") {
+        text += "Edited C:\\Users\\bob\\repo\\a.txt and /home/bob/repo/b.txt and \\\\host\\share\\c.txt, "
+                "in ai-desktop/src and https://example.org/home/x.\n\n";
+    }
+    if (mode == "long") {
+        for (int i = 0; i < 200; ++i) {
+            text += "A long line of the summary that goes on and on.\n";
+        }
+        text += "\n";
+    }
+    text += "## Commits\n\n- demo@0123456789ab the work\n\n";
+    if (mode != "partial") {
+        text += "## Pr\xC3\xBC" "fungen\n\n- `ci commit` CLEAN\n\n";
+    }
+    text += "## Offen\n\nnichts\n";
+    if (mode != "open") {
+        text += "<!-- summary:end -->";
+    }
+    return text;
 }
 
 }  // namespace
@@ -175,7 +207,7 @@ int main(int argc, char** argv) {
             tool("git push -q origin HEAD:main");
         }
     }
-    emit({{"type", "assistant"}, {"message", {{"content", json::array({{{"type", "text"}, {"text", "Did the work of " + id + "."}}})}}}});
+    emit({{"type", "assistant"}, {"message", {{"content", json::array({{{"type", "text"}, {"text", "Did the work of " + id + ".\n\n" + summary_block(id)}}})}}}});
     if (env("FAKE_CLAUDE_FAIL") == "1") {
         emit({{"type", "result"}, {"subtype", "success"}, {"is_error", true}, {"result", "boom"}});
         return 1;

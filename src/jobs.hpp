@@ -101,6 +101,8 @@ struct Job {
     nlohmann::json brief;    // the brief of an agent run: {brief_version, contract_schema, engine_version}
     nlohmann::json draft;    // draft-task: the checked draft (draft::check), once the run ended with one
     std::string draft_error; // draft-task: why the answer gave no draft
+    nlohmann::json summary;  // handoff: the checked summary of the run (src/summary.hpp), once it ended with one
+    std::string summary_error; // handoff: why the run gave no summary
     std::string created;     // UTC, YYYY-MM-DDTHH:MM:SSZ
     std::string updated;
 };
@@ -139,6 +141,8 @@ public:
                   const nlohmann::json& brief);
     // Keeps the draft of a running draft-task (or why there is none); call it before finish().
     void set_draft(const std::string& id, std::uint64_t run, const nlohmann::json& draft, const std::string& error);
+    // Keeps the summary of a running handoff (or why there is none); call it before finish().
+    void set_summary(const std::string& id, std::uint64_t run, const nlohmann::json& summary, const std::string& error);
     // Cancels a running job: 404 unknown, 409 when it does not run.
     config::Status cancel(const std::string& id);
 
