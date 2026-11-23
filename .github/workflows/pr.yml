@@ -106,6 +106,7 @@ jobs:
           persist-credentials: false
       - run: python -m unittest discover -s tools -p "test_*.py"
       - run: python tools/check-control-chars.py
+      - run: python tools/check-dashboard-size.py
       - run: python tools/check-release-kit-pin.py --offline
       - name: PSScriptAnalyzer on the scripts
         shell: pwsh
