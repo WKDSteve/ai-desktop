@@ -18,6 +18,7 @@ What CI runs (`.github/workflows/ci.yml`, `pr.yml`): build via `scripts/setup.ps
 API tests, and the hygiene checks:
 `python -m unittest discover -s tools -p "test_*.py"`, `python tools/check-control-chars.py`,
 `python tools/check-color-literals.py --root dashboard --tokens dashboard/palette.css`,
+`python tools/check-dashboard-size.py` (size budget of `dashboard/`, raised on purpose in the commit that needs more),
 `python tools/check-release-kit-pin.py`, `python tools/check-install-runners.py`.
 Colours in the dashboard come from `palette.css` tokens only.
 
