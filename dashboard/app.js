@@ -127,6 +127,7 @@ function appendLog(agent, message, color) {
   what.className = 'log-msg';
   what.textContent = String(message);
   line.append(stamp, who, what);
+  document.getElementById('log-empty').hidden = true;
   log.appendChild(line);
   log.scrollTop = log.scrollHeight;
 }
@@ -541,6 +542,12 @@ async function loadUsage() {
 
   const list = document.getElementById('usage-events');
   list.textContent = '';
+  if ((data.events || []).length === 0) {
+    const none = document.createElement('p');
+    none.className = 'muted';
+    none.textContent = t('no_events');
+    list.appendChild(none);
+  }
   (data.events || []).forEach((ev) => {
     const line = document.createElement('div');
     line.className = 'usage-event';

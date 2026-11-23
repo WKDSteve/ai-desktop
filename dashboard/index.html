@@ -203,7 +203,10 @@
 <!-- Live-Log -->
 <div class="card">
   <h2 data-i18n="live_log"></h2>
-  <div id="log"></div>
+  <div id="log">
+    <!-- Until the first line: the log is not broken, it is empty (hidden by appendLog). -->
+    <p id="log-empty" class="small muted" data-i18n="log_empty"></p>
+  </div>
 </div>
 </main>
 
