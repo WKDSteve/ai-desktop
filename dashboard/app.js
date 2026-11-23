@@ -114,8 +114,17 @@ function figure(text) {
   return span;
 }
 
+// Times, dates and the unit of a duration follow the language of the page (LOCALE of i18n.js: de-AT, en-GB). Both
+// show 24 hours by themselves; the clock is not forced with hour12, which would override the locale. The formatters are
+// made once, not per line.
+const TIME_FORMAT = new Intl.DateTimeFormat(LOCALE, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const DATE_TIME_FORMAT = new Intl.DateTimeFormat(LOCALE, {
+  year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+});
+const MS_FORMAT = new Intl.NumberFormat(LOCALE, { style: 'unit', unit: 'millisecond', unitDisplay: 'short' });
+
 function ts() {
-  return new Date().toLocaleTimeString(LOCALE, { hour12: false });
+  return TIME_FORMAT.format(new Date());
 }
 
 function appendLog(agent, message, color) {
@@ -586,7 +595,7 @@ async function loadUsage() {
     line.className = 'usage-event';
     const ts = document.createElement('span');
     ts.className = 'log-ts';
-    ts.textContent = new Date(ev.ts).toLocaleString(LOCALE, { hour12: false });
+    ts.textContent = DATE_TIME_FORMAT.format(new Date(ev.ts));
     const state = document.createElement('span');
     state.className = ev.ok ? 'usage-ok' : 'usage-err';
     state.textContent = ev.ok ? '✓' : '✗ ' + (ev.error_kind || t('error_short'));
@@ -595,7 +604,7 @@ async function loadUsage() {
     what.append(
       ident(ev.provider), ' · ', ev.model ? ident(ev.model) : t('default_model'), ev.stream ? ' · stream' : '', ' · ',
       figure(fmtInt(ev.prompt_tokens)), '/', figure(fmtInt(ev.completion_tokens)), ' ' + t('tokens') + ' · ',
-      figure(fmtInt(ev.duration_ms) + ' ms'), ' · ', ident(ev.source),
+      figure(MS_FORMAT.format(Number(ev.duration_ms || 0))), ' · ', ident(ev.source),
     );
     line.appendChild(ts);
     line.appendChild(state);
