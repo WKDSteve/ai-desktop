@@ -93,7 +93,7 @@
     <div id="job-meta" class="small muted"></div>
     <textarea id="job-markdown" data-i18n-aria-label="job_text"></textarea>
     <div class="ask-row">
-      <input id="job-model" data-i18n-aria-label="job_model" list="ask-model-presets">
+      <input id="job-model" spellcheck="false" data-i18n-aria-label="job_model" list="ask-model-presets">
       <button class="btn btn-teal" id="job-run" data-on-click="runJob" data-i18n="run"></button>
       <button class="btn btn-muted" id="job-stop" data-on-click="stopJob" disabled data-i18n="stop"></button>
       <button class="btn btn-muted" id="job-dismiss" data-on-click="dismissJob" data-i18n="dismiss"></button>
@@ -114,7 +114,7 @@
     <label class="row small"><input type="checkbox" id="jobs-enabled" data-on-change="saveJobSettings" data-arg="jobs">
       <span data-i18n="jobs_accept"></span></label>
     <label class="row small"><span data-i18n="private_areas"></span>
-      <input id="private-areas" data-on-change="saveJobSettings" data-arg="private_areas" data-i18n-placeholder="private_areas_placeholder"></label>
+      <input id="private-areas" spellcheck="false" data-on-change="saveJobSettings" data-arg="private_areas" data-i18n-placeholder="private_areas_placeholder"></label>
     <p id="job-settings-status" class="small muted"></p>
   </details>
 </div>
@@ -124,7 +124,7 @@
   <h2>Ask</h2>
   <textarea id="ask-prompt" aria-label="Prompt" data-i18n-placeholder="prompt_placeholder"></textarea>
   <div class="ask-row">
-    <input id="ask-model" data-i18n-aria-label="model" list="ask-model-presets"
+    <input id="ask-model" spellcheck="false" data-i18n-aria-label="model" list="ask-model-presets"
            data-i18n-placeholder="model_placeholder">
     <!-- Filled from GET /models on the first focus of the field (app.js). -->
     <datalist id="ask-model-presets"></datalist>

@@ -85,18 +85,18 @@ h1 { color: var(--accent); font-size: 1.1rem;
 .btn-red   { background: var(--bad); color: var(--surface); }
 .btn-red:hover:not(:disabled) { background: color-mix(in oklab, var(--bad) 85%, var(--text)); }
 
-/* Ask panel */
+/* Ask panel. A field is 1rem at least: a smaller one makes a phone's browser zoom in on focus. */
 #ask-prompt {
   width: 100%; min-height: 70px; resize: vertical;
   background: var(--bg); color: var(--text); border: 1px solid var(--line);
-  border-radius: 6px; padding: .6rem; font-family: inherit; font-size: .82rem;
+  border-radius: 6px; padding: .6rem; font-family: inherit; font-size: 1rem;
 }
 .ask-row { display: flex; gap: .5rem; align-items: center;
            margin-top: .6rem; flex-wrap: wrap; }
 #ask-model {
   flex: 1; min-width: 200px;
   background: var(--bg); color: var(--text); border: 1px solid var(--line);
-  border-radius: 6px; padding: .45rem .6rem; font-family: inherit; font-size: .78rem;
+  border-radius: 6px; padding: .45rem .6rem; font-family: inherit; font-size: 1rem;
 }
 /* The main action: the accent of the app. */
 .btn-teal  { background: var(--accent); color: var(--accent-text); }
@@ -131,12 +131,12 @@ h1 { color: var(--accent); font-size: 1.1rem;
 #job-markdown {
   width: 100%; min-height: 160px; resize: vertical;
   background: var(--bg); color: var(--text); border: 1px solid var(--line);
-  border-radius: 6px; padding: .6rem; font-family: inherit; font-size: .8rem;
+  border-radius: 6px; padding: .6rem; font-family: inherit; font-size: 1rem;
 }
 #job-model, #private-areas {
   flex: 1; min-width: 200px;
   background: var(--bg); color: var(--text); border: 1px solid var(--line);
-  border-radius: 6px; padding: .45rem .6rem; font-family: inherit; font-size: .78rem;
+  border-radius: 6px; padding: .45rem .6rem; font-family: inherit; font-size: 1rem;
 }
 #job-confirm { margin-top: .6rem; padding: .6rem; border: 1px solid var(--warn); border-radius: 6px; }
 #job-status { font-size: .74rem; color: var(--muted); margin-top: .5rem; }
@@ -156,7 +156,7 @@ h1 { color: var(--accent); font-size: 1.1rem;
                  margin-bottom: .75rem; }
 .usage-filters select {
   background: var(--bg); color: var(--text); border: 1px solid var(--line);
-  border-radius: 6px; padding: .4rem .6rem; font-family: inherit; font-size: .78rem;
+  border-radius: 6px; padding: .4rem .6rem; font-family: inherit; font-size: 1rem;
 }
 /* The x of a choice sits inside its border, before the arrow of the browser. */
 .clear-select { position: relative; display: inline-flex; align-items: center; }
