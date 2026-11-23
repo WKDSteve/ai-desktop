@@ -1,8 +1,8 @@
 ## Download
 
 **`ai-desktop-setup-<version>-x64.exe`** - Windows installer (x64). It installs for the current user, no
-administrator rights needed. The optional "add to PATH" step puts the `ai-desktop` command into new terminals.
-Start ai-desktop from the Start menu (or with `ai-desktop` when you chose that step); it listens on `127.0.0.1:8080`.
+administrator rights needed. It also puts the `ai-desktop` command into new terminals.
+Start ai-desktop from the Start menu (or with `ai-desktop start`); it listens on `127.0.0.1:8080`.
 
 **Or install it with the script of this release**, which downloads the installer itself, checks it against
 `SHA256SUMS` and runs it silently for the current user. A file it downloads is not stopped by SmartScreen, and
@@ -14,11 +14,11 @@ irm https://github.com/WKDSteve/ai-desktop/releases/download/{tag}/install.ps1 |
 
 Type the line into the PowerShell session as it is. Wrapped in a new `powershell -ExecutionPolicy Bypass -c "..."`, Microsoft Defender reports the command line as a trojan (`Trojan:Win32/Commando.B!ml`) and nothing is installed.
 
-That installs without the "add to PATH" step. With it (and any other argument of the script), use the form
-that takes arguments:
+The command `ai-desktop` is there in new terminals after that, and so is a shortcut in the Start menu. For any
+other argument of the script (`/TASKS=desktopicon` adds a shortcut on the desktop), use the form that takes arguments:
 
 ```
-& ([scriptblock]::Create((irm https://github.com/WKDSteve/ai-desktop/releases/download/{tag}/install.ps1))) -InstallArgs '/TASKS=addtopath'
+& ([scriptblock]::Create((irm https://github.com/WKDSteve/ai-desktop/releases/download/{tag}/install.ps1))) -InstallArgs '/TASKS=desktopicon'
 ```
 
 Run the script again to repair this release (to update, take the script of a newer release). Stop ai-desktop

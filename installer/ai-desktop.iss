@@ -46,7 +46,6 @@ UninstallDisplayIcon={app}\app\ai-desktop.ico
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; Flags: unchecked
-Name: "addtopath"; Description: "Add ai-desktop to the user &PATH (the ""ai-desktop"" command in new terminals)"; Flags: unchecked
 
 [Files]
 Source: "{#StageDir}\app\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -263,8 +262,6 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-  if (CurStep = ssPostInstall) and WizardIsTaskSelected('addtopath') then
-    AddToUserPath(ExpandConstant('{app}'));
   if CurStep = ssPostInstall then
   begin
     RegisterInFamily;
@@ -279,6 +276,7 @@ begin
     RemoveCommand;
   if CurUninstallStep = usPostUninstall then
   begin
+    { The install folder was on the PATH in setups that still had the task "addtopath". }
     RemoveFromUserPath(ExpandConstant('{app}'));
     DeleteFile(FamilyManifest);
   end;

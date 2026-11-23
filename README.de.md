@@ -66,21 +66,20 @@ Die Zeile so, wie sie ist, in die PowerShell-Sitzung tippen. Verpackt in ein neu
 Das Skript eines Releases installiert genau dieses Release, das von `latest`
 den Rolling-Build ([`rolling.yml`](.github/workflows/rolling.yml), nach jedem
 grünen CI-Lauf auf `main` neu gebaut und durch Installieren, Starten,
-Aktualisieren und Deinstallieren geprüft, zum Ausprobieren des Neuesten). Die
-Zeile oben installiert ohne den Schritt „zum PATH hinzufügen“ (der auch den Installationsordner selbst auf den
-`PATH` legt); der Befehl `ai-desktop` steht in neuen Terminals trotzdem bereit, über seinen Starter. Für den Schritt
-oder ein anderes Argument das Skript erst speichern und die Argumente mitgeben:
+Aktualisieren und Deinstallieren geprüft, zum Ausprobieren des Neuesten). Der
+Befehl `ai-desktop` steht danach in neuen Terminals bereit, über seinen Starter. Für ein Argument des Skripts
+(`/TASKS=desktopicon` legt eine Verknüpfung auf den Desktop) das Skript erst speichern und die Argumente mitgeben:
 
 ```powershell
 irm https://github.com/WKDSteve/ai-desktop/releases/download/latest/install.ps1 -OutFile "$env:TEMP\install.ps1"
-& "$env:TEMP\install.ps1" -InstallArgs '/TASKS=addtopath'
+& "$env:TEMP\install.ps1" -InstallArgs '/TASKS=desktopicon'
 ```
 
 (In einem privaten Fork, in dem anonyme Downloads scheitern: das Skript mit `gh release download` holen
 und `GH_TOKEN` auf ein Token mit Leserecht auf das Repository setzen; es lädt dann über die API.)
 
 Als Datei gespeichert startet man das Skript mit `powershell -ExecutionPolicy
-Bypass -File .\install.ps1 -InstallArgs '/TASKS=addtopath'` (ein Wert je
+Bypass -File .\install.ps1 -InstallArgs '/TASKS=desktopicon'` (ein Wert je
 `-File`-Kommandozeile: eine Liste käme als ein String an; in einer
 PowerShell-Sitzung ist `-InstallArgs 'a','b'` in Ordnung). `-File <setup.exe>`
 installiert ein vorhandenes Setup; dessen Prüfsumme kommt dann aus `-Sums`,

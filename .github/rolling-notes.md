@@ -8,10 +8,10 @@ irm https://github.com/WKDSteve/ai-desktop/releases/download/latest/install.ps1 
 
 Type the line into the PowerShell session as it is. Wrapped in a new `powershell -ExecutionPolicy Bypass -c "..."`, Microsoft Defender reports the command line as a trojan (`Trojan:Win32/Commando.B!ml`) and nothing is installed.
 
-That installs without the "add to PATH" step. With it (and any other argument of the script), use the form that takes arguments:
+The command `ai-desktop` is there in new terminals after that. For any other argument of the script (`/TASKS=desktopicon` adds a shortcut on the desktop), use the form that takes arguments:
 
 ```
-& ([scriptblock]::Create((irm https://github.com/WKDSteve/ai-desktop/releases/download/latest/install.ps1))) -InstallArgs '/TASKS=addtopath'
+& ([scriptblock]::Create((irm https://github.com/WKDSteve/ai-desktop/releases/download/latest/install.ps1))) -InstallArgs '/TASKS=desktopicon'
 ```
 
 Run it again to update to the newest rolling build (stop ai-desktop first if it is running). Or take the file yourself:
@@ -19,4 +19,4 @@ Run it again to update to the newest rolling build (stop ai-desktop first if it 
 - `ai-desktop-setup-x64.exe`, the Windows installer under a fixed name. The version inside is `0.0.<number of the run>`, which is what *Settings -> Apps* shows, also when this build is newer than a release. Windows SmartScreen warns about an unsigned installer you downloaded in the browser: "More info", then "Run anyway".
 - `SHA256SUMS` holds the checksums of both files.
 
-There is no Linux or macOS file: build there with `scripts/setup.sh`. Start ai-desktop from the Start menu (or with `ai-desktop` when "add to PATH" was chosen); it listens on `127.0.0.1:8080`. Cloud backends need their API keys in the environment (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`); the installer never stores secrets.
+There is no Linux or macOS file: build there with `scripts/setup.sh`. Start ai-desktop from the Start menu (or with `ai-desktop start`); it listens on `127.0.0.1:8080`. Cloud backends need their API keys in the environment (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`); the installer never stores secrets.

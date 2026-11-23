@@ -125,13 +125,13 @@ function Install-Setup {
         # in this session, not through `pwsh -File`: a command line cannot carry an array, and the three
         # arguments would arrive as one string.
         & $kitScript -File $Setup -Sha256 $hash -Kind inno -AllowElevated `
-            -InstallArgs @('/TASKS=addtopath', "/DIR=$InstallDir", "/LOG=$SetupLog")
+            -InstallArgs @("/DIR=$InstallDir", "/LOG=$SetupLog")
         Write-Ok 'the install script finished'
     } else {
         Write-Host "`n==> Installing $(Split-Path -Leaf $Setup) silently to $InstallDir"
         $install = Start-Process -FilePath $Setup -Wait -PassThru -ArgumentList @(
             '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-',
-            "/DIR=`"$InstallDir`"", '/TASKS=addtopath', "/LOG=`"$SetupLog`""
+            "/DIR=`"$InstallDir`"", "/LOG=`"$SetupLog`""
         )
         Assert-That ($install.ExitCode -eq 0) "installer exited with code $($install.ExitCode)"
         Write-Ok 'installer exited with 0'
@@ -255,14 +255,14 @@ try {
     Assert-FamilyManifest
     Assert-CommandInstalled
 
-    Write-Host "`n==> Checking the user PATH (task addtopath)"
+    Write-Host "`n==> Checking the user PATH (only the starter folder is added)"
     $pathInstalled = Get-RawUserPath
     $entries = @($pathInstalled -split ';' | Where-Object { $_ })
-    Assert-That (@($entries | Where-Object { $_.TrimEnd('\') -ieq $InstallDir.TrimEnd('\') }).Count -eq 1) 'install directory is not on the user PATH exactly once'
+    Assert-That (@($entries | Where-Object { $_.TrimEnd('\') -ieq $InstallDir.TrimEnd('\') }).Count -eq 0) 'the install directory is on the user PATH (the setup has no such task any more)'
     if ($pathBefore) {
         Assert-That ($pathInstalled.StartsWith($pathBefore)) 'the installer changed existing user PATH entries'
     }
-    Write-Ok 'install directory added, existing entries untouched'
+    Write-Ok 'existing entries untouched, install directory not on the PATH'
 
     Write-Host "`n==> Starting the server through the launcher (minimal PATH, foreign working directory)"
     Start-InstalledServer -Confirm:$false

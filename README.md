@@ -66,21 +66,20 @@ Type the line into the PowerShell session as it is. Wrapped in a new `powershell
 The script of a release installs exactly that release, the script of `latest`
 the rolling build ([`rolling.yml`](.github/workflows/rolling.yml), rebuilt
 after every green CI run on `main` and proven by installing, starting,
-updating and uninstalling it, for trying what is new). The line above installs
-without the "add to PATH" step (which would also put the install directory itself on the
-`PATH`); the command `ai-desktop` is there in new terminals all the same, through its starter. Add `/TASKS=desktopicon` to `-InstallArgs` for a shortcut on the desktop as well). For the step, or any other
-argument of the script, save the script first and pass the arguments:
+updating and uninstalling it, for trying what is new). The command `ai-desktop`
+is there in new terminals after that, through its starter. For an argument of the script (`/TASKS=desktopicon`
+adds a shortcut on the desktop), save the script first and pass the arguments:
 
 ```powershell
 irm https://github.com/WKDSteve/ai-desktop/releases/download/latest/install.ps1 -OutFile "$env:TEMP\install.ps1"
-& "$env:TEMP\install.ps1" -InstallArgs '/TASKS=addtopath'
+& "$env:TEMP\install.ps1" -InstallArgs '/TASKS=desktopicon'
 ```
 
 (For a private fork, where anonymous downloads fail: download the script with `gh release download`
 and set `GH_TOKEN` to a token that can read the repository; the script then downloads through the API.)
 
 Saved as a file, the script is run as `powershell -ExecutionPolicy Bypass -File
-.\install.ps1 -InstallArgs '/TASKS=addtopath'` (one value per `-File` command
+.\install.ps1 -InstallArgs '/TASKS=desktopicon'` (one value per `-File` command
 line: a list would arrive as one string; in a PowerShell session
 `-InstallArgs 'a','b'` is fine). `-File <setup.exe>` installs a setup you
 already have; its checksum then comes from `-Sums`, `-Sha256` or a
