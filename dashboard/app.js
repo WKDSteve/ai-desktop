@@ -106,6 +106,14 @@ function identNodes(key, values) {
   return nodes;
 }
 
+// A number inside a line of text, in digits of one width.
+function figure(text) {
+  const span = document.createElement('span');
+  span.className = 'tnum';
+  span.textContent = text;
+  return span;
+}
+
 function ts() {
   return new Date().toLocaleTimeString(LOCALE, { hour12: false });
 }
@@ -560,9 +568,9 @@ async function loadUsage() {
     const what = document.createElement('span');
     what.className = 'log-msg';
     what.append(
-      ident(ev.provider), ' · ', ev.model ? ident(ev.model) : t('default_model'), ev.stream ? ' · stream' : '',
-      ' · ' + fmtInt(ev.prompt_tokens) + '/' + fmtInt(ev.completion_tokens) + ' ' + t('tokens') + ' · ' +
-      fmtInt(ev.duration_ms) + ' ms · ', ident(ev.source),
+      ident(ev.provider), ' · ', ev.model ? ident(ev.model) : t('default_model'), ev.stream ? ' · stream' : '', ' · ',
+      figure(fmtInt(ev.prompt_tokens)), '/', figure(fmtInt(ev.completion_tokens)), ' ' + t('tokens') + ' · ',
+      figure(fmtInt(ev.duration_ms) + ' ms'), ' · ', ident(ev.source),
     );
     line.appendChild(ts);
     line.appendChild(state);
