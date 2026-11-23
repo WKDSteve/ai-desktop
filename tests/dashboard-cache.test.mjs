@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 
-import { startServer } from "./helpers/server.mjs";
+import { repoRoot, startServer } from "./helpers/server.mjs";
 
 describe("dashboard cache validators", () => {
   let server;
@@ -54,5 +54,15 @@ describe("dashboard cache validators", () => {
     const outside = await server.get("/../CMakeLists.txt");
     assert.notEqual(outside.status, 304);
     assert.equal(outside.headers.etag, undefined);
+  });
+
+  it("gives no validator for a file outside the folder named by an absolute path", async () => {
+    // `dir / "/abs/file"` replaces `dir` in std::filesystem: "//abs/file" (POSIX) and "/C:/abs/file" (Windows) must not
+    // make the server stat a file that is not the dashboard's, nor answer 304 for it.
+    const real = `/${repoRoot.replaceAll("\\", "/")}/CMakeLists.txt`;
+    const res = await server.get(real, { "If-None-Match": "*" });
+    assert.notEqual(res.status, 304, real);
+    assert.equal(res.headers.etag, undefined, real);
+    assert.equal(res.headers["cache-control"], undefined, real);
   });
 });

@@ -500,7 +500,11 @@ static bool dashboard_not_modified(const httplib::Request& req, httplib::Respons
     }
     const std::string sub = req.path.back() == '/' ? req.path + "index.html" : req.path;
     std::error_code ec;
-    const std::filesystem::path file = std::filesystem::path(dir) / sub.substr(1);
+    // `dir / rel` is `rel` alone when `rel` is absolute ("//etc/passwd" leaves "etc/passwd" rooted after the first
+    // slash is cut, "/C:/x" is a drive path on Windows): such a path names a file that is not the dashboard's.
+    const std::filesystem::path rel = sub.substr(1);
+    if (rel.empty() || rel.has_root_name() || rel.has_root_directory()) return false;
+    const std::filesystem::path file = std::filesystem::path(dir) / rel;
     if (!std::filesystem::is_regular_file(file, ec) || ec) return false;
     const auto size = std::filesystem::file_size(file, ec);
     if (ec) return false;
