@@ -7,6 +7,7 @@
 #include <ctime>
 #include <chrono>
 #include <filesystem>
+#include <sstream>
 #include <functional>
 #include <iterator>
 #include <string_view>
@@ -474,6 +475,38 @@ void run_simulation_agent() {
 // ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
+// Validators for the dashboard files. cpp-httplib sends no ETag, Last-Modified or Cache-Control for a mount point, so a
+// browser fetched every file in full on every load. The files have no hash in their names (no build step), so they
+// are not cached for long: `Cache-Control: no-cache` lets a browser keep a copy but ask first, and the weak ETag
+// (size and modification time of the file, no read of it) lets the answer be a 304. True when the request was
+// answered (304); otherwise the headers are set and the static file goes out as before. Not a file of the dashboard
+// (an API route, a missing file, a path out of the folder): nothing is touched.
+static bool dashboard_not_modified(const httplib::Request& req, httplib::Response& res, const std::string& dir) {
+    if (req.method != "GET" && req.method != "HEAD") return false;
+    if (req.path.empty() || req.path[0] != '/' || req.path.find("..") != std::string::npos ||
+        req.path.find('\\') != std::string::npos) {
+        return false;
+    }
+    const std::string sub = req.path.back() == '/' ? req.path + "index.html" : req.path;
+    std::error_code ec;
+    const std::filesystem::path file = std::filesystem::path(dir) / sub.substr(1);
+    if (!std::filesystem::is_regular_file(file, ec) || ec) return false;
+    const auto size = std::filesystem::file_size(file, ec);
+    if (ec) return false;
+    const auto stamp = std::filesystem::last_write_time(file, ec).time_since_epoch().count();
+    if (ec) return false;
+    std::ostringstream tag;
+    tag << "W/\"" << std::hex << size << "-" << (stamp < 0 ? -stamp : stamp) << "\"";
+    res.set_header("ETag", tag.str());
+    res.set_header("Cache-Control", "no-cache");
+    const std::string seen = req.get_header_value("If-None-Match");
+    if (!seen.empty() && (seen == "*" || seen.find(tag.str()) != std::string::npos)) {
+        res.status = 304;
+        return true;
+    }
+    return false;
+}
+
 int main(int argc, char** argv) {
     use_utf8_console();
 
@@ -583,7 +616,7 @@ int main(int argc, char** argv) {
     // reaches a single route handler -- see is_allowed_origin()'s comment.
     // A top-level navigation (loading the dashboard itself) and every
     // non-browser client send no Origin header at all, so those still pass.
-    svr.set_pre_routing_handler([](const httplib::Request& req, httplib::Response& res) {
+    svr.set_pre_routing_handler([dashboard_dir](const httplib::Request& req, httplib::Response& res) {
         // DNS rebinding: a page under a name of its own that resolves to 127.0.0.1 is same-origin to the browser
         // and sends no Origin on a GET, so it could read /settings, /usage or /keys. A browser always names the
         // host it asked for; only this server's own names pass. A program that sends no Host at all (HTTP/1.0)
@@ -605,6 +638,8 @@ int main(int argc, char** argv) {
             send_json_error(res, 401, "a session of the dashboard or the control secret of ai-desktop is required");
             return httplib::Server::HandlerResponse::Handled;
         }
+        // The dashboard files: a validator and "ask before you reuse", or 304 for a copy that is still current.
+        if (dashboard_not_modified(req, res, dashboard_dir)) return httplib::Server::HandlerResponse::Handled;
         return httplib::Server::HandlerResponse::Unhandled;
     });
 
