@@ -123,6 +123,8 @@
 <div class="card">
   <h2>Ask</h2>
   <textarea id="ask-prompt" aria-label="Prompt" data-i18n-placeholder="prompt_placeholder"></textarea>
+  <!-- The reason an empty prompt is not sent: shown at the field, which names it by aria-describedby while it shows (app.js). -->
+  <p id="ask-prompt-error" class="field-error" hidden></p>
   <div class="ask-row">
     <input id="ask-model" spellcheck="false" data-i18n-aria-label="model" list="ask-model-presets"
            data-i18n-placeholder="model_placeholder">
