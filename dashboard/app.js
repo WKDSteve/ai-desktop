@@ -279,9 +279,33 @@ function setAskBusy(busy) {
   document.getElementById('ask-stop').disabled = !busy;
 }
 
+// An error at its field: the field is aria-invalid and names the message by aria-describedby while it shows;
+// the first field with an error gets the focus.
+function setFieldError(fieldId, errorId, message) {
+  const field = document.getElementById(fieldId);
+  const error = document.getElementById(errorId);
+  error.textContent = message || '';
+  error.hidden = !message;
+  if (message) {
+    field.setAttribute('aria-invalid', 'true');
+    field.setAttribute('aria-describedby', errorId);
+  } else {
+    field.removeAttribute('aria-invalid');
+    field.removeAttribute('aria-describedby');
+  }
+}
+
+document.getElementById('ask-prompt').addEventListener('input', () => setFieldError('ask-prompt', 'ask-prompt-error', ''));
+
 async function sendAsk() {
-  const prompt = document.getElementById('ask-prompt').value.trim();
-  if (!prompt) return;
+  const field = document.getElementById('ask-prompt');
+  const prompt = field.value.trim();
+  if (!prompt) {
+    setFieldError('ask-prompt', 'ask-prompt-error', t('prompt_required'));
+    field.focus();
+    return;
+  }
+  setFieldError('ask-prompt', 'ask-prompt-error', '');
 
   const model = document.getElementById('ask-model').value.trim();
   const output = document.getElementById('ask-output');
@@ -715,9 +739,31 @@ async function jobChanged(id) {
   }
 }
 
+// A run is sent once: Run and "send anyway" are disabled from the click until the answer (and the job read after it)
+// is in, as the Ask panel does with setAskBusy; a second click meanwhile would post the job twice.
+function setJobSubmitting(submitting) {
+  document.getElementById('job-confirm-send').disabled = submitting;
+  document.getElementById('job-run').disabled = submitting || (!!selectedJobData && selectedJobData.status === 'running');
+}
+
+let jobSubmitting = false;
 async function postRun(confirmPrivate) {
   const id = selectedJob;
-  if (!id) return;
+  if (!id || jobSubmitting) return;
+  jobSubmitting = true;
+  setJobSubmitting(true);
+  let asksFirst = false;
+  try {
+    asksFirst = await postRunNow(id, confirmPrivate);
+  } finally {
+    jobSubmitting = false;
+    setJobSubmitting(false);
+  }
+  // The question of a private area: its button takes the focus once it is enabled again.
+  if (asksFirst) document.getElementById('job-confirm-send').focus();
+}
+
+async function postRunNow(id, confirmPrivate) {
   const body = { markdown: document.getElementById('job-markdown').value };
   const model = document.getElementById('job-model').value.trim();
   if (model) body.model = model;
@@ -733,19 +779,19 @@ async function postRun(confirmPrivate) {
       const data = await res.json().catch(() => ({}));
       if (data.status === 'needs_confirmation') {
         showJobStatus({ ...selectedJobData, status: 'needs_confirmation', model: model || defaultModel });
-        document.getElementById('job-confirm-send').focus();
-        return;
+        return true;
       }
       status.textContent = t('error') + ((data.error && data.error.message) || 'HTTP ' + res.status);
       status.style.color = 'var(--bad)';
-      return;
+      return false;
     }
   } catch (err) {
     status.textContent = t('error') + err.message;
     status.style.color = 'var(--bad)';
-    return;
+    return false;
   }
-  refreshJob(id, false);
+  await refreshJob(id, false);
+  return false;
 }
 
 async function stopJob() {
