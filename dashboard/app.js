@@ -518,6 +518,26 @@ loadUsage();
 // GET /jobs/<id>; its text and output are foreign text (a task file), so value and textContent only.
 // ---------------------------------------------------------------------------------------------------------------------
 const knownJobs = new Set();
+
+// Timers that only keep the page current (the poll of a running job, the reconnect of the event stream) do not run for a
+// hidden tab: nobody sees their result, and the browser throttles a background tab's timers anyway. A timer that comes
+// due while the tab is hidden parks its action under its key (a newer one replaces it); when the tab is shown again,
+// every parked action runs once, so the page catches up with one read instead of a request per tick in the background.
+const parkedWhileHidden = new Map();
+function laterWhenVisible(key, ms, action) {
+  parkedWhileHidden.delete(key);
+  return setTimeout(() => {
+    if (document.hidden) parkedWhileHidden.set(key, action);
+    else action();
+  }, ms);
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  const actions = [...parkedWhileHidden.values()];
+  parkedWhileHidden.clear();
+  actions.forEach((action) => action());
+});
+
 let selectedJob = null;
 let selectedJobData = null;
 let jobPoll = null;
@@ -599,7 +619,9 @@ function showJobOutput(job) {
   output.scrollTop = output.scrollHeight;
 }
 
-// Reads the job again; while it runs, every 700 ms (the event queue carries no deltas).
+// Reads the job again; while it runs, every 700 ms (the event queue carries no deltas, so the output of a run reaches the
+// page only by this read: a shorter beat would only load the local server, a longer one makes the tail of an answer
+// lag). While the tab is hidden the read waits for it to be shown (laterWhenVisible).
 async function refreshJob(id, fillText) {
   let res;
   try {
@@ -627,8 +649,9 @@ async function refreshJob(id, fillText) {
   showJobStatus(job);
   showJobOutput(job);
   clearTimeout(jobPoll);
+  parkedWhileHidden.delete('job');
   if (job.status === 'running') {
-    jobPoll = setTimeout(() => refreshJob(id, false), 700);
+    jobPoll = laterWhenVisible('job', 700, () => refreshJob(id, false));
   } else if (fillText === false) {
     loadJobs();  // the run ended: its state in the list
   }
@@ -715,6 +738,7 @@ async function dismissJob() {
   if (!id) return;
   await api(`/jobs/${id}`, { method: 'DELETE' }).catch(() => {});
   clearTimeout(jobPoll);
+  parkedWhileHidden.delete('job');
   selectedJob = null;
   selectedJobData = null;
   document.getElementById('job-detail').hidden = true;
@@ -855,7 +879,9 @@ async function connectEvents() {
     // shown below
   }
   eventsLost();
-  setTimeout(connectEvents, 3000);
+  // Every 3 s: a restarted server is back within seconds, and a failed connect is cheap but fills the browser's console;
+  // a hidden tab connects once when it is shown again (laterWhenVisible).
+  laterWhenVisible('events', 3000, connectEvents);
 }
 connectEvents();
 
