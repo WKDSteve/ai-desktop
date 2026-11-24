@@ -67,6 +67,59 @@ test('long unbreakable text stays inside the page', async ({ page }) => {
   for (const extra of overflow.cards) expect(extra).toBeLessThanOrEqual(0);
 });
 
+// A phone is about 360 px wide: the page must not scroll sideways there, with nothing on it and with every card filled
+// (a decision, a job with a long error, usage rows with long names).
+test.describe('at the width of a phone', () => {
+  test.use({ viewport: { width: 360, height: 800 } });
+
+  async function sideways(page) {
+    return page.evaluate(() => ({
+      extra: document.documentElement.scrollWidth - window.innerWidth,
+      past: [...document.querySelectorAll('body *')]
+        .filter((el) => el.getBoundingClientRect().right > window.innerWidth + 1)
+        .map((el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.className ? '.' + el.className : '')),
+    }));
+  }
+
+  test('the empty page does not scroll sideways', async ({ page }) => {
+    await mockPage(page, { events: [], providers: {}, usageEvents: [], jobs: [] });
+    await page.goto(await server.dashboardUrl());
+    await expect(page.locator('#usage-events')).toHaveText('No events in the chosen period.');
+    const { extra, past } = await sideways(page);
+    expect(extra, past.join(' ')).toBeLessThanOrEqual(0);
+  });
+
+  test('the filled page does not scroll sideways', async ({ page }) => {
+    const job = {
+      id: JOB_ID, title: 'T', source: 'tasks-desktop', kind: 'plan', status: 'needs_confirmation', task_id: LONG, area: LONG,
+      markdown: 'm', model: LONG, output: '', runner: 'model', private: true,
+    };
+    await mockPage(page, {
+      events: [{ type: 'decision_point', agent: 'Executor', message: LONG, ts: 'a' }],
+      providers: { [LONG]: { requests: 1, prompt_tokens: 2, completion_tokens: 3, cost_usd: 0.1 } },
+      usageEvents: [{ ts: '2026-11-22T10:00:00Z', ok: true, provider: LONG, model: LONG, stream: false,
+                      prompt_tokens: 1, completion_tokens: 2, duration_ms: 5, source: LONG }],
+      jobs: [job],
+    });
+    await page.goto((await server.dashboardUrl()).replace(/#.*/, '') + `#job=${JOB_ID}`);
+    await expect(page.locator('#decision-banner')).toBeVisible();
+    await expect(page.locator('#usage-events .usage-event')).toHaveCount(1);
+    const { extra, past } = await sideways(page);
+    expect(extra, past.join(' ')).toBeLessThanOrEqual(0);
+  });
+
+  test('the cards and the figures of the usage stand in one column', async ({ page }) => {
+    await mockPage(page, { events: [], providers: {}, usageEvents: [], jobs: [] });
+    await page.goto(await server.dashboardUrl());
+    const columns = await page.evaluate(() => ({
+      cards: getComputedStyle(document.querySelector('.grid')).gridTemplateColumns.split(' ').length,
+      kpis: getComputedStyle(document.querySelector('.usage-kpis')).gridTemplateColumns.split(' ').length,
+    }));
+    expect(columns.cards).toBe(1);
+    expect(columns.kpis).toBeLessThanOrEqual(2);
+  });
+});
+
 test('a failed job status with a long error stays inside its box', async ({ page }) => {
   const job = {
     id: JOB_ID, title: 'T', source: 'tasks-desktop', kind: 'plan', status: 'failed', error: LONG, task_id: 'a/b', area: 'a',

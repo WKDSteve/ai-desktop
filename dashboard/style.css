@@ -225,3 +225,14 @@ h1, .card h2 { text-wrap: balance; }
 .actions { margin-top: .75rem; display: flex; gap: .5rem; }
 .muted   { color: var(--muted); }
 .small   { font-size: .75rem; }
+
+/* A phone (360 px): the cards stand one under the other, the figures of the usage in two columns, and a field may be
+   narrower than 200 px so that it never pushes the page sideways. No separate mobile layout, only no scrolling aside. */
+@media (max-width: 600px) {
+  body { padding: 1rem; }
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .usage-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #ask-model, #job-model, #private-areas { min-width: 0; }
+  .usage-event { flex-wrap: wrap; }
+  .usage-event .log-ts { min-width: 0; }
+}
