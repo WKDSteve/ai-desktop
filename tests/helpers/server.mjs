@@ -104,6 +104,9 @@ export async function startServer({ env = {}, args = [], port, configDir, bin = 
       AI_DESKTOP_JOBS: "",
       AI_DESKTOP_PRIVATE_AREAS: "",
       AI_DESKTOP_JOBS_MODEL: "",
+      // The default model of the machine the tests run on (a developer's or a runner's user environment) must not
+      // reach the server: a test that wants one names it in `env`.
+      AI_DESKTOP_DEFAULT_MODEL: "",
       // A job of the model claude-code must never start the real Claude Code of the machine: a path that does not
       // exist (the job then answers once); tests/agent-jobs.test.mjs names its stand-in instead.
       AI_DESKTOP_CLAUDE_CLI: path.join(os.tmpdir(), "ai-desktop-tests-no-claude", "claude.exe"),
