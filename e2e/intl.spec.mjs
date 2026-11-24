@@ -53,3 +53,9 @@ test('the script does not force the clock or write the unit of a duration as tex
   expect(source).not.toMatch(/['"`] ms['"`]/);
   expect(source).toMatch(/style: 'unit'/);
 });
+
+test('the script reverses a list with toReversed, not with a copy that is reversed', () => {
+  const source = readFileSync(`${repoRoot}/dashboard/app.js`, 'utf8').replace(/^\s*\/\/.*$/gm, '');
+  expect(source).not.toMatch(/\.slice\(\)\.reverse\(\)/);
+  expect(source).toMatch(/\.toReversed\(\)/);
+});

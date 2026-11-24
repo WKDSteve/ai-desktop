@@ -77,4 +77,13 @@ test('names, identifiers and paths are marked translate=no, the words around the
   expect(await translateOf(page, 'ai-nvim', '#usage-events *')).toEqual([false]);
   expect(await translateOf(page, 'openai', '#usage-provider option')).toEqual([false]);
   expect(await translateOf(page, 'tasks-desktop', '#jobs-list *')).toEqual([false]);
+
+  // the name of the app in the heading (the <title> has no such attribute), the words next to it stay translatable
+  expect(await page.locator('#app-title').evaluate((el) => el.translate)).toBe(true);
+  expect(await page.locator('#app-title > span').evaluateAll((els) => els.map((el) => [el.textContent, el.translate])))
+    .toEqual([['ai', false]]);
+  // the log: the name of the sender is an identifier, the message (a foreign program's text) is not
+  await expect(page.locator('#log .log-line')).not.toHaveCount(0);
+  expect(await page.locator('#log .log-agent').first().evaluate((el) => el.translate)).toBe(false);
+  expect(await page.locator('#log .log-msg').first().evaluate((el) => el.translate)).toBe(true);
 });

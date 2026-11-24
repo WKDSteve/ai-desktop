@@ -5,7 +5,7 @@
 // that name stays in the file names, the installer and the repository).
 const APP_NAME = t('app_name');
 document.title = APP_NAME + ' Dashboard';
-document.getElementById('app-title').textContent = '▸ ' + APP_NAME + ' Dashboard';
+document.getElementById('app-title').replaceChildren('▸ ', ident(APP_NAME), ' Dashboard');
 // The mark of the app (rule APP-11) is the favicon: the icon generator rewrites only that one inline copy.
 document.getElementById('app-icon').src = document.querySelector('link[rel="icon"]').href;
 let currentDecisionTs = null;
@@ -140,6 +140,7 @@ function appendLog(agent, message, color) {
   who.className = 'log-agent';
   who.style.color = c;
   who.textContent = String(agent);
+  who.translate = false; // the name of a sender is an identifier; the message beside it stays translatable
   const what = document.createElement('span');
   what.className = 'log-msg';
   what.textContent = String(message);
@@ -655,7 +656,7 @@ function jobFromHash() {
 function renderJobList(jobs) {
   const list = document.getElementById('jobs-list');
   document.getElementById('jobs-empty').hidden = jobs.length > 0;
-  list.replaceChildren(...jobs.slice().reverse().map((job) => {
+  list.replaceChildren(...jobs.toReversed().map((job) => {
     const item = document.createElement('li');
     const button = document.createElement('button');
     button.type = 'button';

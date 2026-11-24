@@ -49,7 +49,9 @@ test('a heading that fits on one line is not changed by balancing', async ({ pag
   const [box, lines] = await h1.evaluate((el) => {
     const range = document.createRange();
     range.selectNodeContents(el);
-    return [el.getBoundingClientRect().height, range.getClientRects().length];
+    // one rect per text run (the name of the app is a span of its own): the lines are the distinct tops
+    const tops = new Set([...range.getClientRects()].map((r) => Math.round(r.top)));
+    return [el.getBoundingClientRect().height, tops.size];
   });
   expect(lines).toBe(1);
   expect(box).toBeLessThan(40);
