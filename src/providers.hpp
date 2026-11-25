@@ -1,3 +1,6 @@
+// The table of cloud providers: key names, model-name prefixes, model-list endpoints and the suggestions shown without
+// a key.
+
 #pragma once
 
 #include <string>

@@ -1,3 +1,6 @@
+// The draft-task job: turns a free text into the fields of a new task, with its prompt, limits and the check of the
+// answer.
+
 #include "draft.hpp"
 
 #include <algorithm>

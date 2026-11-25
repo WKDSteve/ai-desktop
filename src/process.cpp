@@ -1,3 +1,5 @@
+// Starts a program for a job without a shell or a window, with its whole process tree ended together with it.
+
 #include "process.hpp"
 
 #include <algorithm>

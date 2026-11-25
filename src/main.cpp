@@ -1,3 +1,6 @@
+// The entry point of ai-desktop: the HTTP server with /health, /ask and /ask/stream, the routing of a model name to
+// its backend, and the startup.
+
 #include <iostream>
 #include <thread>
 #include <atomic>

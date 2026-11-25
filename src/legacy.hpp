@@ -1,3 +1,5 @@
+// The fallback to the old loomAI name for environment variables, the configuration folder and the stored credentials.
+
 #pragma once
 
 // The program was called loomAI before it became ai-desktop. A setting the person made under the old name keeps

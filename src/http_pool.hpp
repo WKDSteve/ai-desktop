@@ -1,3 +1,5 @@
+// One keep-alive HTTP client per worker thread and base URL, shared by the model backend clients.
+
 #pragma once
 
 #include <chrono>

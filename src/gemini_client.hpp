@@ -1,3 +1,5 @@
+// Client for Google's Gemini API, one of the model backends behind /ask and /ask/stream.
+
 #pragma once
 
 #include <functional>

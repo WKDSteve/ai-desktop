@@ -1,3 +1,6 @@
+// The control secret of the family: made at every start, kept in a file only the user can read, and checked in
+// constant time.
+
 #include "control_secret.hpp"
 
 #include <cstdio>

@@ -1,3 +1,6 @@
+// The git worktree of one agent run, made from origin/main and removed when the run ends, with records to clean up
+// after a crash.
+
 #include "worktree.hpp"
 
 #include <cstdlib>

@@ -1,3 +1,5 @@
+// The check of a custom model id: a small safe alphabet of 1 to 100 characters.
+
 #pragma once
 
 #include <string>

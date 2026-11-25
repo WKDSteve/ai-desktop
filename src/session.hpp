@@ -1,3 +1,5 @@
+// The login of the management API: session tokens and tickets for the dashboard, the control secret for programs.
+
 #pragma once
 
 #include <chrono>

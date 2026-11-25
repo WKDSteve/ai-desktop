@@ -1,3 +1,6 @@
+// Client for the OpenAI Chat Completions API and for servers that speak the same protocol, a model backend behind /ask
+// and /ask/stream.
+
 #pragma once
 
 #include <functional>

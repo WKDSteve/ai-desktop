@@ -1,3 +1,6 @@
+// The hub.json record that tells the other apps of the family that ai-desktop is running, written and removed with the
+// server.
+
 #include "family.hpp"
 
 #include <chrono>

@@ -1,3 +1,6 @@
+// The model listing behind GET /models and /models/info: local Ollama models, cloud provider lists and custom models,
+// cached.
+
 #pragma once
 
 #include <string>

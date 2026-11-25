@@ -1,3 +1,5 @@
+// The model registry: which backend a model name goes to, and the user-defined custom models kept in config.json.
+
 #pragma once
 
 #include <string>

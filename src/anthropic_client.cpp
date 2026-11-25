@@ -1,3 +1,5 @@
+// Client for the Anthropic Messages API, one of the model backends behind /ask and /ask/stream.
+
 #include "anthropic_client.hpp"
 
 #include <cstdlib>

@@ -1,3 +1,5 @@
+// Client for the Anthropic Messages API, one of the model backends behind /ask and /ask/stream.
+
 #pragma once
 
 #include <functional>

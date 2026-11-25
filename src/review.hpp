@@ -1,3 +1,5 @@
+// The review-done and prepare-decision jobs: the prompt, the read-only agent run and the check of the answer block.
+
 #pragma once
 
 #include <filesystem>

@@ -1,3 +1,6 @@
+// The hub.json record that tells the other apps of the family that ai-desktop is running, written and removed with the
+// server.
+
 #pragma once
 
 // How ai-desktop tells the other apps of the family (tasks-desktop, the hub apps of appkit) that it runs: the

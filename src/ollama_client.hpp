@@ -1,3 +1,5 @@
+// Client for Ollama's local REST API, the local model backend behind /ask and /ask/stream.
+
 #pragma once
 
 #include <functional>

@@ -1,3 +1,6 @@
+// Persistent settings in config.json: environment over file over default, atomic writes, locked keys and the price
+// table.
+
 #pragma once
 
 #include <functional>

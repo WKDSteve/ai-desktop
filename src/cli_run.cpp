@@ -1,3 +1,6 @@
+// Runs the terminal commands of ai-desktop (start, stop, status, open) against the server and returns their exit
+// codes.
+
 #include "cli_run.hpp"
 
 #include <cerrno>

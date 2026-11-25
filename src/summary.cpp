@@ -1,3 +1,6 @@
+// The summary block at the end of a hand-over run: finding it in the output, cleaning it and checking its form and
+// size.
+
 #include "summary.hpp"
 
 #include <regex>

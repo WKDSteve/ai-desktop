@@ -1,3 +1,5 @@
+// Replaces anything shaped like a provider API key in a text by <key>.
+
 #pragma once
 
 #include <regex>

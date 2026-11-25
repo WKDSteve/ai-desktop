@@ -1,3 +1,5 @@
+// The usage log: one JSON line per request in usage.jsonl, the bounds of its fields and the queries over it.
+
 #pragma once
 
 #include <cstdint>

@@ -1,3 +1,5 @@
+// Small URL helpers: the host of a URL and whether it names the machine itself.
+
 #pragma once
 
 #include <string>

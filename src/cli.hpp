@@ -1,3 +1,6 @@
+// The terminal command of ai-desktop (start, stop, status, open, --version, --help): argument parsing, texts and the
+// starter files.
+
 #pragma once
 
 // The command in the terminal: `ai-desktop start [--open]`, `stop` (`quit`), `status [--json]`, `open`, `--version`,

@@ -1,3 +1,6 @@
+// The terminal command of ai-desktop (start, stop, status, open, --version, --help): argument parsing, texts and the
+// starter files.
+
 #include "cli.hpp"
 
 #include <algorithm>

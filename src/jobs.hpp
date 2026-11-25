@@ -1,3 +1,6 @@
+// Jobs handed over by the other apps of the family: request validation, the job store, the rate limit and the rule for
+// private areas.
+
 #pragma once
 
 #include <chrono>

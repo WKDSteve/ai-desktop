@@ -1,3 +1,6 @@
+// Runs a task of the tasks family through Claude Code headless: finds the tasks, testing and claude programs and
+// checks the agent brief.
+
 #include "agent.hpp"
 
 #include <algorithm>

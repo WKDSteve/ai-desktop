@@ -1,3 +1,5 @@
+// Client for Ollama's local REST API, the local model backend behind /ask and /ask/stream.
+
 #include "ollama_client.hpp"
 
 #include <chrono>

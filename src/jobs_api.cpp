@@ -1,3 +1,5 @@
+// The HTTP routes of the jobs (hand over, list, run, cancel, delete) and the threads that run them.
+
 #include "jobs_api.hpp"
 
 #include <chrono>

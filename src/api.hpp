@@ -1,3 +1,6 @@
+// The management routes of the dashboard and the desktop app: model listing, settings, keys, custom models and the
+// usage log.
+
 #pragma once
 
 #include <string>

@@ -1,3 +1,5 @@
+// API keys for the cloud backends: the environment first, then the Credential Manager or an owner-only file.
+
 #include "secrets.hpp"
 
 #include <cstdlib>

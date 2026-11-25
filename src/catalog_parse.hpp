@@ -1,3 +1,6 @@
+// Turns the model-list responses of Ollama and the cloud providers into ai-desktop's own entry shape, as pure
+// functions on parsed JSON.
+
 #pragma once
 
 #include <string>

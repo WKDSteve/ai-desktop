@@ -1,3 +1,5 @@
+// Where the server finds the dashboard files it serves: next to the program, never in the working directory.
+
 #pragma once
 
 // Where the server finds the files it serves. The dashboard lies next to the program (`<app>/dashboard`), not in the

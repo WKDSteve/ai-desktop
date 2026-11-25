@@ -1,3 +1,5 @@
+// The result shape and the SSE helpers shared by every model backend client.
+
 #pragma once
 
 #include <optional>

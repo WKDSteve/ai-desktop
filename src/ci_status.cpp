@@ -1,3 +1,6 @@
+// Reads the CI state of a review's commits (the task's ci field and the hosted CI through testing) into a section of
+// the review prompt.
+
 #include "ci_status.hpp"
 
 #include <algorithm>

@@ -1,3 +1,5 @@
+// Where the server finds the dashboard files it serves: next to the program, never in the working directory.
+
 #include "paths.hpp"
 
 #include <string>

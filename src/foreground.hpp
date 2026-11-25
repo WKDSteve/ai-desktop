@@ -1,3 +1,5 @@
+// Brings the dashboard to the front when a family app hands over a new job.
+
 #pragma once
 
 #include <string>
