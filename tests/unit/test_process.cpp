@@ -70,6 +70,17 @@ TEST(process_a_missing_program_is_an_error) {
     CHECK(!error.empty());
 }
 
+// The same answer on every system: a child that cannot start is -3 with the reason, not an exit code of the
+// system's own (the POSIX child used to answer 127 here, with no error text).
+TEST(process_a_missing_working_directory_is_an_error) {
+    auto spec = fake({"echo-env", "AI_DESKTOP_PROCESS_TEST"});
+    spec.cwd = fs::temp_directory_path() / "ai-desktop-no-such-directory";
+    std::string out;
+    std::string error;
+    CHECK_EQ(process::run_capture(spec, std::chrono::seconds(5), 4096, out, &error), -3);
+    CHECK(!error.empty());
+}
+
 TEST(process_the_brief_of_a_tasks_command_is_read) {
     ai_desktop::agent::TasksCommand tasks;
     tasks.program = fs::u8path(AI_DESKTOP_FAKE_TASKS);

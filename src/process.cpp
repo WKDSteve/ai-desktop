@@ -483,8 +483,8 @@ private:
 }  // namespace
 
 std::unique_ptr<Child> start(const Spec& spec, std::string* error) {
-    int in_pipe[2], out_pipe[2], err_pipe[2];
-    if (::pipe(in_pipe) != 0 || ::pipe(out_pipe) != 0 || ::pipe(err_pipe) != 0) {
+    int in_pipe[2], out_pipe[2], err_pipe[2], exec_pipe[2];
+    if (::pipe(in_pipe) != 0 || ::pipe(out_pipe) != 0 || ::pipe(err_pipe) != 0 || ::pipe(exec_pipe) != 0) {
         if (error) *error = "pipe failed";
         return nullptr;
     }
@@ -513,6 +513,7 @@ std::unique_ptr<Child> start(const Spec& spec, std::string* error) {
     const std::string cwd = spec.cwd.string();
     const long max_fd = std::min(::sysconf(_SC_OPEN_MAX), 4096L);
 
+    ::fcntl(exec_pipe[1], F_SETFD, FD_CLOEXEC);
     const pid_t pid = ::fork();
     if (pid < 0) {
         if (error) *error = "fork failed";
@@ -523,20 +524,49 @@ std::unique_ptr<Child> start(const Spec& spec, std::string* error) {
         ::dup2(in_pipe[0], 0);
         ::dup2(out_pipe[1], 1);
         ::dup2(err_pipe[1], 2);
-        for (long fd = 3; fd < max_fd; ++fd) ::close(static_cast<int>(fd));
+        // exec_pipe[1] stays open (it closes itself on a successful exec): it carries errno when exec fails.
+        for (long fd = 3; fd < max_fd; ++fd) {
+            if (fd != exec_pipe[1]) ::close(static_cast<int>(fd));
+        }
         // The server's threads block SIGINT and SIGTERM (main.cpp waits for them in a thread of its own), and the
         // mask survives execve: the child starts with none blocked, so a SIGTERM to it or its tree works.
         sigset_t none;
         sigemptyset(&none);
         ::sigprocmask(SIG_SETMASK, &none, nullptr);
-        if (!cwd.empty() && ::chdir(cwd.c_str()) != 0) ::_exit(126);
-        ::execve(argv[0], argv.data(), envp.data());
+        int failed[2] = {0, 0};  // errno, and 1 when it was the working directory
+        if (!cwd.empty() && ::chdir(cwd.c_str()) != 0) {
+            failed[0] = errno;
+            failed[1] = 1;
+        } else {
+            ::execve(argv[0], argv.data(), envp.data());
+            failed[0] = errno;
+        }
+        // Not started: the parent reads the reason from exec_pipe (as on Windows, where it is "did not start").
+        const ssize_t written = ::write(exec_pipe[1], failed, sizeof failed);
+        (void)written;
         ::_exit(127);
     }
     ::setpgid(pid, pid);
     ::close(in_pipe[0]);
     ::close(out_pipe[1]);
     ::close(err_pipe[1]);
+    ::close(exec_pipe[1]);
+    // A successful exec closes the write end (FD_CLOEXEC): the read then ends with 0 bytes.
+    int exec_failed[2] = {0, 0};
+    ssize_t got = 0;
+    while ((got = ::read(exec_pipe[0], exec_failed, sizeof exec_failed)) < 0 && errno == EINTR) {
+    }
+    ::close(exec_pipe[0]);
+    if (got == static_cast<ssize_t>(sizeof exec_failed)) {
+        while (::waitpid(pid, nullptr, 0) < 0 && errno == EINTR) {
+        }
+        for (int fd : {in_pipe[1], out_pipe[0], err_pipe[0]}) ::close(fd);
+        if (error) {
+            *error = (exec_failed[1] ? "cannot use the working directory " + cwd : "cannot start " + spec.program.string()) +
+                     ": " + std::strerror(exec_failed[0]);
+        }
+        return nullptr;
+    }
     for (int fd : {in_pipe[1], out_pipe[0], err_pipe[0]}) ::fcntl(fd, F_SETFD, FD_CLOEXEC);
     return std::make_unique<PosixChild>(pid, out_pipe[0], err_pipe[0], in_pipe[1], spec.stdin_text);
 }
