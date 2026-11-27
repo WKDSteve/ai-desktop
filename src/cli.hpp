@@ -86,4 +86,12 @@ std::string install_starters(const std::filesystem::path& dir, const std::string
 // empty. `*dir_removed` says whether it went. Returns "" or the problem.
 std::string uninstall_starters(const std::filesystem::path& dir, const std::string& command, bool* dir_removed);
 
+// How `start` and `open` give the server its console on Windows. Visible is the only way for people: the console is
+// how the server is operated (docs/PROCESSES.md). None is for the tests only (AI_DESKTOP_NO_CONSOLE=1), so a test run
+// on a runner opens no window that takes the focus.
+enum class ServerConsole { Visible, None };
+
+// The console for the value of AI_DESKTOP_NO_CONSOLE (`nullptr` when unset): None for a value other than "" and "0".
+ServerConsole server_console(const char* no_console);
+
 }  // namespace ai_desktop::cli

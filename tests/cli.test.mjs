@@ -19,6 +19,9 @@ function hermeticEnv(extra = {}) {
     AI_DESKTOP_OLLAMA_HOST: "http://127.0.0.1:9",
     AI_DESKTOP_SECRET_BACKEND: "file",
     AI_DESKTOP_NO_BROWSER: "1",
+    // `start` and `open` give the server a console without a window (src/cli.hpp, server_console): a test run on a
+    // runner opens no window that takes the focus. People always get the visible console.
+    AI_DESKTOP_NO_CONSOLE: "1",
     AI_DESKTOP_JOBS_FOREGROUND: "0",
     AI_DESKTOP_JOBS: "",
     OPENAI_API_KEY: "",
@@ -155,6 +158,15 @@ describe("ai-desktop in the terminal", () => {
       assert.equal(ai(["status"], env).code, 0, "still running");
       assert.ok(existsSync(path.join(configDir, "hub.json")));
     });
+  });
+});
+
+describe("the console of a started server", () => {
+  // The switch is read where the server is started, and only there: without it the server gets CREATE_NEW_CONSOLE.
+  it("start takes CREATE_NO_WINDOW only from AI_DESKTOP_NO_CONSOLE, and these tests set it", () => {
+    const source = readFileSync(path.join(repoRoot, "src", "cli_run.cpp"), "utf8");
+    assert.match(source, /server_console\(std::getenv\("AI_DESKTOP_NO_CONSOLE"\)\) == ServerConsole::None\s*\?\s*CREATE_NO_WINDOW\s*:\s*CREATE_NEW_CONSOLE/);
+    assert.equal(hermeticEnv().AI_DESKTOP_NO_CONSOLE, "1");
   });
 });
 

@@ -335,4 +335,9 @@ std::string uninstall_starters(const fs::path& dir, const std::string& command, 
     return "";
 }
 
+ServerConsole server_console(const char* no_console) {
+    if (no_console == nullptr || *no_console == '\0') return ServerConsole::Visible;
+    return std::string(no_console) == "0" ? ServerConsole::Visible : ServerConsole::None;
+}
+
 }  // namespace ai_desktop::cli

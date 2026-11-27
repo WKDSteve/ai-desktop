@@ -108,6 +108,8 @@ std::wstring widen(const std::string& text) {
 // The server in its own place. Windows: a console window of its own, visible, with nothing inherited from this
 // process -- the same as the tile of hub-desktop (docs/PROCESSES.md): a process that stays is never hidden
 // (no CREATE_NO_WINDOW, no DETACHED_PROCESS), closing the window ends the server, `ai-desktop stop` does too.
+// Only the tests (AI_DESKTOP_NO_CONSOLE=1) start it with a console that has no window: a test run on a runner must not
+// open a window that takes the focus of the person at the machine.
 // Elsewhere it is a session of its own with its output in `log`.
 bool spawn_server(const std::string& exe, const std::vector<std::string>& args, const fs::path& log,
                   Spawned* spawned, std::string* error) {
@@ -116,11 +118,14 @@ bool spawn_server(const std::string& exe, const std::vector<std::string>& args, 
     std::wstring command = widen(process::quote_windows_arg(exe));
     for (const auto& arg : args) command += L" " + widen(process::quote_windows_arg(arg));
 
+    const DWORD console = server_console(std::getenv("AI_DESKTOP_NO_CONSOLE")) == ServerConsole::None
+                              ? CREATE_NO_WINDOW
+                              : CREATE_NEW_CONSOLE;
     STARTUPINFOW startup{};
     startup.cb = sizeof startup;
     PROCESS_INFORMATION info{};
     const BOOL ok = CreateProcessW(nullptr, command.data(), nullptr, nullptr, FALSE,
-                                   CREATE_NEW_CONSOLE | CREATE_NEW_PROCESS_GROUP, nullptr, nullptr, &startup, &info);
+                                   console | CREATE_NEW_PROCESS_GROUP, nullptr, nullptr, &startup, &info);
     if (!ok) {
         *error = "cannot start " + exe + " (error " + std::to_string(GetLastError()) + ")";
         return false;

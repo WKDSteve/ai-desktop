@@ -175,3 +175,12 @@ TEST(the_starter_folder_follows_APPKIT_FAMILY_DIR) {
     CHECK(cli::starter_dir() == fs::path("C:/fam") / "bin");
     minitest::set_env("APPKIT_FAMILY_DIR", "");
 }
+
+// People always get the visible console of the server; only the switch of the tests hides it.
+TEST(the_server_console_is_visible_unless_the_tests_switch_it_off) {
+    CHECK(cli::server_console(nullptr) == cli::ServerConsole::Visible);
+    CHECK(cli::server_console("") == cli::ServerConsole::Visible);
+    CHECK(cli::server_console("0") == cli::ServerConsole::Visible);
+    CHECK(cli::server_console("1") == cli::ServerConsole::None);
+    CHECK(cli::server_console("yes") == cli::ServerConsole::None);
+}
