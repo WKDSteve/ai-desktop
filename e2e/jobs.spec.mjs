@@ -130,6 +130,28 @@ test('a private area asks before a cloud model, and is accessible while it asks'
   expect(asked.length).toBe(before + 1);
 });
 
+// The stream connects at once and may name an older job before the first list of jobs is read (it was the cause of a
+// flake: #job-meta showed another job). Made certain here: the list is held back and the stream names the older job.
+test('an event for an older job while the list is read does not take the selection from the job of the address', async ({ page }) => {
+  const older = (await sendJob({ ...TASK, title: 'The older one' })).json;
+  const wanted = (await sendJob({ ...TASK, title: 'The one of the address' })).json;
+  await page.route(/\/events$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'text/event-stream', body: `data: ${JSON.stringify({ type: 'job', message: older.job_id })}
+
+` }));
+  await page.route(/\/jobs$/, async (route) => {
+    const response = await route.fetch();
+    await new Promise((r) => setTimeout(r, 500));
+    await route.fulfill({ response });
+  });
+  await page.goto(await server.dashboardUrl(`job=${wanted.job_id}`));
+  await expect(page.locator(`[data-job="${wanted.job_id}"]`)).toHaveAttribute('aria-current', 'true');
+  await expect(page.locator('#job-meta')).toContainText('ai-desktop/auftrag-von-aussen');
+  await page.waitForTimeout(800);
+  await expect(page.locator(`[data-job="${wanted.job_id}"]`)).toHaveAttribute('aria-current', 'true');
+  await expect(page.locator(`[data-job="${older.job_id}"]`)).not.toHaveAttribute('aria-current', 'true');
+});
+
 test('a job is put away', async ({ page }) => {
   const { json } = await sendJob({ ...TASK, title: 'To put away' });
   await page.goto(await server.dashboardUrl(`job=${json.job_id}`));

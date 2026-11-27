@@ -786,6 +786,9 @@ function selectJob(id) {
 
 async function jobChanged(id) {
   if (!JOB_ID.test(id)) return;
+  // Not before the first list is read and the job of the address is selected: an event that comes in while that
+  // runs (the stream connects at once) would find every job "new" and select an older one over the one asked for.
+  await jobsReady;
   const isNew = !knownJobs.has(id);
   const jobs = await loadJobs();
   const job = jobs.find((j) => j.id === id);
@@ -952,7 +955,7 @@ for (const fieldId of ['jobs-enabled', 'private-areas']) {
   }
 }
 loadJobSettings();
-loadJobs().then(() => {
+const jobsReady = loadJobs().then(() => {
   const id = jobFromHash();
   if (id) selectJob(id);
 });
