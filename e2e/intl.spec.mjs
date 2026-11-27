@@ -46,6 +46,24 @@ for (const c of CASES) {
   });
 }
 
+// One damaged entry of the event log (no ts, an empty one, text) must not end the list: its line shows a dash and the
+// lines after it are there (Intl.DateTimeFormat#format throws a RangeError on an invalid date).
+test('an event with an invalid ts shows a dash and the list goes on', async ({ page }) => {
+  const event = (ts) => ({ ...(ts === undefined ? {} : { ts }), ok: true, provider: 'openai', model: 'gpt-4o', stream: false,
+                           prompt_tokens: 1, completion_tokens: 2, duration_ms: 5, source: 'cli' });
+  await page.route(/\/events$/, (route) => route.fulfill({ status: 200, contentType: 'text/event-stream', body: '' }));
+  await page.route(/\/usage\?/, (route) =>
+    route.fulfill({
+      json: {
+        totals: {}, by_provider: {},
+        events: [event(undefined), event(''), event(null), event('not a time'), event('2026-11-22T10:00:00Z')],
+      },
+    }));
+  await page.goto(await server.dashboardUrl());
+  await expect(page.locator('#usage-events .usage-event')).toHaveCount(5);
+  await expect(page.locator('#usage-events .log-ts')).toHaveText(['–', '–', '–', '–', /10:00:00/]);
+});
+
 test('the script does not force the clock or write the unit of a duration as text', () => {
   // the code, not its comments (a comment may say what is not done)
   const source = readFileSync(`${repoRoot}/dashboard/app.js`, 'utf8').replace(/^\s*\/\/.*$/gm, '');

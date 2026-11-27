@@ -121,6 +121,14 @@ const TIME_FORMAT = new Intl.DateTimeFormat(LOCALE, { hour: '2-digit', minute: '
 const DATE_TIME_FORMAT = new Intl.DateTimeFormat(LOCALE, {
   year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
 });
+
+// A time of the event log. `Intl.DateTimeFormat#format` throws a RangeError on an invalid date, which would end the
+// whole list at one damaged entry: such a line shows a dash. (`new Date(null)` is the epoch, so null counts as missing.)
+function formatTs(value) {
+  if (value == null || value === '') return '–';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '–' : DATE_TIME_FORMAT.format(date);
+}
 const MS_FORMAT = new Intl.NumberFormat(LOCALE, { style: 'unit', unit: 'millisecond', unitDisplay: 'short' });
 
 function ts() {
@@ -596,7 +604,7 @@ async function loadUsage() {
     line.className = 'usage-event';
     const ts = document.createElement('span');
     ts.className = 'log-ts';
-    ts.textContent = DATE_TIME_FORMAT.format(new Date(ev.ts));
+    ts.textContent = formatTs(ev.ts);
     const state = document.createElement('span');
     state.className = ev.ok ? 'usage-ok' : 'usage-err';
     state.textContent = ev.ok ? '✓' : '✗ ' + (ev.error_kind || t('error_short'));
